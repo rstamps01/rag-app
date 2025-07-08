@@ -15,11 +15,11 @@ from langchain_community.document_loaders import (
     CSVLoader
 )
 
-from app.core.config import settings
-from app.core.pipeline_monitor import pipeline_monitor
-from app.db.session import get_db
-from app.crud.crud_document import create_document, get_document_by_filename, update_document
-from app.schemas.document import DocumentCreate, DocumentUpdate
+from ..core.config import settings
+from ..core.pipeline_monitor import pipeline_monitor
+from ..db.session import get_db
+from ..crud.crud_document import create_document, get_document_by_filename
+from ..schemas.document import DocumentCreate, DocumentUpdate
 from sqlalchemy.orm import Session
 import time
 import uuid
@@ -28,7 +28,6 @@ from PIL import Image
 import io
 import fitz  # PyMuPDF for PDF image extraction
 import tempfile
-import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -497,7 +496,7 @@ def store_document_metadata(
             )
             
             # Update document in database
-            updated_doc = update_document(
+            updated_doc = crud_document.update_document(
                 db=db,
                 db_obj=existing_doc,
                 obj_in=doc_update
@@ -631,3 +630,6 @@ class nullcontext:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
+
+# Import datetime here to avoid circular imports
+import datetime

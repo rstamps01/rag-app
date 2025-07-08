@@ -1,15 +1,15 @@
 version: '3.8'
 
 services:
-  postgres-07:
+  postgres:
     image: postgres:14
-    container_name: rag-postgres-07
+    container_name: rag-postgres
     environment:
       POSTGRES_USER: raguser
       POSTGRES_PASSWORD: ragpassword
       POSTGRES_DB: ragdb
     volumes:
-      - postgres_data-07:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     restart: unless-stopped
@@ -19,11 +19,11 @@ services:
       timeout: 5s
       retries: 5
 
-  qdrant-07:
+  qdrant:
     image: qdrant/qdrant:latest
-    container_name: rag-qdrant-07
+    container_name: rag-qdrant
     volumes:
-      - qdrant_data-07:/qdrant/storage
+      - qdrant_data:/qdrant/storage
     ports:
       - "6333:6333"
       - "6334:6334"
@@ -34,13 +34,13 @@ services:
       timeout: 5s
       retries: 5
 
-  backend-07:
+  backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: rag-backend-07
+    container_name: rag-backend
     volumes:
-      - ./data-07:/app/data
+      - ./data:/app/data
     ports:
       - "8000:8000"
     environment:
@@ -49,8 +49,8 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
     depends_on:
-      - postgres-07
-      - qdrant-07
+      - postgres
+      - qdrant
     restart: unless-stopped
     deploy:
       resources:
@@ -60,18 +60,18 @@ services:
               count: 1
               capabilities: [gpu]
 
-  frontend-07:
+  frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: rag-frontend-07
+    container_name: rag-frontend
     ports:
       - "3000:3000"
     depends_on:
-      - backend-07
+      - backend
     restart: unless-stopped
 
 volumes:
-  postgres_data-07:
-  qdrant_data-07:
-  data-07:
+  postgres_data:
+  qdrant_data:
+  data:
