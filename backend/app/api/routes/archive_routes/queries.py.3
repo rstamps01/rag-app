@@ -1,0 +1,150 @@
+# File Path: /home/ubuntu/rag-app/backend/app/api/routes/queries.py
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any, List
+import time
+import logging
+
+# Assuming schemas are defined correctly elsewhere
+# from app.schemas.queries import QueryRequest, QueryResponse, Source
+# --- Example Pydantic models (replace with your actual schemas) ---
+from pydantic import BaseModel
+
+class QueryRequest(BaseModel):
+    query: str
+    model: str | None = "default_model" # Optional: if you support multiple models
+    # Add other parameters like user_id, session_id if needed
+
+class Source(BaseModel):
+    document_id: str
+    document_name: str
+    relevance_score: float
+    content_snippet: str
+
+class QueryResponse(BaseModel):
+    query: str
+    response: str
+    model: str | None
+    sources: List[Source]
+    processing_time: float
+    gpu_accelerated: bool # Or remove if not tracking
+# --- End Example Models ---
+
+# Import the pipeline monitor (if used)
+# from app.core.pipeline_monitor import pipeline_monitor
+
+# Import your actual RAG service/functions
+# from app.services import rag_service # Example RAG service
+# from app.db import crud_query_history # Example DB functions for history
+
+# Setup logger
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+# ================================================
+# Placeholder for Actual RAG Query Logic
+# ================================================
+async def execute_rag_query(query_text: str, model: str | None) -> QueryResponse:
+    """
+    Placeholder function to perform the actual RAG process.
+    Replace with calls to your embedding model, vector store, and LLM.
+    """
+    logger.info( f"Executing RAG query: '{query_text}' using model: {model}" )
+    start_time = time.time()
+    
+    try:
+        # 1. Generate Query Embedding
+        # query_embedding = await rag_service.get_embedding(query_text)
+        logger.info("Generated query embedding (simulated)")
+        # pipeline_monitor.record_event(pipeline_id, 'query_embedding_generated', ...)
+
+        # 2. Search Vector Store (Qdrant)
+        # retrieved_docs = await rag_service.search_vector_store(query_embedding)
+        simulated_sources = [
+            Source(
+                document_id="doc123",
+                document_name="Sample Document 1.pdf",
+                relevance_score=0.92,
+                content_snippet="Simulated snippet 1 matching the query."
+            ),
+            Source(
+                document_id="doc456",
+                document_name="Sample Document 2.docx",
+                relevance_score=0.85,
+                content_snippet="Simulated snippet 2 matching the query."
+            )
+        ]
+        logger.info(f"Retrieved {len(simulated_sources)} sources from vector store (simulated)")
+        # pipeline_monitor.record_event(pipeline_id, 'context_retrieved', ...)
+
+        # 3. Prepare Context and Call LLM
+        # context = " ".join([doc.content_snippet for doc in retrieved_docs])
+        # llm_response_text = await rag_service.call_llm(query_text, context, model)
+        llm_response_text = f"This is a simulated LLM response to: '{query_text}'." 
+        logger.info("Generated response from LLM (simulated)")
+        # pipeline_monitor.record_event(pipeline_id, 'response_generated', ...)
+
+        # 4. Construct Final Response
+        processing_time = time.time() - start_time
+        final_response = QueryResponse(
+            query=query_text,
+            response=llm_response_text,
+            model=model,
+            sources=simulated_sources,
+            processing_time=round(processing_time, 2),
+            gpu_accelerated=True # Determine based on actual execution
+        )
+        
+        # 5. (Optional) Save to Query History Database
+        # await crud_query_history.create(final_response)
+        logger.info(f"Query processed successfully in {processing_time:.2f}s")
+        # pipeline_monitor.record_event(pipeline_id, 'query_completed', {'status': 'success', ...})
+        
+        return final_response
+
+    except Exception as e:
+        error_msg = f"Failed to execute RAG query '{query_text}': {e}"
+        logger.error(error_msg, exc_info=True)
+        # pipeline_monitor.record_event(pipeline_id, 'query_failed', {'error': str(e)})
+        # Re-raise a specific HTTP exception or handle appropriately
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process query: {e}"
+        )
+
+# ================================================
+# API Route Definitions
+# ================================================
+
+@router.post("/ask", response_model=QueryResponse)
+async def process_query_endpoint(
+    request: QueryRequest,
+    # Add Depends(get_current_user) for authentication
+) -> Any:
+    """
+    Receives a query request, executes the RAG pipeline, and returns the response.
+    """
+    # pipeline_monitor.record_event(pipeline_id, 'query_received', ...)
+    response = await execute_rag_query(query_text=request.query, model=request.model)
+    return response
+
+@router.get("/history", response_model=List[QueryResponse])
+async def get_query_history_endpoint(
+    skip: int = 0, 
+    limit: int = 50
+    # Add Depends(get_current_user) for authentication
+) -> Any:
+    """
+    Get history of previous queries (requires database implementation).
+    Replace with actual database query.
+    """
+    # === Placeholder: Fetch query history from Database ===
+    # history = await crud_query_history.get_multi(skip=skip, limit=limit)
+    # Simulate empty history for now
+    history = [] 
+    logger.info(f"Listing query history, skip={skip}, limit={limit}")
+    # pipeline_monitor.record_event(pipeline_id, 'query_history_retrieved', ...)
+    return history
+    # === End Placeholder ===
+

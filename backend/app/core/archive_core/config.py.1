@@ -1,0 +1,21 @@
+import os
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    API_V1_STR: str = "/api/v1"
+    PROJECT_NAME: str = "RAG AI Application"
+    
+    # Security
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "supersecretkey")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    
+    # Database
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://raguser:ragpassword@postgres:5432/ragdb")
+    
+    # Vector Database
+    QDRANT_URL: str = os.getenv("QDRANT_URL", "http://qdrant:6333")
+    
+    class Config:
+        case_sensitive = True
+
+settings = Settings()

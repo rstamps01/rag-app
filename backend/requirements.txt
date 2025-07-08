@@ -1,0 +1,61 @@
+# File Path: /home/vastdata/rag-app/backend/requirements.txt
+# Description: Python dependencies for the RAG application backend.
+
+# --- Core Web Framework ---
+fastapi==0.103.1
+uvicorn==0.23.2
+
+# --- Database & ORM ---
+sqlalchemy==2.0.20
+psycopg2-binary==2.9.7 # PostgreSQL adapter
+alembic==1.12.0        # Database migrations
+
+# --- Data Validation & Settings ---
+pydantic<3.0.0,>=2.9.0    # pydantic==2.3.0  # Ollama 0.4.7 needs pydantic<3.0.0,>=2.9.0
+pydantic-settings==2.0.3
+email-validator
+psutil>=5.9.0
+
+# --- Authentication ---
+python-jose==3.3.0     # JWT handling
+passlib==1.7.4         # Password hashing
+python-multipart==0.0.6 # Form data parsing
+
+# --- Vector Database Client ---
+qdrant-client==1.4.0   # Client for Qdrant
+
+# --- Language Model & RAG Framework ---
+langchain-core
+langchain
+langchain-community
+#anthropic # For Claude LLM
+sentence-transformers>=2.6.0    # installed sentence-transformers==2.2.2       # For embeddings
+
+# Note: torch is NOT listed here; it's installed separately in the Dockerfile
+#       to ensure compatibility with CUDA 12.8 for RTX 5090.
+
+transformers  # Hugging Face transformers library
+accelerate   # For optimizing transformer models
+bitsandbytes==0.41.1 # For model quantization (optional, depends on usage)
+
+# --- Background Tasks ---
+celery==5.3.4
+redis==5.0.0
+
+# --- Document Processing ---
+pypdf==3.15.1          # PDF parsing
+# langchain_community.document_loaders
+python-docx==0.8.11    # DOCX parsing
+beautifulsoup4  # For HTML files
+pytesseract            # OCR for image processing
+
+# --- Data Handling & Utilities ---
+pandas==2.1.0
+numpy
+scikit-learn==1.3.0
+tqdm==4.66.1
+# hf_xet
+
+# --- Testing & Development ---
+pytest==7.4.0
+httpx<0.29,>=0.27    # httpx==0.24.1   # HTTP client for testing - Ollama 0.4.7 needs httpx<0.29,>=0.27

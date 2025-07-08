@@ -1,0 +1,48 @@
+# download_models.py
+import os
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from sentence_transformers import SentenceTransformer
+
+# Define cache directory within the container
+CACHE_DIR = "/app/models_cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+# Set environment variables for Hugging Face libraries
+# Note: These might be better set globally in the Dockerfile ENV instruction
+# os.environ["TRANSFORMERS_CACHE"] = CACHE_DIR
+# os.environ["HF_HOME"] = CACHE_DIR
+
+# List of models to pre-download
+llm_models = [
+    "EleutherAI/gpt-j-6b",
+    "meta-llama/Llama-2-7b-hf",
+    "tiiuae/falcon-7b",
+    "mistralai/Mistral-7B-v0.1"
+]
+
+embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
+
+print(f"--- Starting model download to {CACHE_DIR} ---")
+
+# Download LLMs and Tokenizers
+for model_name in llm_models:
+    print(f"Downloading {model_name}...")
+    try:
+        # Download model
+        AutoModelForCausalLM.from_pretrained(model_name, cache_dir=CACHE_DIR)
+        # Download tokenizer
+        AutoTokenizer.from_pretrained(model_name, cache_dir=CACHE_DIR)
+        print(f"Successfully downloaded {model_name}.")
+    except Exception as e:
+        print(f"ERROR downloading {model_name}: {e}")
+
+# Download Embedding Model
+print(f"Downloading {embedding_model}...")
+try:
+    SentenceTransformer(embedding_model, cache_folder=CACHE_DIR)
+    print(f"Successfully downloaded {embedding_model}.")
+except Exception as e:
+    print(f"ERROR downloading {embedding_model}: {e}")
+
+print("--- Model download script finished ---")
+

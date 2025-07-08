@@ -1,0 +1,26 @@
+# File Path: /home/ubuntu/rag_app_v2/rag-app/backend/app/schemas/query.py
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+# Request model for asking a question
+class QueryRequest(BaseModel):
+    query: str = Field(..., min_length=1, description="The user's query text")
+    # Optional: Add parameters like desired model, temperature, etc.
+    # model: Optional[str] = None
+
+# Model for a single source document used in the response
+class SourceDocument(BaseModel):
+    document_id: str
+    document_name: str
+    relevance_score: float
+    content_snippet: Optional[str] = None # Optional snippet from the source
+
+# Response model for the query result
+class QueryResponse(BaseModel):
+    query: str
+    response: str
+    model: str # The LLM model used
+    sources: List[SourceDocument]
+    processing_time: Optional[float] = None
+    gpu_accelerated: Optional[bool] = None
+

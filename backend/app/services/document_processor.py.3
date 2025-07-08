@@ -1,0 +1,178 @@
+# File Path: /home/ubuntu/rag_app_v2/rag-app/backend/app/services/document_processor.py
+import os
+import logging
+from typing import List, Dict, Any, Optional
+import torch
+import numpy as np
+from qdrant_client import QdrantClient, models
+from sentence_transformers import SentenceTransformer # Use SentenceTransformer directly for simplicity
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+# Updated Langchain Community Imports
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+    Docx2txtLoader,
+    CSVLoader
+)
+
+from ..core.config import settings
+
+logger = logging.getLogger(__name__)
+
+# --- Configuration ---
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+QDRANT_COLLECTION_NAME = settings.QDRANT_COLLECTION_NAME
+
+# --- Component Initialization (Module Level) ---
+
+# Determine device (reuse logic)
+device = "cuda" if settings.USE_GPU and torch.cuda.is_available() else "cpu"
+logger.info(f"Using device: {device}")
+
+# Initialize Embedding Model (using SentenceTransformer for simplicity)
+try:
+    logger.info(f"Loading embedding model: {EMBEDDING_MODEL_NAME} onto {device} from cache /app/models_cache")
+    embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=device, cache_folder="/app/models_cache") # Added cache_folder
+    logger.info(f"Embedding model {EMBEDDING_MODEL_NAME} loaded successfully.")
+except Exception as e:
+    logger.error(f"Failed to load embedding model {EMBEDDING_MODEL_NAME}: {e}", exc_info=True)
+    embedding_model = None
+
+# Initialize Qdrant Client
+try:
+    logger.info(f"Initializing Qdrant client at {settings.QDRANT_HOST}:{settings.QDRANT_PORT}")
+    qdrant_client = QdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT)
+    # Ensure collection exists (optional, depending on setup)
+    try:
+        qdrant_client.get_collection(collection_name=QDRANT_COLLECTION_NAME)
+        logger.info(f"Qdrant collection '{QDRANT_COLLECTION_NAME}' already exists.") # CORRECTED Line 48
+    except Exception:
+        logger.info(f"Creating Qdrant collection: {QDRANT_COLLECTION_NAME}")
+        qdrant_client.recreate_collection(
+            collection_name=QDRANT_COLLECTION_NAME,
+            vectors_config=models.VectorParams(
+                size=embedding_model.get_sentence_embedding_dimension() if embedding_model else 384, # Get dimension from model
+                distance=models.Distance.COSINE
+            )
+        )
+        logger.info(f"Qdrant collection '{QDRANT_COLLECTION_NAME}' created.") # CORRECTED Line 60
+except Exception as e:
+    logger.error(f"Failed to initialize Qdrant client or collection: {e}", exc_info=True)
+    qdrant_client = None
+
+# Initialize Text Splitter
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200,
+    length_function=len,
+)
+
+# --- Processing Functions (Can be called directly or via a class instance if preferred) ---
+
+def load_and_split_document(file_path: str) -> List[Dict[str, Any]]:
+    """Loads and splits a document into chunks."""
+    extension = os.path.splitext(file_path)[1].lower()
+    
+    if extension == ".pdf":
+        loader = PyPDFLoader(file_path)
+    elif extension == ".txt":
+        loader = TextLoader(file_path)
+    elif extension in [".docx", ".doc"]:
+        loader = Docx2txtLoader(file_path)
+    elif extension == ".csv":
+        loader = CSVLoader(file_path)
+    else:
+        raise ValueError(f"Unsupported file type: {extension}")
+    
+    documents = loader.load()
+    chunks = text_splitter.split_documents(documents)
+    
+    chunk_dicts = []
+    for i, chunk in enumerate(chunks):
+        chunk_dicts.append({
+            "id": f"{os.path.basename(file_path)}-{i}", # Generate a unique ID for the chunk
+            "text": chunk.page_content,
+            "metadata": {
+                "page": chunk.metadata.get("page", i),
+                "source": os.path.basename(file_path) # Store only filename as source
+            }
+        })
+    return chunk_dicts
+
+def generate_embeddings(texts: List[str]) -> Optional[List[List[float]]]:
+    """Generates embeddings for a list of texts."""
+    if not embedding_model:
+        logger.error("Embedding model not available.")
+        return None
+    try:
+        # SentenceTransformer handles batching and device placement
+        embeddings = embedding_model.encode(texts, convert_to_numpy=True).tolist()
+        return embeddings
+    except Exception as e:
+        logger.error(f"Error generating embeddings: {e}", exc_info=True)
+        return None
+
+def store_embeddings(chunks: List[Dict[str, Any]], embeddings: List[List[float]], department: str):
+    """Stores chunks and embeddings in Qdrant."""
+    if not qdrant_client:
+        logger.error("Qdrant client not available.")
+        return
+    
+    points = []
+    for i, chunk in enumerate(chunks):
+        # Add department to metadata for filtering
+        chunk_metadata = chunk["metadata"]
+        chunk_metadata["department"] = department 
+        
+        points.append(models.PointStruct(
+            id=chunk["id"], 
+            vector=embeddings[i],
+            payload={"text": chunk["text"], **chunk_metadata} # Combine text and metadata
+        ))
+    
+    try:
+        qdrant_client.upsert(
+            collection_name=QDRANT_COLLECTION_NAME,
+            points=points,
+            wait=True # Wait for operation to complete
+        )
+        logger.info(f"Stored {len(points)} points in Qdrant collection '{QDRANT_COLLECTION_NAME}'.") # CORRECTED Line 139
+    except Exception as e:
+        logger.error(f"Failed to store points in Qdrant: {e}", exc_info=True)
+
+async def process_and_store_document(file_path: str, department: str):
+    """Main function to process a document and store its embeddings."""
+    logger.info(f"Starting processing for document: {file_path}, Department: {department}")
+    try:
+        chunks = load_and_split_document(file_path)
+        if not chunks:
+            logger.warning(f"No chunks generated for document: {file_path}")
+            return
+        
+        logger.info(f"Generated {len(chunks)} chunks. Generating embeddings...")
+        embeddings = generate_embeddings([c["text"] for c in chunks])
+        
+        if embeddings and len(embeddings) == len(chunks):
+            logger.info(f"Embeddings generated. Storing {len(chunks)} points in Qdrant...")
+            store_embeddings(chunks, embeddings, department)
+            logger.info(f"Successfully processed and stored document: {file_path}")
+        else:
+            logger.error(f"Failed to generate embeddings or mismatch in count for document: {file_path}")
+            
+    except Exception as e:
+        logger.error(f"Error processing document {file_path}: {e}", exc_info=True)
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                logger.info(f"Removed temporary file: {file_path}")
+            except Exception as e:
+                logger.error(f"Failed to remove temporary file {file_path}: {e}")
+
+# Note: The DocumentProcessor class is no longer the primary way to use this module.
+# The functions load_and_split_document, generate_embeddings, store_embeddings, 
+# and process_and_store_document can be called directly.
+# The necessary components (embedding_model, qdrant_client, device, QDRANT_COLLECTION_NAME) 
+# are initialized at the module level and can be imported by other modules like query_processor.py.
+

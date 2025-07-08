@@ -1,0 +1,57 @@
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from app.api.routes import monitoring
+
+app = FastAPI(
+    title="RAG AI Application",
+    description="A Retrieval-Augmented Generation AI application with GPU acceleration",
+    version="1.0.0"
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to RAG AI Application API"}
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "gpu_available": True,
+        "system_info": {
+            "cpu": {"usage": 25.0},
+            "memory": {"total": 64.0, "used": 16.0},
+            "gpu": {
+                "available": True,
+                "name": "NVIDIA RTX 5090",
+                "memory": {"total": 32.0, "used": 2.0}
+            }
+        }
+    }
+
+@app.get("/api/auth/me")
+async def get_current_user():
+    return {"id": 1, "username": "admin", "email": "admin@example.com", "is_active": True}
+
+@app.get("/api/documents")
+async def list_documents():
+    return [
+        {"id": 1, "title": "Sample Document 1", "description": "This is a sample document", "is_processed": True},
+        {"id": 2, "title": "Sample Document 2", "description": "This is another sample document", "is_processed": True}
+    ]
+
+@app.get("/api/queries")
+async def list_queries():
+    return [
+        {"id": 1, "query_text": "What is RAG?", "response_text": "RAG stands for Retrieval-Augmented Generation", "model_used": "gpt-j-6b"},
+        {"id": 2, "query_text": "How does GPU acceleration work?", "response_text": "GPU acceleration uses parallel processing to speed up computations", "model_used": "llama-2-7b"}
+    ]

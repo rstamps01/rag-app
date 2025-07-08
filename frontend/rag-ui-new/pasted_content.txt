@@ -1,0 +1,177 @@
+INFO: 172.20.0.1:38652 - "GET /api/v1/documents HTTP/1.1" 307 Temporary Redirect
+
+
+INFO:app.api.routes.documents:Listing documents: skip=0, limit=10
+
+
+INFO:app.api.routes.documents:Returning 0 documents out of 0
+
+
+INFO: 172.20.0.1:38652 - "GET /api/v1/documents/ HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:38652 - "GET /api/monitoring/pipelines HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:38654 - "GET /api/monitoring/stats HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:47562 - "GET /api/monitoring/pipelines HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:47576 - "GET /api/monitoring/stats HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:47576 - "GET /api/v1/documents HTTP/1.1" 307 Temporary Redirect
+
+
+INFO:app.api.routes.documents:Listing documents: skip=0, limit=10
+
+
+INFO:app.api.routes.documents:Returning 0 documents out of 0
+
+
+INFO: 172.20.0.1:47576 - "GET /api/v1/documents/ HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:35962 - "POST /api/v1/documents HTTP/1.1" 307 Temporary Redirect
+
+
+INFO:app.api.routes.documents:Receiving file: vast-whitepaper.pdf (doc_id: 9051e2e7-020b-4c88-b795-3034cf95fade)
+
+
+INFO:app.api.routes.documents:File saved to: /app/data/uploaded_files/9051e2e7-020b-4c88-b795-3034cf95fade_vast-whitepaper.pdf
+
+
+INFO:app.api.routes.documents:Document record created for 9051e2e7-020b-4c88-b795-3034cf95fade
+
+
+WARNING:app.api.routes.documents:Background processing task not implemented yet. Status remains 'pending'.
+
+
+INFO: 172.20.0.1:35962 - "POST /api/v1/documents/ HTTP/1.1" 202 Accepted
+
+
+INFO: 172.20.0.1:35962 - "GET /api/v1/documents HTTP/1.1" 307 Temporary Redirect
+
+
+INFO: 172.20.0.1:35962 - "GET /api/v1/documents/ HTTP/1.1" 200 OK
+
+
+INFO:app.api.routes.documents:Listing documents: skip=0, limit=10
+
+
+INFO:app.api.routes.documents:Returning 1 documents out of 1
+
+
+INFO: 172.20.0.1:35962 - "GET /api/monitoring/pipelines HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:35964 - "GET /api/monitoring/stats HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:43698 - "GET /api/monitoring/pipelines HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:43712 - "GET /api/monitoring/stats HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:43724 - "GET /api/monitoring/pipelines HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:43726 - "GET /api/monitoring/stats HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:43726 - "GET /api/v1/documents HTTP/1.1" 307 Temporary Redirect
+
+
+INFO:app.api.routes.documents:Listing documents: skip=0, limit=10
+
+
+INFO:app.api.routes.documents:Returning 1 documents out of 1
+
+
+INFO: 172.20.0.1:43726 - "GET /api/v1/documents/ HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:38312 - "POST /api/v1/documents HTTP/1.1" 307 Temporary Redirect
+
+
+INFO:app.api.routes.documents:Receiving file: Transforming-High-Performance-Computing-with-VAST-Data.pdf (doc_id: 2000b4b4-9095-4b3a-9905-dabb84e19896)
+
+
+INFO:app.api.routes.documents:File saved to: /app/data/uploaded_files/2000b4b4-9095-4b3a-9905-dabb84e19896_Transforming-High-Performance-Computing-with-VAST-Data.pdf
+
+
+INFO:app.api.routes.documents:Document record created for 2000b4b4-9095-4b3a-9905-dabb84e19896
+
+
+WARNING:app.api.routes.documents:Background processing task not implemented yet. Status remains 'pending'.
+
+
+INFO: 172.20.0.1:38312 - "POST /api/v1/documents/ HTTP/1.1" 202 Accepted
+
+
+INFO: 172.20.0.1:38312 - "GET /api/v1/documents HTTP/1.1" 307 Temporary Redirect
+
+
+INFO:app.api.routes.documents:Listing documents: skip=0, limit=10
+
+
+INFO:app.api.routes.documents:Returning 2 documents out of 2
+
+
+INFO: 172.20.0.1:38312 - "GET /api/v1/documents/ HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:52126 - "GET /api/monitoring/pipelines HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:52130 - "GET /api/monitoring/stats HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:44362 - "OPTIONS /api/v1/queries/ask HTTP/1.1" 200 OK
+
+
+INFO:app.api.routes.queries:Executing RAG query: 'What is VAST' using model: default_model
+
+
+INFO:app.api.routes.queries:Generated query embedding (simulated)
+
+
+INFO:app.api.routes.queries:Retrieved 2 sources from vector store (simulated)
+
+
+INFO:app.api.routes.queries:Generated response from LLM (simulated)
+
+
+INFO:app.api.routes.queries:Query processed successfully in 0.00s
+
+
+INFO: 172.20.0.1:44362 - "POST /api/v1/queries/ask HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:44366 - "GET /api/monitoring/pipelines HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:48064 - "GET /api/monitoring/stats HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:59864 - "GET /api/monitoring/pipelines HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:59878 - "GET /api/monitoring/stats HTTP/1.1" 200 OK
+
+
+INFO: 172.20.0.1:59878 - "GET /api/v1/documents HTTP/1.1" 307 Temporary Redirect
+
+
+INFO:app.api.routes.documents:Listing documents: skip=0, limit=10
+
+
+INFO:app.api.routes.documents:Returning 2 documents out of 2
+
+
+INFO: 172.20.0.1:59878 - "GET /api/v1/documents/ HTTP/1.1" 200 OK
+
+

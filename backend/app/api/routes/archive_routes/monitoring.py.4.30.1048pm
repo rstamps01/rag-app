@@ -1,0 +1,29 @@
+# In app/api/routes/monitoring.py
+from fastapi import APIRouter, HTTPException
+from app.core.pipeline_monitor import pipeline_monitor
+
+router = APIRouter()
+
+@router.get("/api/monitoring/pipelines")
+async def get_pipelines():
+    """Get list of all pipeline IDs"""
+    return {"pipelines": pipeline_monitor.get_active_pipelines()}
+
+@router.get("/api/monitoring/pipelines/{pipeline_id}")
+async def get_pipeline_events(pipeline_id: str):
+    """Get all events for a specific pipeline"""
+    events = pipeline_monitor.get_pipeline_events(pipeline_id)
+    if not events:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    return {"events": events}
+
+@router.get("/api/monitoring/stats")
+async def get_pipeline_stats():
+    """Get aggregated pipeline statistics"""
+    # Implement statistics calculation here
+    return {"stats": {
+        "total_documents": 0,
+        "total_queries": 0,
+        "avg_processing_time": 0,
+        # etc.
+    }}

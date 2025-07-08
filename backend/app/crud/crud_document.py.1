@@ -1,0 +1,65 @@
+# File Path: /home/ubuntu/rag_app_v2/rag-app/backend/app/crud/crud_document.py
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from app import models, schemas
+import logging
+
+logger = logging.getLogger(__name__)
+
+def get_document(db: Session, doc_id: str) -> models.Document | None:
+    return db.query(models.Document).filter(models.Document.id == doc_id).first()
+
+def get_documents_by_department(
+    db: Session, department: str, skip: int = 0, limit: int = 100
+) -> list[models.Document]:
+    return (
+        db.query(models.Document)
+        .filter(models.Document.department == department)
+        .order_by(models.Document.upload_date.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+def count_documents_by_department(db: Session, department: str) -> int:
+    return (
+        db.query(func.count(models.Document.id))
+        .filter(models.Document.department == department)
+        .scalar() or 0
+    )
+
+def create_document(db: Session, document: schemas.DocumentCreate) -> models.Document:
+    db_document = models.Document(**document.model_dump())
+    db.add(db_document)
+    db.commit()
+    db.refresh(db_document)
+    logger.info(f"Created document record: {db_document.id} for department {document.department}")
+    return db_document
+
+def update_document_status(
+    db: Session, doc_id: str, status: str, error_message: str | None = None
+) -> models.Document | None:
+    db_doc = get_document(db, doc_id=doc_id)
+    if db_doc:
+        db_doc.status = status
+        db_doc.error_message = error_message
+        db.commit()
+        db.refresh(db_doc)
+        logger.info(f"Updated status for document {doc_id} to {status}")
+    else:
+        logger.warning(f"Attempted to update status for non-existent document: {doc_id}")
+    return db_doc
+
+def delete_document(db: Session, doc_id: str) -> models.Document | None:
+    db_doc = get_document(db, doc_id=doc_id)
+    if db_doc:
+        db.delete(db_doc)
+        db.commit()
+        logger.info(f"Deleted document record: {doc_id}")
+        return db_doc
+    else:
+        logger.warning(f"Attempted to delete non-existent document record: {doc_id}")
+        return None
+
+# Add other document-related CRUD operations as needed
+
