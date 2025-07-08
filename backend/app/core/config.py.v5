@@ -1,4 +1,4 @@
-# File Path: /home/ubuntu/rag-app-analysis/rag-app/backend/app/core/config.py
+# File Path: /home/ubuntu/rag_app_v2/rag-app/backend/app/core/config.py
 import os
 from typing import Optional, List
 from email_validator import validate_email
@@ -20,31 +20,19 @@ class Settings(BaseSettings):
 
     # Vector Database
     QDRANT_URL: str = os.getenv("QDRANT_URL", "http://qdrant:6333") 
-    QDRANT_HOST: str = os.getenv("QDRANT_HOST", "qdrant")
-    QDRANT_PORT: int = int(os.getenv("QDRANT_PORT", "6333"))
-    QDRANT_COLLECTION_NAME: str = os.getenv("QDRANT_COLLECTION_NAME", "rag_documents")
+    QDRANT_HOST: str = os.getenv("QDRANT_HOST", "qdrant") # Added based on document_processor.py usage
+    QDRANT_PORT: int = int(os.getenv("QDRANT_PORT", "6333")) # Added based on document_processor.py usage
+    QDRANT_COLLECTION_NAME: str = os.getenv("QDRANT_COLLECTION_NAME", "rag_documents") # Added missing setting
     
     # GPU Settings
     USE_GPU: bool = os.getenv("USE_GPU", "True").lower() in ("true", "1", "t")
     
     # LLM Settings
-    DEFAULT_LLM_MODEL: str = os.getenv("DEFAULT_LLM_MODEL", "mistral-7b")
+    DEFAULT_LLM_MODEL: str = os.getenv("DEFAULT_LLM_MODEL", "gpt-j-6b")
     AVAILABLE_MODELS: list = ["gpt-j-6b", "llama-2-7b", "falcon-7b", "mistral-7b"]
-    
-    # OCR Settings
-    OCR_ENABLED: bool = os.getenv("OCR_ENABLED", "True").lower() in ("true", "1", "t")
-    OCR_LANGUAGE: str = os.getenv("OCR_LANGUAGE", "eng")
-    
-    # Context Window Settings
-    MAX_CONTEXT_LENGTH: int = int(os.getenv("MAX_CONTEXT_LENGTH", "4096"))
-    MAX_NEW_TOKENS: int = int(os.getenv("MAX_NEW_TOKENS", "512"))
-    
-    # File Storage
-    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/app/data/uploads")
-    LOGS_DIR: str = os.getenv("LOGS_DIR", "/app/data/logs")
-    MODELS_CACHE_DIR: str = os.getenv("MODELS_CACHE_DIR", "/app/models_cache")
 
     class Config:
         case_sensitive = True
 
 settings = Settings()
+

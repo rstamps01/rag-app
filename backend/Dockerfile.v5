@@ -53,8 +53,8 @@ ARG HUGGING_FACE_HUB_TOKEN
 ENV HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
 
 # Copy and run the script to download models during build time.
-COPY download_models.py .
-RUN python3 download_models.py
+# COPY download_models.py .
+# RUN python3 download_models.py
 
 # === Application Code ===
 # Copy the entire application code into the container.
@@ -75,3 +75,4 @@ EXPOSE 8000
 # Command to start the Uvicorn server for the FastAPI application.
 # Runs on all interfaces (0.0.0.0) inside the container.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
