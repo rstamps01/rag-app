@@ -28,22 +28,53 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # === PyTorch Installation for CUDA 12.8 ===
 # Install PyTorch 2.7.0, torchvision, and torchaudio compatible with CUDA 12.8.
 # This is done separately to ensure the correct CUDA version is used.
+# RUN pip3 install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
+# RUN pip3 install \
+#    torch==2.8.0.dev20250504+cu128 \
+#    torchvision==0.22.0.dev20250504+cu128 \
+#    pytorch-triton==3.3.0+git96316ce5 \
+#    nvidia-cublas-cu12==12.8.3.14 \
+#    nvidia-cuda-cupti-cu12==12.8.57 \
+#    nvidia-cuda-nvrtc-cu12==12.8.61 \
+#    nvidia-cuda-runtime-cu12==12.8.57 \
+#    nvidia-cudnn-cu12==9.8.0.87 \
+#    nvidia-cufft-cu12==11.3.3.41 \
+#    nvidia-cufile-cu12==1.13.0.11 \
+#    nvidia-curand-cu12==10.3.9.55 \
+#    nvidia-cusolver-cu12==11.7.2.55 \
+#    nvidia-cusparse-cu12==12.5.7.53 \
+#    nvidia-nvjitlink-cu12==12.8.61 \
+#    nvidia-nvtx-cu12==12.8.55 \
+#    --index-url https://download.pytorch.org/whl/nightly/cu128
+
+# === Upddated Pytorch Installation for CUDA 12.8 - July 8, 2025 ===
+
 RUN pip3 install \
-    torch==2.8.0.dev20250504+cu128 \
-    torchvision==0.22.0.dev20250504+cu128 \
-    pytorch-triton==3.3.0+git96316ce5 \
-    nvidia-cublas-cu12==12.8.3.14 \
-    nvidia-cuda-cupti-cu12==12.8.57 \
-    nvidia-cuda-nvrtc-cu12==12.8.61 \
-    nvidia-cuda-runtime-cu12==12.8.57 \
-    nvidia-cudnn-cu12==9.8.0.87 \
-    nvidia-cufft-cu12==11.3.3.41 \
-    nvidia-cufile-cu12==1.13.0.11 \
-    nvidia-curand-cu12==10.3.9.55 \
-    nvidia-cusolver-cu12==11.7.2.55 \
-    nvidia-cusparse-cu12==12.5.7.53 \
-    nvidia-nvjitlink-cu12==12.8.61 \
-    nvidia-nvtx-cu12==12.8.55 \
+    torch==2.9.0.dev20250708+cu128 \
+    torchvision==0.24.0.dev20250708+cu128 \
+    torchaudio==2.8.0.dev20250708+cu128 \
+    pytorch-triton==3.4.0+gitae848267 \
+    nvidia-cublas-cu12== \
+    torch-2.9.0.dev20250708+cu128 \
+    torchaudio-2.8.0.dev20250708+cu128 \
+    torchvision-0.24.0.dev20250708+cu128 \
+    pytorch-triton-3.4.0+gitae848267 \
+    nvidia-cublas-cu12-12.8.4.1 \
+    nvidia-cuda-cupti-cu12-12.8.90 \
+    nvidia-cuda-nvrtc-cu12-12.8.93 \
+    nvidia-cuda-runtime-cu12-12.8.90 \
+    nvidia-cudnn-cu12-9.10.2.21 \
+    nvidia-cufft-cu12-11.3.3.83 \
+    nvidia-cufile-cu12-1.13.1.3 \
+    nvidia-curand-cu12-10.3.9.90 \
+    nvidia-cusolver-cu12-11.7.3.90 \
+    nvidia-cusparse-cu12-12.5.8.93 \
+    nvidia-cusparselt-cu12-0.7.1 \
+    nvidia-nccl-cu12-2.27.3 \
+    nvidia-nvjitlink-cu12-12.8.93 \
+    nvidia-nvshmem-cu12-3.3.9 \
+    nvidia-nvtx-cu12-12.8.90 \
+    pillow-11.2.1 \
     --index-url https://download.pytorch.org/whl/nightly/cu128
 
 # === Pre-download Models ===
