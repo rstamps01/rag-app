@@ -30,7 +30,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY requirements.txt .
 
 # Install Python packages listed in requirements.txt.
-RUN pip3 install --no-cache-dir -r requirements.txt
+# RUN pip3 install --no-cache-dir -r requirements.txt
 # RUN pip3 install -r requirements.txt
 
 # === PyTorch Installation for CUDA 12.8 ===
@@ -56,6 +56,8 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 #    --index-url https://download.pytorch.org/whl/nightly/cu128
 
 # === Upddated Pytorch Installation for CUDA 12.8 - July 8, 2025 ===
+# Install Python packages listed in requirements.txt.
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 RUN pip3 install \
     nvidia-cublas-cu12==12.8.4.1 \
@@ -76,7 +78,7 @@ RUN pip3 install \
     pillow==11.2.1 \
     torch==2.9.0.dev20250708+cu128 \
     torchvision==0.24.0.dev20250708+cu128 \
-    # torchaudio==2.8.0.dev20250708+cu128 \
+#   torchaudio==2.8.0.dev20250708+cu128 \
     pytorch-triton==3.4.0+gitae848267 \
     --index-url https://download.pytorch.org/whl/nightly/cu128
 

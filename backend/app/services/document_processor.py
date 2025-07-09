@@ -15,18 +15,18 @@ from langchain_community.document_loaders import (
     CSVLoader
 )
 
-from app.core.config import settings
-from app.core.pipeline_monitor import pipeline_monitor
-from app.db.session import get_db
-from app.crud.crud_document import create_document, get_document_by_filename, update_document
-from app.schemas.document import DocumentCreate, DocumentUpdate
+from ..core.config import settings
+from ..core.pipeline_monitor import pipeline_monitor
+from ..db.session import get_db
+from ..crud.crud_document import create_document, get_document_by_filename, update_document
+from ..schemas.document import DocumentCreate, DocumentUpdate
 from sqlalchemy.orm import Session
 import time
 import uuid
 import pytesseract
 from PIL import Image
 import io
-import fitz  # PyMuPDF for PDF image extraction
+import fitz  #  PyMuPDF for PDF image extraction
 import tempfile
 import datetime
 
