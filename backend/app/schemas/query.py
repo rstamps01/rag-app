@@ -51,5 +51,5 @@ class QueryHistoryResponse(BaseModel):
     gpu_accelerated: Optional[bool] = False
 
     class Config:
-        orm_mode = True # For SQLAlchemy model conversion
+        from_attributes = True # For SQLAlchemy model conversion
 

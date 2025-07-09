@@ -76,6 +76,9 @@ app.include_router(admin.router, prefix=f"{settings.API_V1_STR}/admin", tags=["a
 app.include_router(system.router, prefix=f"{settings.API_V1_STR}/system", tags=["system"])
 app.include_router(monitoring.router, prefix=f"{settings.API_V1_STR}/monitoring", tags=["monitoring"])
 
+# Include monitoring router
+app.include_router(monitoring.router, prefix="/api/v1/monitoring", tags=["monitoring"])
+
 @app.get("/")
 async def root():
     """
@@ -100,6 +103,8 @@ async def health_check():
         "database": "connected" if engine else "disconnected",
         "timestamp": datetime.datetime.now().isoformat()
     }
+
+
 
 # Import here to avoid circular imports
 import datetime

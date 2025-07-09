@@ -1,0 +1,252 @@
+# File Path: /home/ubuntu/rag_app_v2/rag-app/backend/app/api/routes/documents.py
+
+from fastapi import (
+    APIRouter, 
+    Depends, 
+    HTTPException, 
+    status, 
+    UploadFile, 
+    File, 
+    BackgroundTasks,
+    Query # Added Query for pagination
+)
+from typing import Any, List, Dict # Added Dict
+import os
+import uuid
+from datetime import datetime
+import time
+import logging # Added for logging
+import asyncio # Keep for actual async operations if any in future, or remove if process_and_store_document is not async
+
+# Assuming schemas are defined correctly elsewhere
+# from app.schemas.documents import DocumentCreate, Document, DocumentList 
+# --- Example Pydantic models (replace with your actual schemas) ---
+from pydantic import BaseModel, Field
+
+# Import the actual document processing function
+# Assuming document_processor.py is in app/services/
+# from app.services.document_processor import process_and_store_document
+
+class DocumentMetadata(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    filename: str
+    content_type: str | None = None
+    size: int
+    upload_date: datetime = Field(default_factory=datetime.now)
+    status: str = "pending" # e.g., pending, processing, completed, failed
+    path: str | None = None # Path where the raw file is stored
+    error_message: str | None = None
+
+class DocumentList(BaseModel):
+    documents: List[DocumentMetadata]
+    total_count: int # Added for pagination response
+# --- End Example Models ---
+
+# Setup logger
+logger = logging.getLogger(__name__)
+# Ensure logger is configured to output INFO messages (might be handled by Uvicorn, but good to be explicit if needed)
+# logging.basicConfig(level=logging.INFO) # Uncomment if logs are not appearing
+
+router = APIRouter()
+
+# --- Configuration (Should come from settings/env vars) ---
+UPLOAD_DIR = "/app/data/uploads" # Example upload directory
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# --- Global In-Memory Store (Placeholder - used by placeholder logic below) ---
+# This should ideally be replaced with actual PostgreSQL interactions for status updates.
+# For now, we'll keep it to reflect status changes based on the background task.
+documents_db: Dict[str, Dict[str, Any]] = {}
+# ---------------------------------------------------------------------------
+
+# ================================================
+# Actual Document Processing Logic Integration
+# ================================================
+async def process_document_pipeline(doc_id: str, file_path: str, filename: str):
+    """
+    Background task to process the uploaded document using the actual document_processor.
+    """
+    # VERY IMPORTANT: Add print and logger statements at the VERY BEGINNING
+    print(f"--- PRINT: [BACKGROUND TASK process_document_pipeline ENTRY] doc_id: {doc_id}, file: {filename} ---")
+    logger.info(f"--- LOGGER: [BACKGROUND TASK process_document_pipeline ENTRY] doc_id: {doc_id}, file: {filename} ---")
+    
+    global documents_db # Access the global placeholder for status updates
+    processing_start_time = time.time()
+    
+    try:
+        logger.info(f"[{doc_id}] Inside try block of process_document_pipeline.")
+        # 1. Update Status to Processing (using placeholder DB)
+        if doc_id in documents_db:
+            documents_db[doc_id]["status"] = "processing"
+            logger.info(f"[{doc_id}] Status set to 'processing' in placeholder DB.")
+        else:
+            logger.warning(f"[{doc_id}] doc_id not found in placeholder DB to set status to 'processing'.")
+
+        # 2. Call the actual document processing function from document_processor.py
+        logger.info(f"[{doc_id}] Attempting to call document_processor.process_and_store_document for file: {file_path}")
+        await process_and_store_document(file_path=file_path, department="general")
+        logger.info(f"[{doc_id}] Call to document_processor.process_and_store_document completed.")
+
+        # 3. Update Status to Completed (using placeholder DB)
+        if doc_id in documents_db:
+            documents_db[doc_id]["status"] = "completed"
+            processing_time = time.time() - processing_start_time
+            logger.info(f"[{doc_id}] Status set to 'completed' in placeholder DB. Processing time: {processing_time:.2f}s")
+        else:
+            logger.warning(f"[{doc_id}] doc_id not found in placeholder DB to set status to 'completed'.")
+
+    except Exception as e:
+        error_msg = f"[BACKGROUND TASK] Unhandled error in processing pipeline for doc_id {doc_id}: {e}"
+        logger.error(error_msg, exc_info=True)
+        print(f"--- PRINT: [BACKGROUND TASK process_document_pipeline ERROR] doc_id: {doc_id}, error: {e} ---")
+        if doc_id in documents_db:
+            documents_db[doc_id]["status"] = "failed"
+            documents_db[doc_id]["error_message"] = str(e)
+            logger.info(f"[{doc_id}] Status set to 'failed' in placeholder DB due to unhandled error.")
+        else:
+            logger.warning(f"[{doc_id}] doc_id not found in placeholder DB to set status to 'failed' after unhandled error.")
+    finally:
+        logger.info(f"--- LOGGER: [BACKGROUND TASK process_document_pipeline EXIT] doc_id: {doc_id} ---")
+        print(f"--- PRINT: [BACKGROUND TASK process_document_pipeline EXIT] doc_id: {doc_id} ---")
+
+# ================================================
+# API Route Definitions
+# ================================================
+
+@router.post("/", response_model=DocumentMetadata, status_code=status.HTTP_202_ACCEPTED)
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+) -> Any:
+    logger.info(f"--- API POST /documents - Received file: {file.filename} ---")
+    global documents_db 
+    
+    doc_id = str(uuid.uuid4())
+    safe_filename = f"{doc_id}_{os.path.basename(file.filename)}"
+    file_location = os.path.join(UPLOAD_DIR, safe_filename)
+
+    try:
+        file_content = await file.read()
+        file_size = len(file_content)
+        with open(file_location, "wb") as f:
+            f.write(file_content)
+        logger.info(f"[{doc_id}] File saved: {file_location}, size: {file_size}")
+    except Exception as e:
+        logger.error(f"[{doc_id}] Failed to save file {safe_filename}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save uploaded file: {e}"
+        )
+    finally:
+        await file.close()
+
+    doc_metadata = DocumentMetadata(
+        id=doc_id,
+        filename=file.filename,
+        content_type=file.content_type,
+        size=file_size,
+        status="pending",
+        path=file_location
+    )
+
+    try:
+        documents_db[doc_id] = doc_metadata.model_dump()
+        logger.info(f"[{doc_id}] Initial metadata saved to placeholder DB.")
+    except Exception as e:
+        logger.error(f"[{doc_id}] Failed to save initial metadata to placeholder DB: {e}", exc_info=True)
+        if os.path.exists(file_location):
+             try: os.remove(file_location) 
+             except OSError: logger.error(f"[{doc_id}] Failed to remove partial file: {file_location}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create document record in placeholder database: {e}"
+        )
+
+    logger.info(f"[{doc_id}] Adding background task for file: {file_location}")
+    background_tasks.add_task(
+        process_document_pipeline, 
+        doc_id=doc_id, 
+        file_path=file_location, 
+        filename=file.filename
+    )
+    logger.info(f"[{doc_id}] Successfully added background task.")
+
+    return doc_metadata
+
+@router.get("/", response_model=DocumentList)
+async def list_documents(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100)
+) -> Any:
+    global documents_db
+    try:
+        all_doc_ids = list(documents_db.keys())
+        paginated_ids = all_doc_ids[skip : skip + limit]
+        paginated_docs_data = [documents_db[doc_id] for doc_id in paginated_ids]
+        # Ensure the data matches DocumentMetadata structure before creating instances
+        paginated_docs = [DocumentMetadata(**data) for data in paginated_docs_data]
+        total_count = len(documents_db)
+        logger.info(f"API GET /documents - Listing documents, skip={skip}, limit={limit}, returning {len(paginated_docs)} of {total_count}")
+        return {"documents": paginated_docs, "total_count": total_count}
+    except Exception as e:
+        logger.error(f"API GET /documents - Error listing documents: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve documents")
+
+@router.get("/{document_id}", response_model=DocumentMetadata)
+async def get_document(document_id: str) -> Any:
+    global documents_db
+    document_dict = documents_db.get(document_id)
+    if not document_dict:
+        logger.warning(f"API GET /documents/{document_id} - Document not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+    logger.info(f"API GET /documents/{document_id} - Retrieved document.")
+    return DocumentMetadata(**document_dict)
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_document(document_id: str) -> None:
+    global documents_db
+    document_dict = documents_db.get(document_id)
+    if not document_dict:
+        logger.warning(f"API DELETE /documents/{document_id} - Attempted to delete non-existent document.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    # 1. Delete from Vector Store (Placeholder - actual deletion should be in document_processor.py or similar)
+    # For now, we assume Qdrant deletion would be handled if this were a full system.
+    # The provided document_processor.py does not have a delete_embeddings function.
+    logger.info(f"[{document_id}] Simulating deletion of embeddings from vector DB (actual logic needed).")
+
+    # 2. Delete File from Storage
+    file_path = document_dict.get("path")
+    if file_path and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+            logger.info(f"[{document_id}] Deleted file: {file_path}")
+        except Exception as e:
+            logger.error(f"[{document_id}] Failed to delete file {file_path}: {e}", exc_info=True)
+    else:
+        logger.warning(f"[{document_id}] File path not found or file does not exist: {file_path}")
+
+    # 3. Delete from Database (Placeholder)
+    try:
+        if document_id in documents_db:
+             del documents_db[document_id]
+             logger.info(f"[{document_id}] Deleted document metadata from placeholder DB.")
+        else: 
+             logger.warning(f"[{document_id}] Document was not found in placeholder DB during delete operation.")
+             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found during delete.")
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"[{document_id}] Failed to delete metadata from placeholder DB: {e}", exc_info=True) 
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete document record from placeholder database: {e}"
+        )
+    return None
+

@@ -23,7 +23,7 @@ class UserInDBBase(UserBase):
     is_active: bool
 
     class Config:
-        from_attributes = True # Replaces orm_mode = True in Pydantic v2
+        from_attributes = True # Replaces from_attributes = True in Pydantic v2
 
 # Additional properties stored in DB
 class UserInDB(UserInDBBase):
