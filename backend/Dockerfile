@@ -30,8 +30,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY requirements.txt .
 
 # Install Python packages listed in requirements.txt.
-# RUN pip3 install --no-cache-dir -r requirements.txt
-RUN pip3 install -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
+# RUN pip3 install -r requirements.txt
 
 # === PyTorch Installation for CUDA 12.8 ===
 # Install PyTorch 2.7.0, torchvision, and torchaudio compatible with CUDA 12.8.
