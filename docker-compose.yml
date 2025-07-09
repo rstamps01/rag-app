@@ -44,7 +44,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - HUGGING_FACE_HUB_TOKEN=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
+      - HUGGING_FACE_HUB_TOKEN=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
       - DATABASE_URL=postgresql://raguser:ragpassword@postgres:5432/ragdb
       - QDRANT_URL=http://qdrant:6333
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}

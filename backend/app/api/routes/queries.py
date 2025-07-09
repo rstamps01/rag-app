@@ -6,10 +6,10 @@ import logging
 
 from app.db.base import get_db 
 from sqlalchemy.orm import Session
-from ...services import query_processor 
+from app.services import query_processor 
 # Updated schema imports
-from ...schemas.query import QueryRequest, QueryResponse, QueryHistoryResponse 
-from ...crud import crud_query_history # Import CRUD for query history
+from app.schemas.query import QueryRequest, QueryResponse, QueryHistoryResponse
+from app.crud import crud_query_history # Import CRUD for query history
 # from ...core.security import get_current_active_user # Placeholder for user auth
 # from ...models.models import User as UserModel # Placeholder for user model
 

@@ -9,6 +9,14 @@ class DocumentBase(BaseModel):
 class DocumentCreate(DocumentBase):
     pass
 
+class DocumentUpdate(BaseModel):
+    """Schema for updating document metadata"""
+    filename: Optional[str] = None
+    content_type: Optional[str] = None
+    status: Optional[str] = None
+    path: Optional[str] = None
+    error_message: Optional[str] = None
+
 class Document(DocumentBase):
     id: str
     size: int

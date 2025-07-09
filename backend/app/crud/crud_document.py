@@ -1,15 +1,19 @@
-# File Path: /home/ubuntu/rag-app-analysis/rag-app/backend/app/crud/crud_document.py
+# File Path: /backend/app/crud/crud_document.py
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from app import models, schemas
+
+# Fixed imports - use direct imports instead of package imports
+from app.models.models import Document
+from app.schemas.documents import DocumentCreate, DocumentUpdate
+
 import logging
 import uuid
 
 logger = logging.getLogger(__name__)
 
-def get_document(db: Session, doc_id: str) -> Optional[models.Document]:
+def get_document(db: Session, doc_id: str) -> Optional[Document]:
     """
     Retrieve a document by its ID.
     
@@ -18,11 +22,15 @@ def get_document(db: Session, doc_id: str) -> Optional[models.Document]:
         doc_id: Document ID
         
     Returns:
-        Document object or None if not found
+        Document object if found, None otherwise
     """
-    return db.query(models.Document).filter(models.Document.id == doc_id).first()
+    try:
+        return db.query(Document).filter(Document.id == doc_id).first()
+    except Exception as e:
+        logger.error(f"Error retrieving document {doc_id}: {str(e)}")
+        return None
 
-def get_document_by_filename(db: Session, filename: str) -> Optional[models.Document]:
+def get_document_by_filename(db: Session, filename: str) -> Optional[Document]:
     """
     Retrieve a document by its filename.
     
@@ -31,92 +39,82 @@ def get_document_by_filename(db: Session, filename: str) -> Optional[models.Docu
         filename: Document filename
         
     Returns:
-        Document object or None if not found
+        Document object if found, None otherwise
     """
-    return db.query(models.Document).filter(models.Document.filename == filename).first()
+    try:
+        return db.query(Document).filter(Document.filename == filename).first()
+    except Exception as e:
+        logger.error(f"Error retrieving document by filename {filename}: {str(e)}")
+        return None
 
 def get_documents(
-    db: Session, skip: int = 0, limit: int = 100
-) -> List[models.Document]:
+    db: Session, 
+    skip: int = 0, 
+    limit: int = 100,
+    department: Optional[str] = None
+) -> List[Document]:
     """
-    Fetches all documents with pagination.
+    Retrieve multiple documents with optional filtering.
     
     Args:
         db: Database session
         skip: Number of records to skip
         limit: Maximum number of records to return
+        department: Optional department filter
         
     Returns:
         List of Document objects
     """
-    return (
-        db.query(models.Document)
-        .order_by(desc(models.Document.upload_date))
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    try:
+        query = db.query(Document)
+        
+        if department:
+            query = query.filter(Document.department == department)
+            
+        return query.offset(skip).limit(limit).all()
+    except Exception as e:
+        logger.error(f"Error retrieving documents: {str(e)}")
+        return []
 
-def count_all_documents(db: Session) -> int:
+def get_documents_with_ocr(db: Session) -> List[Document]:
     """
-    Counts all documents in the database.
+    Retrieve documents that have been processed with OCR.
     
     Args:
         db: Database session
         
     Returns:
-        Total count of documents
+        List of Document objects with OCR processing
     """
-    return db.query(func.count(models.Document.id)).scalar() or 0
+    try:
+        return db.query(Document).filter(
+            Document.status.in_(["completed", "ocr_processed"])
+        ).all()
+    except Exception as e:
+        logger.error(f"Error retrieving OCR documents: {str(e)}")
+        return []
 
-def get_documents_by_department(
-    db: Session, department: str, skip: int = 0, limit: int = 100
-) -> List[models.Document]:
+def count_documents_with_ocr(db: Session) -> int:
     """
-    Fetches documents filtered by department with pagination.
+    Count documents that have been processed with OCR.
     
     Args:
         db: Database session
-        department: Department name to filter by
-        skip: Number of records to skip
-        limit: Maximum number of records to return
         
     Returns:
-        List of Document objects
+        Number of documents with OCR processing
     """
-    # Ensure department is queried in lowercase if stored in lowercase
-    department_lower = department.lower()
-    return (
-        db.query(models.Document)
-        .filter(models.Document.department == department_lower)
-        .order_by(desc(models.Document.upload_date))
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    try:
+        return db.query(Document).filter(
+            Document.status.in_(["completed", "ocr_processed"])
+        ).count()
+    except Exception as e:
+        logger.error(f"Error counting OCR documents: {str(e)}")
+        return 0
 
-def count_documents_by_department(db: Session, department: str) -> int:
+def create_document(db: Session, obj_in: DocumentCreate) -> Document:
     """
-    Counts documents filtered by department.
-    
-    Args:
-        db: Database session
-        department: Department name to filter by
-        
-    Returns:
-        Count of documents in the specified department
-    """
-    # Ensure department is queried in lowercase if stored in lowercase
-    department_lower = department.lower()
-    return (
-        db.query(func.count(models.Document.id))
-        .filter(models.Document.department == department_lower)
-        .scalar() or 0
-    )
-
-def create_document(db: Session, obj_in: schemas.DocumentCreate) -> models.Document:
-    """
-    Creates a new document record.
+    Create a new document record.
     
     Args:
         db: Database session
@@ -126,219 +124,106 @@ def create_document(db: Session, obj_in: schemas.DocumentCreate) -> models.Docum
         Created Document object
     """
     try:
-        # Generate a UUID for the document if not provided
-        doc_id = str(uuid.uuid4())
-        
-        # Ensure department is stored in lowercase
-        db_document_data = obj_in.model_dump()
-        if 'department' in db_document_data and db_document_data['department']:
-            db_document_data['department'] = db_document_data['department'].lower()
-        else:
-            # Handle cases where department might be None or empty
-            db_document_data['department'] = 'general'  # Default department
-            
-        # Create the document object
-        db_document = models.Document(id=doc_id, **db_document_data)
-        
-        # Add to database
-        db.add(db_document)
+        db_obj = Document(
+            id=str(uuid.uuid4()),
+            filename=obj_in.filename,
+            content_type=obj_in.content_type,
+            upload_date=datetime.utcnow(),
+            status="uploaded"
+        )
+        db.add(db_obj)
         db.commit()
-        db.refresh(db_document)
-        
-        logger.info(f"Created document record: {db_document.id} for department {db_document.department}")
-        return db_document
-    
+        db.refresh(db_obj)
+        logger.info(f"Created document: {db_obj.id}")
+        return db_obj
     except Exception as e:
+        logger.error(f"Error creating document: {str(e)}")
         db.rollback()
-        logger.error(f"Error creating document record: {str(e)}", exc_info=True)
         raise
 
 def update_document(
-    db: Session, db_obj: models.Document, obj_in: schemas.DocumentUpdate
-) -> models.Document:
+    db: Session, db_obj: Document, obj_in: DocumentUpdate
+) -> Document:
     """
-    Updates an existing document.
+    Update an existing document record.
     
     Args:
         db: Database session
         db_obj: Existing document object
-        obj_in: Document update data
+        obj_in: Update data
         
     Returns:
         Updated Document object
     """
     try:
-        # Get update data, excluding unset fields
-        update_data = obj_in.model_dump(exclude_unset=True)
+        update_data = obj_in.dict(exclude_unset=True)
         
-        # Normalize department to lowercase if present
-        if 'department' in update_data and update_data['department']:
-            update_data['department'] = update_data['department'].lower()
-        
-        # Update the document object
         for field, value in update_data.items():
-            setattr(db_obj, field, value)
+            if hasattr(db_obj, field):
+                setattr(db_obj, field, value)
         
-        # Update last_updated timestamp
-        db_obj.last_updated = datetime.now()
-        
-        # Commit changes
         db.commit()
         db.refresh(db_obj)
-        
-        logger.info(f"Updated document record: {db_obj.id}")
+        logger.info(f"Updated document: {db_obj.id}")
         return db_obj
-    
     except Exception as e:
+        logger.error(f"Error updating document {db_obj.id}: {str(e)}")
         db.rollback()
-        logger.error(f"Error updating document record: {str(e)}", exc_info=True)
         raise
 
-def update_document_status(
-    db: Session, doc_id: str, status: str, error_message: Optional[str] = None
-) -> Optional[models.Document]:
+def delete_document(db: Session, doc_id: str) -> bool:
     """
-    Updates the status of a document.
+    Delete a document record.
     
     Args:
         db: Database session
-        doc_id: Document ID
-        status: New status
-        error_message: Optional error message
+        doc_id: Document ID to delete
         
     Returns:
-        Updated Document object or None if not found
+        True if deleted successfully, False otherwise
     """
     try:
-        db_doc = get_document(db, doc_id=doc_id)
-        if db_doc:
-            db_doc.status = status
-            db_doc.error_message = error_message
-            db_doc.last_updated = datetime.now()
-            
+        db_obj = db.query(Document).filter(Document.id == doc_id).first()
+        if db_obj:
+            db.delete(db_obj)
             db.commit()
-            db.refresh(db_doc)
-            
-            logger.info(f"Updated status for document {doc_id} to {status}. Error: {error_message}")
-            return db_doc
-        else:
-            logger.warning(f"Attempted to update status for non-existent document: {doc_id}")
-            return None
-    
+            logger.info(f"Deleted document: {doc_id}")
+            return True
+        return False
     except Exception as e:
+        logger.error(f"Error deleting document {doc_id}: {str(e)}")
         db.rollback()
-        logger.error(f"Error updating document status: {str(e)}", exc_info=True)
-        raise
-
-def delete_document(db: Session, doc_id: str) -> Optional[models.Document]:
-    """
-    Deletes a document.
-    
-    Args:
-        db: Database session
-        doc_id: Document ID
-        
-    Returns:
-        Deleted Document object or None if not found
-    """
-    try:
-        db_doc = get_document(db, doc_id=doc_id)
-        if db_doc:
-            db.delete(db_doc)
-            db.commit()
-            
-            logger.info(f"Deleted document record: {doc_id}")
-            return db_doc
-        else:
-            logger.warning(f"Attempted to delete non-existent document record: {doc_id}")
-            return None
-    
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error deleting document record: {str(e)}", exc_info=True)
-        raise
-
-def get_documents_with_ocr(
-    db: Session, skip: int = 0, limit: int = 100
-) -> List[models.Document]:
-    """
-    Fetches documents that have OCR applied.
-    
-    Args:
-        db: Database session
-        skip: Number of records to skip
-        limit: Maximum number of records to return
-        
-    Returns:
-        List of Document objects with OCR applied
-    """
-    return (
-        db.query(models.Document)
-        .filter(models.Document.ocr_applied == True)
-        .order_by(desc(models.Document.upload_date))
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
-
-def count_documents_with_ocr(db: Session) -> int:
-    """
-    Counts documents that have OCR applied.
-    
-    Args:
-        db: Database session
-        
-    Returns:
-        Count of documents with OCR applied
-    """
-    return (
-        db.query(func.count(models.Document.id))
-        .filter(models.Document.ocr_applied == True)
-        .scalar() or 0
-    )
+        return False
 
 def get_document_stats(db: Session) -> Dict[str, Any]:
     """
-    Gets statistics about documents in the database.
+    Get document statistics.
     
     Args:
         db: Database session
         
     Returns:
-        Dictionary with document statistics
+        Dictionary containing document statistics
     """
-    total_count = count_all_documents(db)
-    ocr_count = count_documents_with_ocr(db)
-    
-    # Get department counts
-    department_counts = (
-        db.query(
-            models.Document.department,
-            func.count(models.Document.id).label('count')
-        )
-        .group_by(models.Document.department)
-        .all()
-    )
-    
-    # Convert to dictionary
-    departments = {dept: count for dept, count in department_counts}
-    
-    # Get status counts
-    status_counts = (
-        db.query(
-            models.Document.status,
-            func.count(models.Document.id).label('count')
-        )
-        .group_by(models.Document.status)
-        .all()
-    )
-    
-    # Convert to dictionary
-    statuses = {status: count for status, count in status_counts}
-    
-    return {
-        "total_count": total_count,
-        "ocr_count": ocr_count,
-        "departments": departments,
-        "statuses": statuses
-    }
+    try:
+        total_docs = db.query(Document).count()
+        completed_docs = db.query(Document).filter(Document.status == "completed").count()
+        failed_docs = db.query(Document).filter(Document.status == "failed").count()
+        processing_docs = db.query(Document).filter(Document.status == "processing").count()
+        
+        return {
+            "total_documents": total_docs,
+            "completed_documents": completed_docs,
+            "failed_documents": failed_docs,
+            "processing_documents": processing_docs,
+            "success_rate": (completed_docs / total_docs * 100) if total_docs > 0 else 0
+        }
+    except Exception as e:
+        logger.error(f"Error getting document stats: {str(e)}")
+        return {
+            "total_documents": 0,
+            "completed_documents": 0,
+            "failed_documents": 0,
+            "processing_documents": 0,
+            "success_rate": 0
+        }

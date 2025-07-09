@@ -19,7 +19,8 @@ import logging # Added for logging
 import asyncio # Keep for actual async operations if any in future, or remove if process_and_store_document is not async
 
 # Assuming schemas are defined correctly elsewhere
-# from app.schemas.documents import DocumentCreate, Document, DocumentList 
+from app.schemas.documents import DocumentCreate, Document, DocumentList
+
 # --- Example Pydantic models (replace with your actual schemas) ---
 from pydantic import BaseModel, Field
 
