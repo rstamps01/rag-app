@@ -9,7 +9,7 @@ from app.db.base import get_db
 from sqlalchemy.orm import Session
 
 # Import the module instead of trying to import the function directly
-from app.services import query_processor
+from app.services import query_wrapper
 
 from app.schemas.query import QueryRequest, QueryResponse, QueryHistoryResponse
 from app.crud import crud_query_history # Import CRUD for query history
@@ -36,10 +36,10 @@ async def process_query_endpoint(
 
     try:
         department_to_use = request.department if request.department is not None else "General"
-        logger.info(f"Calling query_processor.process_query with query: {request.query}, department: {department_to_use}, user_id: {user_id_to_pass}")
+        logger.info(f"Calling query_wrapper.process_query with query: {request.query}, department: {department_to_use}, user_id: {user_id_to_pass}")
         
         # Call the async function from the imported module
-        response = await query_processor.process_query(
+        response = await query_wrapper.process_query(
             db=db, # Pass the DB session
             query_text=request.query, 
             department=department_to_use,

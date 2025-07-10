@@ -26,3 +26,6 @@ class Document(DocumentBase):
 
 class DocumentList(BaseModel):
     documents: List[Document]
+    total: int = 0
+    skip: int = 0
+    limit: int = 10
