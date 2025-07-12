@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Global placeholder database for document metadata
+# Global placeholder database for document metadata 
 documents_db = {}
 
 # Valid departments
