@@ -1,9 +1,12 @@
+# File Path: backend/app/schemas/__init__.py
+# CORRECTED: Removed import of non-existent DocumentMetadata from .document
+
 # Import all necessary schemas to make them directly accessible from app.schemas
 
 # Document schemas
 from .documents import DocumentBase, DocumentCreate, Document, DocumentList
-# Note: DocumentMetadata import commented out - uncomment if needed and available
-from .document import DocumentMetadata
+# CORRECTED: Removed non-existent import
+# from .document import DocumentMetadata
 
 # User schemas  
 from .user import UserBase, UserCreate, UserUpdate, UserInDBBase, UserInDB, User
@@ -27,7 +30,7 @@ from .token import Token as TokenSchema, TokenData
 __all__ = [
     # Document schemas
     "DocumentBase", "DocumentCreate", "Document", "DocumentList",
-    "DocumentMetadata",  # Commented out since import is commented out
+    # CORRECTED: Removed DocumentMetadata from exports since import is removed
     
     # User schemas
     "UserBase", "UserCreate", "UserUpdate", "UserInDBBase", "UserInDB", "User",

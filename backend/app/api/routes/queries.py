@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query # Added Que
 from typing import Any, List, Optional, Dict  # FIXED: Added Dict import
 import logging
 
-from app.db.base import get_db 
+from app.db.session import get_db 
 from sqlalchemy.orm import Session
 
 # Import the module instead of trying to import the function directly

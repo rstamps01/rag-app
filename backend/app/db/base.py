@@ -1,22 +1,11 @@
-from sqlalchemy import create_engine
+# File Path: backend/app/db/base.py
+# OPTIONAL: Simplified version to remove duplication with session.py
+# This file can be simplified since session.py already handles everything
+
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-
-from app.core.config import settings
-
-# Create SQLAlchemy engine
-engine = create_engine(settings.DATABASE_URL)
-
-# Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Create base class for models
 Base = declarative_base()
 
-# Dependency to get DB session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Note: Session management and get_db function are now in session.py
+# This avoids duplication and follows single responsibility principle

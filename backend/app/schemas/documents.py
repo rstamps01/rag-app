@@ -1,3 +1,6 @@
+# File Path: backend/app/schemas/documents.py
+# CORRECTED: Added missing department field to DocumentUpdate
+
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -16,6 +19,7 @@ class DocumentUpdate(BaseModel):
     status: Optional[str] = None
     path: Optional[str] = None
     error_message: Optional[str] = None
+    department: Optional[str] = None  # CORRECTED: Added missing department field
 
 class Document(DocumentBase):
     id: str
