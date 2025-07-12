@@ -1,5 +1,16 @@
 # File: backend/app/analytics/insights_engine.py
-class InsightsEngine:
+# backend/app/analytics/insights_engine.py
+from typing import Dict, List, Any
+import asyncio
+
+class AnalyticsEngine:
+    def __init__(self):
+        self.insights_cache = {}
+    
+    async def generate_insights(self, metrics: Dict) -> List[Dict]:
+        # Implementation needed
+        return []
+
     """
     AI-powered insights generation for RAG pipeline optimization
     """

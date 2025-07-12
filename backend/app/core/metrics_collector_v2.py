@@ -1,4 +1,10 @@
 # File: backend/app/core/metrics_collector_v2.py
+# Still needed in various files:
+import uuid
+from datetime import datetime
+from typing import Dict, List, Any
+import asyncio
+
 class MetricsCollectorV2:
     """
     Advanced metrics collection with multi-dimensional data capture

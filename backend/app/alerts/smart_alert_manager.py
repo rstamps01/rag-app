@@ -1,4 +1,10 @@
 # File: backend/app/alerts/smart_alert_manager.py
+# Still needed in various files:
+import uuid
+from datetime import datetime
+# from typing import Dict, List, Any
+# import asyncio
+
 class SmartAlertManager:
     """
     AI-powered alert management with context awareness
