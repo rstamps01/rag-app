@@ -1,5 +1,5 @@
 # File Path: /backend/app/api/routes/documents.py
-# GITHUB-COMPATIBLE VERSION with TYPE CONVERSIONS
+# COMPREHENSIVE VERSION: Fixes validation issues while preserving all original features
 
 import os
 import uuid
@@ -34,16 +34,16 @@ def convert_db_document_to_response(db_document) -> Document:
         db_document: Database document object
         
     Returns:
-        Document: API response format
+        Document: API response format with FIXED type handling
     """
     return Document(
-        id=str(db_document.id),  # Convert int to str for API response
+        id=str(db_document.id),  # FIXED: Ensure string conversion for UUID
         filename=db_document.filename,
         content_type=db_document.content_type,
-        size=getattr(db_document, 'size', 0),
-        upload_date=db_document.upload_date.isoformat() if db_document.upload_date else "",  # Convert datetime to str
+        size=getattr(db_document, 'size', None),  # FIXED: Handle None values
+        upload_date=db_document.upload_date.isoformat() if db_document.upload_date else time.strftime("%Y-%m-%dT%H:%M:%S"),  # FIXED: Ensure string format
         status=getattr(db_document, 'status', 'unknown'),
-        path=getattr(db_document, 'path', ''),
+        path=getattr(db_document, 'path', None),  # FIXED: Handle None values
         department=getattr(db_document, 'department', 'General'),
         error_message=getattr(db_document, 'error_message', None)
     )
@@ -121,7 +121,7 @@ async def process_document_pipeline(doc_id: str, file_path: str, filename: str, 
                         status=actual_status,
                         error_message=error_message,
                         department=department,
-                        path=file_path
+                        path=file_path  # FIXED: Set the actual file path
                     )
                     update_document(db, db_document, document_update)
                     logger.info(f"[{doc_id}] Status set to '{actual_status}' in database.")
@@ -214,14 +214,22 @@ async def upload_document(
         document_create = DocumentCreate(
             filename=file.filename,
             content_type=file.content_type,
-            size=file_size,  # ADDED: Include file size
-            department=department  # ADDED: Include department
+            size=file_size,  # FIXED: Include file size
+            department=department
         )
         
         db_document = create_document(db, document_create)
         logger.info(f"[{doc_id}] Document created in database with ID: {db_document.id}")
         
-        # 3. Store in placeholder DB for immediate status tracking
+        # 3. FIXED: Update the database document with path immediately
+        if hasattr(db_document, 'id'):
+            document_update = DocumentUpdate(path=file_path)
+            update_document(db, db_document, document_update)
+            # Refresh the document to get updated values
+            db.refresh(db_document)
+            logger.info(f"[{doc_id}] Document path updated in database: {file_path}")
+        
+        # 4. Store in placeholder DB for immediate status tracking
         documents_db[doc_id] = {
             "id": str(db_document.id),
             "filename": file.filename,
@@ -229,13 +237,13 @@ async def upload_document(
             "department": department,
             "size": file_size,
             "status": "uploaded",
-            "upload_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "upload_date": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "path": file_path
         }
         
         logger.info(f"[{doc_id}] Initial metadata saved to placeholder DB with status 'uploaded'")
         
-        # 4. Add background processing task
+        # 5. Add background processing task
         logger.info(f"[{doc_id}] Adding background task for file: {file_path}")
         
         background_tasks.add_task(
@@ -248,7 +256,7 @@ async def upload_document(
             db_document_id=str(db_document.id)
         )
         
-        # 5. FIXED: Return document with proper type conversions
+        # 6. FIXED: Return document with proper type conversions
         return convert_db_document_to_response(db_document)
         
     except Exception as e:
@@ -275,11 +283,14 @@ def list_documents(
         List of documents
     """
     try:
-        documents = get_documents(db=db, skip=skip, limit=limit, department=department)
+        documents = get_documents(db=db, skip=skip, limit=limit)
         
         # FIXED: Convert to response format with proper type conversions
         result = []
         for doc in documents:
+            # Apply department filter if specified
+            if department and getattr(doc, 'department', None) != department:
+                continue
             result.append(convert_db_document_to_response(doc))
         
         return result
@@ -333,8 +344,15 @@ def delete_document_by_id(document_id: str, db: Session = Depends(get_db)):
         if not db_document:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        # Delete from database (assuming delete function exists)
-        # delete_document(db=db, doc_id=document_id)
+        # Delete file if it exists
+        if hasattr(db_document, 'path') and db_document.path and os.path.exists(db_document.path):
+            os.remove(db_document.path)
+            logger.info(f"Deleted file: {db_document.path}")
+        
+        # Delete from database
+        db.delete(db_document)
+        db.commit()
+        logger.info(f"Deleted document from database: {document_id}")
         
         return {"message": f"Document {document_id} deleted successfully"}
         

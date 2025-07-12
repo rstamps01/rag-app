@@ -1,17 +1,19 @@
 # File Path: backend/app/schemas/documents.py
-# CORRECTED: Added missing fields and fixed field types
+# COMPREHENSIVE VERSION: Fixes validation issues while preserving all original features
 
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
 class DocumentBase(BaseModel):
+    """Base schema for document operations"""
     filename: str
     content_type: str
 
 class DocumentCreate(DocumentBase):
-    size: Optional[int] = None  # ADDED: Missing size field
-    department: Optional[str] = "General"  # ADDED: Missing department field
+    """Schema for creating a new document"""
+    size: Optional[int] = None        # FIXED: Made optional to handle None values
+    department: Optional[str] = "General"
 
 class DocumentUpdate(BaseModel):
     """Schema for updating document metadata"""
@@ -20,21 +22,23 @@ class DocumentUpdate(BaseModel):
     status: Optional[str] = None
     path: Optional[str] = None
     error_message: Optional[str] = None
-    department: Optional[str] = None  # ✅ Already present
+    department: Optional[str] = None
 
 class Document(DocumentBase):
-    id: int  # FIXED: Should be int to match model
-    size: int
-    upload_date: datetime  # FIXED: Should be datetime to match model
+    """Schema for document response - FIXED validation issues"""
+    id: str                           # FIXED: Changed from int to str (UUID)
+    size: Optional[int] = None        # FIXED: Made optional (can be None)
+    upload_date: str                  # FIXED: Changed from datetime to str for API response
     status: str
-    path: str
-    department: Optional[str] = "General"  # ADDED: Missing department field
-    error_message: Optional[str] = None  # ADDED: Missing error_message field
+    path: Optional[str] = None        # FIXED: Made optional (can be None)
+    department: Optional[str] = "General"
+    error_message: Optional[str] = None
     
     class Config:
         from_attributes = True  # For Pydantic v2 compatibility
 
 class DocumentList(BaseModel):
+    """Schema for document list response"""
     documents: List[Document]
     total: int = 0
     skip: int = 0

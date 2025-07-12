@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "RAG Application"
     
-    # Database Configuration
+    # Database Configuration - UPDATED to match docker-compose.yml
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
         "postgresql://raguser:ragpassword@postgres-07:5432/ragdb"
@@ -38,9 +38,10 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "/app/uploads"
     MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
     
-    # Vector Database Configuration
-    QDRANT_HOST: str = os.getenv("QDRANT_HOST", "qdrant")
+    # Vector Database Configuration - COMPLETE with missing QDRANT_COLLECTION_NAME
+    QDRANT_HOST: str = os.getenv("QDRANT_HOST", "qdrant-07")
     QDRANT_PORT: int = int(os.getenv("QDRANT_PORT", "6333"))
+    QDRANT_COLLECTION_NAME: str = os.getenv("QDRANT_COLLECTION_NAME", "documents")
     
     # GPU Configuration
     ENABLE_GPU: bool = True
