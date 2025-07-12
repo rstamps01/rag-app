@@ -1,5 +1,5 @@
 # File Path: backend/app/schemas/documents.py
-# CORRECTED: Added missing department field to DocumentUpdate
+# CORRECTED: Added missing fields and fixed field types
 
 from pydantic import BaseModel
 from typing import List, Optional
@@ -10,7 +10,8 @@ class DocumentBase(BaseModel):
     content_type: str
 
 class DocumentCreate(DocumentBase):
-    pass
+    size: Optional[int] = None  # ADDED: Missing size field
+    department: Optional[str] = "General"  # ADDED: Missing department field
 
 class DocumentUpdate(BaseModel):
     """Schema for updating document metadata"""
@@ -19,14 +20,19 @@ class DocumentUpdate(BaseModel):
     status: Optional[str] = None
     path: Optional[str] = None
     error_message: Optional[str] = None
-    department: Optional[str] = None  # CORRECTED: Added missing department field
+    department: Optional[str] = None  # ✅ Already present
 
 class Document(DocumentBase):
-    id: str
+    id: int  # FIXED: Should be int to match model
     size: int
-    upload_date: str
+    upload_date: datetime  # FIXED: Should be datetime to match model
     status: str
     path: str
+    department: Optional[str] = "General"  # ADDED: Missing department field
+    error_message: Optional[str] = None  # ADDED: Missing error_message field
+    
+    class Config:
+        from_attributes = True  # For Pydantic v2 compatibility
 
 class DocumentList(BaseModel):
     documents: List[Document]

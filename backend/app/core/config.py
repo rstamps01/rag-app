@@ -13,12 +13,11 @@ class Settings(BaseSettings):
     
     # Database Configuration
     DATABASE_URL: str = os.getenv(
-        "DATABASE_URL", 
-        "postgresql://rag_user:rag_password@postgres:5432/rag_db"
+        "DATABASE_URL",
+        "postgresql://raguser:ragpassword@postgres-07:5432/ragdb"
     )
     
     # Security Configuration
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # Hugging Face Configuration
@@ -27,6 +26,9 @@ class Settings(BaseSettings):
     # LLM Configuration
     LLM_MODEL_NAME: str = "mistralai/Mistral-7B-Instruct-v0.2"
     CONTEXT_WINDOW_SIZE: int = 4096
+    
+    # ADDED: Embedding Model Configuration - CRITICAL FIX
+    EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
     
     # OCR Configuration
     ENABLE_OCR: bool = True
@@ -47,10 +49,10 @@ class Settings(BaseSettings):
     # Monitoring Configuration
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     ENABLE_METRICS: bool = True
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = True
 
-# Create global settings instance
+# CRITICAL: Create the settings instance that other modules import
 settings = Settings()
