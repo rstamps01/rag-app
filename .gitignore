@@ -24,3 +24,7 @@ docker-compose.yml
 data-07/uploads/77d5db26-bd26-45b6-a19f-d3e32b035d8b_VAST-Driver-for-Cinder-2025-04-22-01.59.pdf
 data-07/uploads/ac94eb1b-792f-463c-a048-9d8a436efda5_VAST-Block-CSI-Driver-2.6-Administrators-Guide-2025-04-22-02.00.pdf
 .gitignore
+.env
+docker-compose.yml
+backend/archive_backend/.env.mistral.v1
+docker-compose.yml

@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""
+Corrected Model Download Script using Modern Transformers Library Approach
+Based on HuggingFace official documentation and best practices
+"""
+
+import os
+import sys
+import logging
+import torch
+from pathlib import Path
+from transformers import (
+    AutoTokenizer, 
+    AutoModelForCausalLM, 
+    AutoModel,
+    pipeline
+)
+from sentence_transformers import SentenceTransformer
+import gc
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Model configurations
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.1"
+MODELS_CACHE_DIR = "/app/models_cache"
+
+def setup_environment():
+    """Setup environment and verify GPU availability"""
+    logger.info("Setting up environment...")
+    
+    # Create cache directory
+    os.makedirs(MODELS_CACHE_DIR, exist_ok=True)
+    
+    # Set HuggingFace cache directory
+    os.environ['TRANSFORMERS_CACHE'] = MODELS_CACHE_DIR
+    os.environ['HF_HOME'] = MODELS_CACHE_DIR
+    
+    # Check GPU availability
+    if torch.cuda.is_available():
+        gpu_name = torch.cuda.get_device_name(0)
+        gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        logger.info(f"GPU detected: {gpu_name} ({gpu_memory:.1f}GB)")
+        
+        # RTX 5090 optimizations
+        if "RTX 5090" in gpu_name or "5090" in gpu_name:
+            logger.info("RTX 5090 detected - enabling optimizations")
+            torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+    else:
+        logger.warning("No GPU detected - using CPU mode")
+    
+    return torch.cuda.is_available()
+
+def download_embedding_model():
+    """Download embedding model using SentenceTransformers"""
+    try:
+        logger.info(f"Downloading embedding model: {EMBEDDING_MODEL_NAME}")
+        
+        # Download and cache the model
+        model = SentenceTransformer(
+            EMBEDDING_MODEL_NAME,
+            cache_folder=MODELS_CACHE_DIR
+        )
+        
+        # Test the model
+        test_text = "This is a test sentence."
+        embedding = model.encode(test_text)
+        
+        logger.info(f"✅ Embedding model downloaded successfully")
+        logger.info(f"   Model dimension: {len(embedding)}")
+        logger.info(f"   Cache location: {MODELS_CACHE_DIR}")
+        
+        # Clean up memory
+        del model
+        gc.collect()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to download embedding model: {str(e)}")
+        return False
+
+def download_llm_model(use_gpu=True):
+    """Download LLM model using modern transformers approach"""
+    try:
+        logger.info(f"Downloading LLM model: {LLM_MODEL_NAME}")
+        
+        # Configure device and dtype
+        device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
+        dtype = torch.float16 if device == "cuda" else torch.float32
+        
+        logger.info(f"Using device: {device}, dtype: {dtype}")
+        
+        # Method 1: Download tokenizer first (recommended approach)
+        logger.info("Step 1: Downloading tokenizer...")
+        tokenizer = AutoTokenizer.from_pretrained(
+            LLM_MODEL_NAME,
+            cache_dir=MODELS_CACHE_DIR,
+            trust_remote_code=True
+        )
+        logger.info("✅ Tokenizer downloaded successfully")
+        
+        # Method 2: Download model with optimizations
+        logger.info("Step 2: Downloading model...")
+        
+        # Configure model loading parameters
+        model_kwargs = {
+            "cache_dir": MODELS_CACHE_DIR,
+            "torch_dtype": dtype,
+            "trust_remote_code": True,
+            "low_cpu_mem_usage": True,
+        }
+        
+        # Add device mapping for GPU
+        if device == "cuda":
+            model_kwargs["device_map"] = "auto"
+            
+            # Add quantization for memory efficiency
+            if torch.cuda.get_device_properties(0).total_memory < 20 * 1024**3:  # Less than 20GB
+                logger.info("Enabling 8-bit quantization for memory efficiency")
+                model_kwargs["load_in_8bit"] = True
+        
+        model = AutoModelForCausalLM.from_pretrained(
+            LLM_MODEL_NAME,
+            **model_kwargs
+        )
+        
+        logger.info("✅ Model downloaded successfully")
+        
+        # Test the model with a simple generation
+        logger.info("Step 3: Testing model functionality...")
+        
+        test_prompt = "Hello, how are you?"
+        inputs = tokenizer(test_prompt, return_tensors="pt")
+        
+        if device == "cuda":
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+        
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=10,
+                do_sample=False,
+                pad_token_id=tokenizer.eos_token_id
+            )
+        
+        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        logger.info(f"✅ Model test successful. Response: {response[:50]}...")
+        
+        # Clean up memory
+        del model, tokenizer, inputs, outputs
+        if device == "cuda":
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to download LLM model: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        
+        # Provide specific error guidance
+        if "401" in str(e) or "unauthorized" in str(e).lower():
+            logger.error("Authentication error - check HuggingFace token")
+        elif "tokenizer" in str(e).lower():
+            logger.error("Tokenizer error - trying alternative approach")
+            return download_llm_with_pipeline()
+        elif "memory" in str(e).lower() or "cuda" in str(e).lower():
+            logger.error("Memory/CUDA error - trying CPU mode")
+            return download_llm_model(use_gpu=False)
+        
+        return False
+
+def download_llm_with_pipeline():
+    """Alternative download method using pipeline (from HuggingFace docs)"""
+    try:
+        logger.info("Trying alternative download method with pipeline...")
+        
+        # Use pipeline approach as shown in HuggingFace docs
+        pipe = pipeline(
+            "text-generation",
+            model=LLM_MODEL_NAME,
+            cache_dir=MODELS_CACHE_DIR,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            device_map="auto" if torch.cuda.is_available() else None
+        )
+        
+        # Test the pipeline
+        test_result = pipe("Hello", max_new_tokens=5, do_sample=False)
+        logger.info(f"✅ Pipeline method successful: {test_result[0]['generated_text'][:50]}...")
+        
+        # Clean up
+        del pipe
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Pipeline method also failed: {str(e)}")
+        return False
+
+def verify_downloads():
+    """Verify that all models are properly downloaded and accessible"""
+    logger.info("Verifying downloaded models...")
+    
+    try:
+        # Check embedding model
+        embedding_model = SentenceTransformer(
+            EMBEDDING_MODEL_NAME,
+            cache_folder=MODELS_CACHE_DIR
+        )
+        test_embedding = embedding_model.encode("test")
+        logger.info(f"✅ Embedding model verified (dimension: {len(test_embedding)})")
+        del embedding_model
+        
+        # Check LLM model
+        tokenizer = AutoTokenizer.from_pretrained(
+            LLM_MODEL_NAME,
+            cache_dir=MODELS_CACHE_DIR
+        )
+        logger.info("✅ LLM tokenizer verified")
+        del tokenizer
+        
+        # Check model files exist
+        cache_path = Path(MODELS_CACHE_DIR)
+        model_files = list(cache_path.rglob("*.bin")) + list(cache_path.rglob("*.safetensors"))
+        logger.info(f"✅ Found {len(model_files)} model files in cache")
+        
+        gc.collect()
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Verification failed: {str(e)}")
+        return False
+
+def main():
+    """Main download process"""
+    logger.info("🚀 Starting model download process...")
+    logger.info(f"Cache directory: {MODELS_CACHE_DIR}")
+    
+    # Setup environment
+    use_gpu = setup_environment()
+    
+    success_count = 0
+    total_models = 2
+    
+    # Download embedding model
+    if download_embedding_model():
+        success_count += 1
+    
+    # Download LLM model
+    if download_llm_model(use_gpu=use_gpu):
+        success_count += 1
+    
+    # Verify downloads
+    if success_count == total_models:
+        if verify_downloads():
+            logger.info("🎉 All models downloaded and verified successfully!")
+            return 0
+        else:
+            logger.warning("⚠️ Models downloaded but verification failed")
+            return 1
+    else:
+        logger.error(f"❌ Only {success_count}/{total_models} models downloaded successfully")
+        return 1
+
+if __name__ == "__main__":
+    exit_code = main()
+    sys.exit(exit_code)

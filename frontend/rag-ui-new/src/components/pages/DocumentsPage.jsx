@@ -1,48 +1,64 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Upload, File, Clock, CheckCircle, AlertCircle, RefreshCw, Trash2, Download } from 'lucide-react';
-import { apiHelpers } from '../../lib/api';
+import React, { useState, useEffect } from 'react';
+import { Upload, FileText, Calendar, HardDrive, AlertCircle, CheckCircle, Clock, X, RefreshCw, Download, Trash2 } from 'lucide-react';
 
 const DocumentsPage = () => {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedDepartment, setSelectedDepartment] = useState('General');
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
-  // ✅ CORRECTED: Fetch documents using the validated API helper
-  const fetchDocuments = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  // Department options matching the queries page
+  const departments = [
+    { value: 'General', label: 'General', color: 'bg-blue-100 text-blue-800' },
+    { value: 'IT', label: 'IT', color: 'bg-green-100 text-green-800' },
+    { value: 'HR', label: 'HR', color: 'bg-purple-100 text-purple-800' },
+    { value: 'Finance', label: 'Finance', color: 'bg-yellow-100 text-yellow-800' },
+    { value: 'Legal', label: 'Legal', color: 'bg-red-100 text-red-800' }
+  ];
+
+  const getDepartmentColor = (department) => {
+    const dept = departments.find(d => d.value.toLowerCase() === department.toLowerCase());
+    return dept ? dept.color : 'bg-gray-100 text-gray-800';
+  };
+
+  const fetchDocuments = async () => {
     try {
-      const response = await apiHelpers.getDocuments();
-      // ✅ CORRECTED: Access the documents array from the response
-      const fetchedDocs = response.documents || [];
-      setDocuments(fetchedDocs);
-      console.log(`✅ Fetched ${fetchedDocs.length} documents`);
+      setLoading(true);
+      const response = await fetch('/api/v1/documents/?skip=0&limit=100');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setDocuments(data.documents || []);
+      setError(null);
     } catch (err) {
       console.error('Error fetching documents:', err);
-      setError('Failed to fetch documents. Please check the backend connection.');
+      setError('Failed to fetch document list. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     fetchDocuments();
-  }, [fetchDocuments]);
+  }, []);
 
-  // Handle file selection
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
-    if (file) {
-      setSelectedFile(file);
-      setError(''); // Clear previous errors
-    }
+    setSelectedFile(file);
+    setError(null);
+    setSuccess(null);
   };
 
-  // ✅ CORRECTED: Handle file upload with progress
-  const handleFileUpload = async () => {
+  const handleDepartmentChange = (event) => {
+    setSelectedDepartment(event.target.value);
+  };
+
+  const handleUpload = async () => {
     if (!selectedFile) {
       setError('Please select a file to upload.');
       return;
@@ -50,180 +66,328 @@ const DocumentsPage = () => {
 
     setUploading(true);
     setUploadProgress(0);
-    setError('');
+    setError(null);
+    setSuccess(null);
 
     try {
-      const response = await apiHelpers.uploadDocument(selectedFile, (progressEvent) => {
-        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        setUploadProgress(percentCompleted);
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('department', selectedDepartment);
+
+      const response = await fetch('/api/v1/documents/', {
+        method: 'POST',
+        body: formData,
       });
 
-      // Add the newly uploaded document to the list
-      setDocuments(prevDocs => [response, ...prevDocs]);
-      setSelectedFile(null); // Clear selection after upload
-      console.log('✅ File uploaded successfully:', response);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Upload failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      setSuccess(`File "${selectedFile.name}" uploaded successfully to ${selectedDepartment} department!`);
+      setSelectedFile(null);
+      setSelectedDepartment('General');
+      
+      // Reset file input
+      const fileInput = document.getElementById('file-upload');
+      if (fileInput) fileInput.value = '';
+      
+      // Refresh document list
+      setTimeout(() => {
+        fetchDocuments();
+      }, 1000);
 
     } catch (err) {
-      console.error('Upload failed:', err);
-      setError(`Upload failed: ${err.message || 'Please check the server logs.'}`);
+      console.error('Upload error:', err);
+      setError(`Upload failed: ${err.message}`);
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
-  // Handle document deletion
-  const handleDeleteDocument = async (documentId) => {
+  const handleDelete = async (documentId) => {
     if (!window.confirm('Are you sure you want to delete this document?')) {
       return;
     }
 
     try {
-      await apiHelpers.deleteDocument(documentId);
-      setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== documentId));
-      console.log(`✅ Document ${documentId} deleted`);
+      const response = await fetch(`/api/v1/documents/${documentId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Delete failed with status ${response.status}`);
+      }
+
+      setSuccess('Document deleted successfully!');
+      fetchDocuments();
     } catch (err) {
-      console.error(`Error deleting document ${documentId}:`, err);
-      setError(`Failed to delete document: ${err.message}`);
+      console.error('Delete error:', err);
+      setError(`Delete failed: ${err.message}`);
     }
   };
-  
-  // ✅ IMPROVED: Format file size helper
+
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // ✅ IMPROVED: Get status color and icon helpers
-  const getStatusInfo = (status) => {
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getStatusIcon = (status) => {
     switch (status?.toLowerCase()) {
       case 'completed':
-      case 'processed':
-        return { icon: <CheckCircle className="text-green-600" />, color: 'text-green-700' };
+        return <CheckCircle className="w-5 h-5 text-green-500" />;
       case 'processing':
-        return { icon: <RefreshCw className="text-blue-600 animate-spin" />, color: 'text-blue-700' };
+        return <Clock className="w-5 h-5 text-yellow-500" />;
       case 'failed':
-        return { icon: <AlertCircle className="text-red-600" />, color: 'text-red-700' };
+        return <AlertCircle className="w-5 h-5 text-red-500" />;
       default:
-        return { icon: <Clock className="text-gray-600" />, color: 'text-gray-700' };
+        return <Clock className="w-5 h-5 text-gray-500" />;
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'processing':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'failed':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <h1 className="text-3xl font-bold">Document Management</h1>
-
-      {/* Upload Section */}
-      <div className="bg-white rounded-lg border shadow-sm p-6">
-        <h2 className="text-xl font-semibold flex items-center gap-2">
-          <Upload size={20} />
-          Upload New Document
-        </h2>
-        <div className="mt-4 flex items-center gap-4">
-          <input 
-            type="file"
-            onChange={handleFileSelect}
-            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-          />
-          <button 
-            onClick={handleFileUpload} 
-            disabled={uploading || !selectedFile}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 flex items-center gap-2"
-          >
-            {uploading ? <RefreshCw className="animate-spin" /> : <Upload size={16} />}
-            {uploading ? `Uploading... ${uploadProgress}%` : 'Upload'}
-          </button>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Document Management</h1>
+          <p className="text-gray-600">Upload, organize, and manage your documents by department</p>
         </div>
-        {selectedFile && (
-          <p className="text-sm text-gray-600 mt-2">Selected: {selectedFile.name}</p>
-        )}
-        {uploading && (
-          <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
-            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
+
+        {/* Upload Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+            <Upload className="w-5 h-5 mr-2" />
+            Upload Document
+          </h2>
+          
+          {/* Department Selection */}
+          <div className="mb-4">
+            <label htmlFor="department-select" className="block text-sm font-medium text-gray-700 mb-2">
+              Department
+            </label>
+            <select
+              id="department-select"
+              value={selectedDepartment}
+              onChange={handleDepartmentChange}
+              className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {departments.map((dept) => (
+                <option key={dept.value} value={dept.value}>
+                  {dept.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-sm text-gray-500">
+              Documents uploaded to "General" will be accessible to all departments
+            </p>
+          </div>
+
+          {/* File Selection */}
+          <div className="mb-4">
+            <label htmlFor="file-upload" className="block text-sm font-medium text-gray-700 mb-2">
+              Select File
+            </label>
+            <input
+              id="file-upload"
+              type="file"
+              onChange={handleFileSelect}
+              accept=".pdf,.txt,.docx,.doc"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <p className="mt-1 text-sm text-gray-500">
+              Supported formats: PDF, TXT, DOCX, DOC (Max size: 100MB)
+            </p>
+          </div>
+
+          {/* Upload Button */}
+          <button
+            onClick={handleUpload}
+            disabled={!selectedFile || uploading}
+            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+          >
+            {uploading ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4 mr-2" />
+                Upload to {selectedDepartment}
+              </>
+            )}
+          </button>
+
+          {/* Progress Bar */}
+          {uploading && (
+            <div className="mt-4">
+              <div className="bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Status Messages */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+              <span className="text-red-700">{error}</span>
+            </div>
           </div>
         )}
-      </div>
 
-      {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded flex items-center gap-2">
-          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
-          <p className="text-red-800">{error}</p>
-        </div>
-      )}
+        {success && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
+            <div className="flex items-center">
+              <CheckCircle className="w-5 h-5 text-green-500 mr-2" />
+              <span className="text-green-700">{success}</span>
+            </div>
+          </div>
+        )}
 
-      {/* Documents List */}
-      <div className="bg-white rounded-lg border shadow-sm">
-        <div className="p-6 border-b flex justify-between items-center">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <File size={20} />
-            Uploaded Documents
-          </h2>
-          <button 
-            onClick={fetchDocuments} 
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </button>
-        </div>
-        <div className="p-6">
+        {/* Documents List */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                <FileText className="w-5 h-5 mr-2" />
+                Uploaded Documents ({documents.length})
+              </h2>
+              <button
+                onClick={fetchDocuments}
+                disabled={loading}
+                className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 flex items-center"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+          </div>
+
           {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Loading documents...</p>
+            <div className="p-8 text-center">
+              <RefreshCw className="w-8 h-8 text-gray-400 animate-spin mx-auto mb-4" />
+              <p className="text-gray-500">Loading documents...</p>
             </div>
           ) : documents.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <File size={48} className="mx-auto mb-4 opacity-50" />
-              <p>No documents uploaded yet.</p>
-              <p className="text-sm">Use the upload form above to add your first document!</p>
+            <div className="p-8 text-center">
+              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No documents uploaded yet</p>
+              <p className="text-sm text-gray-400">Upload your first document to get started</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Filename</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded At</th>
-                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Document
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Department
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Size
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Upload Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {documents.map((doc) => {
-                    const statusInfo = getStatusInfo(doc.status);
-                    return (
-                      <tr key={doc.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{doc.filename}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatFileSize(doc.size)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <div className={`inline-flex items-center gap-2 ${statusInfo.color}`}>
-                            {statusInfo.icon}
-                            <span>{doc.status || 'Unknown'}</span>
+                  {documents.map((doc) => (
+                    <tr key={doc.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <FileText className="w-5 h-5 text-gray-400 mr-3" />
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {doc.filename}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {doc.content_type}
+                            </div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(doc.created_at).toLocaleString()}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex justify-end gap-2">
-                            <button className="text-blue-600 hover:text-blue-900" title="Download">
-                              <Download size={16} />
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteDocument(doc.id)} 
-                              className="text-red-600 hover:text-red-900" 
-                              title="Delete"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getDepartmentColor(doc.department || 'General')}`}>
+                          {doc.department || 'General'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div className="flex items-center">
+                          <HardDrive className="w-4 h-4 text-gray-400 mr-2" />
+                          {formatFileSize(doc.size)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          {getStatusIcon(doc.status)}
+                          <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(doc.status)}`}>
+                            {doc.status || 'pending'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div className="flex items-center">
+                          <Calendar className="w-4 h-4 text-gray-400 mr-2" />
+                          {formatDate(doc.upload_date)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleDelete(doc.id)}
+                            className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
+                            title="Delete document"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

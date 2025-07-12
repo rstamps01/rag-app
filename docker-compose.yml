@@ -38,14 +38,17 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN}
     container_name: rag-backend-07
     volumes:
       - ./data-07:/app/data
     ports:
       - "8000:8000"
     environment:
-      - HUGGING_FACE_HUB_TOKEN=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
-#      - DATABASE_URL=postgresql://raguser:ragpassword@postgres:5432/ragdb
+      - HUGGING_FACE_HUB_TOKEN=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
+      - HUGGINGFACE_TOKEN=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
+#      - DATABASE_URL=postgresql://raguser:ragpassword@postgres:5432/ragdb 
       - DATABASE_URL=postgresql://raguser:ragpassword@postgres-07:5432/ragdb
       - QDRANT_URL=http://qdrant-07:6333
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}

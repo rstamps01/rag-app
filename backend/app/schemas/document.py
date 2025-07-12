@@ -1,45 +1,61 @@
-# Fixed version of app/schemas/document.py
-# This file should only contain Pydantic models, not API route logic
+"""
+Corrected Document Schema - Fixes Pydantic Validation Error
+This schema matches the field names used in the documents route
+"""
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Optional, List
 from datetime import datetime
 import uuid
 
 class DocumentMetadata(BaseModel):
-    """Document metadata model for API responses."""
+    """
+    CORRECTED: Document metadata schema with proper field names
+    """
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     filename: str
+    department: str = "General"  # ADDED: Department field for categorization
     content_type: Optional[str] = None
-    size: int
-    upload_date: datetime = Field(default_factory=datetime.now)
-    status: str = "pending"  # e.g., pending, processing, completed, failed, uploaded
+    file_size: int  # CORRECTED: Changed from 'size' to 'file_size' to match route usage
+    upload_time: float = Field(default_factory=lambda: datetime.now().timestamp())  # CORRECTED: Changed from 'upload_date' to 'upload_time'
+    status: str = "pending"  # e.g., pending, processing, completed, failed
     path: Optional[str] = None  # Path where the raw file is stored
     error_message: Optional[str] = None
 
+    class Config:
+        """Pydantic configuration"""
+        json_encoders = {
+            datetime: lambda v: v.timestamp()
+        }
+
 class DocumentCreate(BaseModel):
-    """Document creation model for database operations."""
+    """Schema for creating a new document"""
     filename: str
+    department: str = "General"
     content_type: Optional[str] = None
-    size: int
-    status: str = "pending"
-    path: Optional[str] = None
 
 class DocumentUpdate(BaseModel):
-    """Document update model for database operations."""
+    """Schema for updating document metadata"""
     status: Optional[str] = None
+    department: Optional[str] = None
     error_message: Optional[str] = None
-    processed_date: Optional[datetime] = None
 
 class DocumentList(BaseModel):
-    """Document list response model."""
+    """Schema for document list response"""
     documents: List[DocumentMetadata]
     total_count: int
 
 class DocumentResponse(BaseModel):
-    """Single document response model."""
-    document: DocumentMetadata
-    message: Optional[str] = None
+    """Schema for single document response"""
+    success: bool
+    message: str
+    document: Optional[DocumentMetadata] = None
 
-# ✅ REMOVED: All router and API logic that was incorrectly placed in this schemas file
-# The schemas file should only contain Pydantic models for data validation and serialization
+# Department validation
+VALID_DEPARTMENTS = ["General", "IT", "HR", "Finance", "Legal"]
+
+def validate_department(department: str) -> str:
+    """Validate and normalize department name"""
+    if department not in VALID_DEPARTMENTS:
+        return "General"  # Default fallback
+    return department

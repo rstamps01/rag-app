@@ -14,7 +14,7 @@ Usage:
     python download_models.py
 
 Environment variables:
-    HUGGING_FACE_HUB_TOKEN: HuggingFace token for downloading models
+    HUGGINGFACE_TOKEN: HuggingFace token for downloading models
 """
 
 import os
@@ -37,7 +37,7 @@ logger = logging.getLogger("model_downloader")
 EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # Updated to latest stable version
 CACHE_DIR = "/app/models_cache"
-HF_TOKEN = os.environ.get("HUGGING_FACE_HUB_TOKEN")
+HF_TOKEN = os.environ.get("HUGGINGFACE_TOKEN")
 
 def main():
     """Main function to download all required models."""

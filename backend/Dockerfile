@@ -25,10 +25,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
-# === Python Dependencies ===
-# Copy only the requirements file first to leverage Docker cache.
-COPY requirements.txt .
-
 # Install Python packages listed in requirements.txt.
 # RUN pip3 install --no-cache-dir -r requirements.txt
 # RUN pip3 install -r requirements.txt
@@ -55,11 +51,7 @@ COPY requirements.txt .
 #    nvidia-nvtx-cu12==12.8.55 \
 #    --index-url https://download.pytorch.org/whl/nightly/cu128
 
-# === Upddated Pytorch Installation for CUDA 12.8 - July 8, 2025 ===
-# Install Python packages listed in requirements.txt.
-RUN pip3 install --no-cache-dir -r requirements.txt
-
-RUN pip3 install \
+RUN pip3 install --no-cache-dir \
     nvidia-cublas-cu12==12.8.4.1 \
     nvidia-cuda-cupti-cu12==12.8.90 \
     nvidia-cuda-nvrtc-cu12==12.8.93 \
@@ -81,6 +73,14 @@ RUN pip3 install \
 #   torchaudio==2.8.0.dev20250708+cu128 \
     pytorch-triton==3.4.0+gitae848267 \
     --index-url https://download.pytorch.org/whl/nightly/cu128
+
+# === Python Dependencies ===
+# Copy only the requirements file first to leverage Docker cache.
+COPY requirements.txt .
+
+# === Upddated Pytorch Installation for CUDA 12.8 - July 8, 2025 ===
+# Install Python packages listed in requirements.txt.
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # === Pre-download Models ===
 # Accept Hugging Face token as a build argument

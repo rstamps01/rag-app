@@ -1,0 +1,182 @@
+# File Path: /home/ubuntu/rag_app_v2/rag-app/backend/app/services/query_processor.py
+import logging
+from time import time
+from fastapi import HTTPException
+import torch
+from typing import List, Dict, Any
+
+from sentence_transformers import SentenceTransformer
+from qdrant_client import QdrantClient, models
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+
+from ..core.config import settings
+from ..schemas.query import QueryResponse, SourceDocument # Use schemas defined earlier
+from .document_processor import embedding_model, qdrant_client, device, QDRANT_COLLECTION_NAME # Reuse components
+
+logger = logging.getLogger(__name__)
+
+# --- Configuration ---
+LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.1" # Or another Mistral variant
+MAX_CONTEXT_LENGTH = 4096 # Adjust based on model limits and desired context window
+MAX_NEW_TOKENS = 512 # Max tokens for LLM generation
+
+# --- LLM Initialization ---
+llm_pipeline = None
+if device == "cuda":
+    try:
+        logger.info(f"Loading LLM model: {LLM_MODEL_NAME} onto GPU ({device})")
+        # Load model with optimizations for GPU (e.g., 8-bit quantization if needed)
+        # Note: 8-bit requires bitsandbytes and accelerate
+        model = AutoModelForCausalLM.from_pretrained(
+            LLM_MODEL_NAME,
+            # load_in_8bit=True, # Uncomment for 8-bit quantization
+            torch_dtype=torch.float16, # Use float16 for faster inference
+            device_map="auto" # Automatically distribute across available GPUs
+        )
+        tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_NAME)
+        
+        # Create a text generation pipeline
+        llm_pipeline = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            torch_dtype=torch.float16,
+            device_map="auto",
+            max_new_tokens=MAX_NEW_TOKENS
+        )
+        logger.info(f"LLM pipeline created successfully for {LLM_MODEL_NAME} on GPU.")
+    except Exception as e:
+        logger.error(f"Failed to load LLM model {LLM_MODEL_NAME} on GPU: {e}", exc_info=True)
+        llm_pipeline = None
+elif settings.USE_GPU:
+     logger.warning(f"GPU requested but not available. LLM ({LLM_MODEL_NAME}) will not be loaded.")
+else:
+    # Optional: Load on CPU if GPU is disabled (will be very slow for Mistral 7B)
+    logger.warning(f"GPU disabled. Loading LLM ({LLM_MODEL_NAME}) on CPU is not recommended for performance.")
+    # try:
+    #     logger.info(f"Loading LLM model: {LLM_MODEL_NAME} onto CPU")
+    #     model = AutoModelForCausalLM.from_pretrained(LLM_MODEL_NAME)
+    #     tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_NAME)
+    #     llm_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer, device=-1) # device=-1 for CPU
+    #     logger.info(f"LLM pipeline created successfully for {LLM_MODEL_NAME} on CPU.")
+    # except Exception as e:
+    #     logger.error(f"Failed to load LLM model {LLM_MODEL_NAME} on CPU: {e}", exc_info=True)
+    #     llm_pipeline = None
+
+# --- Core Query Function ---
+async def process_query(
+    query_text: str, 
+    department: str
+) -> QueryResponse:
+    """
+    Processes a query using the RAG pipeline: embed, search, generate.
+    """
+    logger.info(f"--- query_processor.py: process_query ENTRY --- Query: 	{query_text}	, Department: {department}") # ADDED TRACING
+    if not embedding_model or not qdrant_client:
+        logger.error("Embedding model or Qdrant client not available in query_processor.") # ADDED DETAIL
+        raise HTTPException(status_code=503, detail="Embedding model or Qdrant client not available.")
+    if not llm_pipeline:
+        logger.error("LLM pipeline not available in query_processor.") # ADDED DETAIL
+        raise HTTPException(status_code=503, detail="LLM pipeline not available.")
+
+    start_time = time()
+
+    # 1. Generate Query Embedding
+    logger.info(f"Generating embedding for query: \"{query_text}\"")
+    # Ensure embedding_model is available and loaded
+    if embedding_model is None:
+        logger.error("Embedding model is None, cannot generate query vector.")
+        raise HTTPException(status_code=500, detail="Embedding model not loaded")
+    
+    query_vector = embedding_model.encode(query_text, convert_to_numpy=True).tolist()
+    logger.info(f"Query vector generated.")
+
+    # 2. Search Vector Store (Qdrant) with Department Filter
+    logger.info(f"Searching Qdrant collection 	{QDRANT_COLLECTION_NAME}	 for department 	{department}	 with {len(query_vector)} dim vector.")
+    try:
+        search_result = qdrant_client.search(
+            collection_name=QDRANT_COLLECTION_NAME,
+            query_vector=query_vector,
+            query_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="department",
+                        match=models.MatchValue(value=department)
+                    )
+                ]
+            ),
+            limit=5, # Retrieve top 5 relevant chunks
+            with_payload=True # Ensure payload is returned
+        )
+        logger.info(f"Retrieved {len(search_result)} results from Qdrant.")
+        if search_result:
+            for i, hit in enumerate(search_result):
+                logger.info(f"Qdrant Hit {i+1}: ID={hit.id}, Score={hit.score}, Payload Keys={list(hit.payload.keys()) if hit.payload else 'No Payload'}")
+    except Exception as e:
+        logger.error(f"Error during Qdrant search: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error searching Qdrant: {e}")
+
+    # 3. Prepare Context and Source Documents
+    context = ""
+    sources = []
+    if search_result:
+        for hit in search_result:
+            if hit.payload and isinstance(hit.payload, dict) and "text" in hit.payload:
+                context += hit.payload["text"] + "\n\n" # Add chunk text to context
+                sources.append(SourceDocument(
+                    document_id=str(hit.id), # Use Qdrant point ID as document_id for source
+                    document_name=hit.payload.get("source", str(hit.id)), # Use source from payload or point ID
+                    relevance_score=hit.score,
+                    content_snippet=hit.payload["text"][:200] + "..." # Add snippet
+                ))
+            else:
+                logger.warning(f"Qdrant hit {hit.id} missing payload or text field.")
+        context = context[:MAX_CONTEXT_LENGTH] 
+        logger.info(f"Prepared context for LLM (length: {len(context)} chars). Number of sources: {len(sources)}")
+    else:
+        logger.info("No relevant documents found in Qdrant for the query and department.")
+
+    # 4. Prepare Prompt for LLM (Mistral Instruct format)
+    if not context:
+        logger.info("Context is empty. LLM will be asked to respond based on its general knowledge or indicate it doesn't know.")
+        # Modified prompt for when no context is found
+        prompt = f"<s>[INST] Answer the following question. If you don't know the answer from your general knowledge, say that you don't have specific information on this topic.\n\nQuestion: {query_text} [/INST]"
+    else:
+        prompt = f"<s>[INST] Use the following context to answer the question. If the answer is not in the context, say you don't know.\n\nContext:\n{context}\n\nQuestion: {query_text} [/INST]"
+    
+    logger.debug(f"LLM Prompt: {prompt}") # Log the full prompt for debugging if needed (can be long)
+
+    # 5. Call LLM Pipeline
+    logger.info(f"Calling LLM pipeline for query: \"{query_text}\"")
+    answer = "Error: LLM processing failed." 
+    try: 
+        llm_response_data = llm_pipeline(prompt)
+        if llm_response_data and isinstance(llm_response_data, list) and len(llm_response_data) > 0:
+            full_generated_text = llm_response_data[0].get(	generated_text	, "")
+            answer_part = full_generated_text.split("[/INST]")[-1].strip()
+            if not answer_part and full_generated_text: # Handle cases where split might not work as expected
+                answer = full_generated_text # Fallback to full text if split fails to find answer
+            else:
+                answer = answer_part
+            logger.info(f"LLM generated answer: {answer[:200]}...") # Log snippet of answer
+        else:
+            logger.error(f"LLM pipeline returned unexpected or empty output: {llm_response_data}")
+            answer = "Error: Failed to get a valid response from LLM."
+            
+    except Exception as e: 
+        logger.error(f"Error during LLM generation: {e}", exc_info=True)
+        answer = f"Error: Exception during LLM generation - {e}"
+
+    processing_time = time() - start_time
+    logger.info(f"--- query_processor.py: process_query EXIT --- Time: {processing_time:.2f}s ---") # ADDED TRACING
+
+    final_response = QueryResponse(
+        query=query_text,
+        response=answer,
+        model=LLM_MODEL_NAME,
+        sources=sources,
+        processing_time=round(processing_time, 2),
+        gpu_accelerated=(device == "cuda")
+    )
+    return final_response
+
