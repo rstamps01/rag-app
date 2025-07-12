@@ -1,3 +1,6 @@
+// File Path: frontend/rag-ui-new/src/components/pages/DocumentsPage.jsx
+// CORRECTED: Proper PDT timezone conversion using Intl.DateTimeFormat
+
 import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Calendar, HardDrive, AlertCircle, CheckCircle, Clock, X, RefreshCw, Download, Trash2 } from 'lucide-react';
 
@@ -11,7 +14,7 @@ const DocumentsPage = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  // Department options matching the queries page
+  // Department options matching the backend
   const departments = [
     { value: 'General', label: 'General', color: 'bg-blue-100 text-blue-800' },
     { value: 'IT', label: 'IT', color: 'bg-green-100 text-green-800' },
@@ -21,23 +24,72 @@ const DocumentsPage = () => {
   ];
 
   const getDepartmentColor = (department) => {
-    const dept = departments.find(d => d.value.toLowerCase() === department.toLowerCase());
+    const normalizedDept = (department || 'general').toLowerCase();
+    const dept = departments.find(d => d.value.toLowerCase() === normalizedDept);
     return dept ? dept.color : 'bg-gray-100 text-gray-800';
   };
 
+  // Remove duplicate documents (keep most recent)
+  const removeDuplicateDocuments = (documents) => {
+    const seen = new Map();
+    
+    // Sort by upload_date descending to keep most recent
+    const sorted = documents.sort((a, b) => 
+      new Date(b.upload_date || 0) - new Date(a.upload_date || 0)
+    );
+    
+    return sorted.filter(doc => {
+      const key = doc.filename || 'unknown';
+      if (seen.has(key)) {
+        return false; // Skip duplicate
+      }
+      seen.set(key, true);
+      return true;
+    });
+  };
+
+  // ENHANCED: Handle both flat array and nested structure from backend with debugging
   const fetchDocuments = async () => {
     try {
       setLoading(true);
       const response = await fetch('/api/v1/documents/?skip=0&limit=100');
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
       const data = await response.json();
-      setDocuments(data.documents || []);
+      
+      // DEBUG: Log the actual API response
+      console.log('API Response:', data);
+      
+      // Handle both flat array and nested structure
+      const documentsArray = Array.isArray(data) ? data : (data.documents || []);
+      
+      // DEBUG: Log individual document sizes
+      documentsArray.forEach((doc, index) => {
+        console.log(`Document ${index}:`, {
+          filename: doc.filename,
+          size: doc.size,
+          sizeType: typeof doc.size,
+          upload_date: doc.upload_date
+        });
+      });
+      
+      // Filter out invalid documents
+      const validDocuments = documentsArray.filter(doc => 
+        doc && typeof doc === 'object' && doc.id
+      );
+      
+      // Remove duplicates
+      const uniqueDocuments = removeDuplicateDocuments(validDocuments);
+      
+      setDocuments(uniqueDocuments);
       setError(null);
     } catch (err) {
       console.error('Error fetching documents:', err);
       setError('Failed to fetch document list. Please try again.');
+      setDocuments([]); // Ensure we don't leave stale data
     } finally {
       setLoading(false);
     }
@@ -129,45 +181,95 @@ const DocumentsPage = () => {
     }
   };
 
+  // ENHANCED: File size formatting with debugging and better handling
   const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
+    // Debug logging to see what we're receiving
+    console.log('formatFileSize received:', bytes, typeof bytes);
+    
+    // Handle various null/undefined cases
+    if (bytes === null || bytes === undefined) {
+      return 'Size Unknown';
+    }
+    
+    // Convert string numbers to actual numbers
+    if (typeof bytes === 'string') {
+      const parsed = parseInt(bytes, 10);
+      if (isNaN(parsed)) {
+        return 'Size Unknown';
+      }
+      bytes = parsed;
+    }
+    
+    // Handle zero or negative values
+    if (bytes <= 0) {
+      return '0 Bytes';
+    }
+    
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    
+    // Ensure we don't exceed array bounds
+    const sizeIndex = Math.min(i, sizes.length - 1);
+    
+    return parseFloat((bytes / Math.pow(k, sizeIndex)).toFixed(2)) + ' ' + sizes[sizeIndex];
   };
 
+  // CORRECTED: Proper PDT timezone conversion using Intl.DateTimeFormat
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return 'Unknown';
+    
+    try {
+      const date = new Date(dateString);
+      
+      // Use Intl.DateTimeFormat for proper timezone conversion
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles',  // This will properly convert to PDT/PST
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short',
+        hour12: true
+      });
+      
+      return formatter.format(date);
+    } catch (e) {
+      console.error('Date formatting error:', e);
+      return 'Invalid Date';
+    }
   };
 
+  // Null-safe status handling
   const getStatusIcon = (status) => {
-    switch (status?.toLowerCase()) {
+    const normalizedStatus = (status || 'unknown').toLowerCase();
+    switch (normalizedStatus) {
       case 'completed':
         return <CheckCircle className="w-5 h-5 text-green-500" />;
       case 'processing':
         return <Clock className="w-5 h-5 text-yellow-500" />;
       case 'failed':
         return <AlertCircle className="w-5 h-5 text-red-500" />;
+      case 'uploaded':
+        return <Clock className="w-5 h-5 text-blue-500" />;
       default:
         return <Clock className="w-5 h-5 text-gray-500" />;
     }
   };
 
   const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
+    const normalizedStatus = (status || 'unknown').toLowerCase();
+    switch (normalizedStatus) {
       case 'completed':
         return 'bg-green-100 text-green-800';
       case 'processing':
         return 'bg-yellow-100 text-yellow-800';
       case 'failed':
         return 'bg-red-100 text-red-800';
+      case 'uploaded':
+        return 'bg-blue-100 text-blue-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -336,22 +438,22 @@ const DocumentsPage = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {documents.map((doc) => (
-                    <tr key={doc.id} className="hover:bg-gray-50">
+                    <tr key={doc.id || Math.random()} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <FileText className="w-5 h-5 text-gray-400 mr-3" />
                           <div>
                             <div className="text-sm font-medium text-gray-900">
-                              {doc.filename}
+                              {doc.filename || 'Unknown File'}
                             </div>
                             <div className="text-sm text-gray-500">
-                              {doc.content_type}
+                              {doc.content_type || 'Unknown Type'}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getDepartmentColor(doc.department || 'General')}`}>
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getDepartmentColor(doc.department)}`}>
                           {doc.department || 'General'}
                         </span>
                       </td>
