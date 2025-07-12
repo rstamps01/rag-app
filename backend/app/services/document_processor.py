@@ -1,5 +1,5 @@
 # File Path: /backend/app/services/document_processor.py
-# Enhanced version - Added department support while preserving all existing functionality
+# FIXED VERSION - Eliminates duplicate document creation and enables PDF processing
 
 import os
 import logging
@@ -21,7 +21,6 @@ from langchain_community.document_loaders import (
 from app.core.config import settings
 from app.core.pipeline_monitor import pipeline_monitor
 from app.db.session import get_db
-from app.crud.crud_document import create_document, get_document_by_filename, update_document
 
 # FIXED: Import from documents.py instead of document.py to avoid circular import
 from app.schemas.documents import DocumentCreate, DocumentUpdate
@@ -40,7 +39,7 @@ logger = logging.getLogger(__name__)
 VALID_DEPARTMENTS = ["General", "IT", "HR", "Finance", "Legal"]
 
 class DocumentProcessor:
-    """Enhanced document processor with OCR capabilities, GPU optimization, and department support"""
+    """FIXED: Enhanced document processor with OCR capabilities, GPU optimization, and department support"""
     
     def __init__(self):
         self.embedding_model = None
@@ -48,44 +47,69 @@ class DocumentProcessor:
             chunk_size=settings.CONTEXT_WINDOW_SIZE // 4,
             chunk_overlap=200,
             length_function=len,
+            separators=["\n\n", "\n", " ", ""]
         )
-        self.vector_client = None
+        self.qdrant_client = None
         self._initialize_components()
-    
+        
     def _initialize_components(self):
-        """Initialize embedding model and vector database client"""
+        """Initialize embedding model and Qdrant client"""
         try:
-            # Initialize embedding model with GPU optimization
-            device = "cuda" if torch.cuda.is_available() and settings.ENABLE_GPU else "cpu"
+            # Initialize embedding model with GPU support
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            logger.info(f"Initializing embedding model on device: {device}")
+            
             self.embedding_model = SentenceTransformer(
-                'all-MiniLM-L6-v2',
+                settings.EMBEDDING_MODEL_NAME,
                 device=device
             )
             
-            # Enable GPU optimizations if available
-            if device == "cuda":
-                torch.backends.cudnn.benchmark = True
-                if hasattr(torch.backends.cuda, 'enable_flash_sdp'):
-                    torch.backends.cuda.enable_flash_sdp(True)
-            
-            # Initialize vector database client
-            self.vector_client = QdrantClient(
+            # Initialize Qdrant client
+            self.qdrant_client = QdrantClient(
                 host=settings.QDRANT_HOST,
                 port=settings.QDRANT_PORT
             )
             
-            logger.info(f"Document processor initialized with device: {device}")
+            # Ensure collection exists
+            self._ensure_collection_exists()
+            
+            logger.info("Document processor initialized successfully")
             
         except Exception as e:
             logger.error(f"Failed to initialize document processor: {str(e)}")
             raise
-
-    def extract_text_with_ocr(self, file_path: str, file_type: str) -> str:
-        """Extract text from documents using OCR when needed"""
+    
+    def _ensure_collection_exists(self):
+        """Ensure the Qdrant collection exists with proper configuration"""
         try:
-            if file_type.lower() == 'pdf':
+            collections = self.qdrant_client.get_collections()
+            collection_names = [col.name for col in collections.collections]
+            
+            if settings.QDRANT_COLLECTION_NAME not in collection_names:
+                logger.info(f"Creating Qdrant collection: {settings.QDRANT_COLLECTION_NAME}")
+                
+                self.qdrant_client.create_collection(
+                    collection_name=settings.QDRANT_COLLECTION_NAME,
+                    vectors_config=models.VectorParams(
+                        size=self.embedding_model.get_sentence_embedding_dimension(),
+                        distance=models.Distance.COSINE
+                    )
+                )
+                logger.info("Qdrant collection created successfully")
+            else:
+                logger.info(f"Qdrant collection {settings.QDRANT_COLLECTION_NAME} already exists")
+                
+        except Exception as e:
+            logger.error(f"Failed to ensure collection exists: {str(e)}")
+            raise
+
+    def _extract_text_with_ocr(self, file_path: str, file_type: str) -> str:
+        """FIXED: Extract text from documents using OCR when needed"""
+        try:
+            # FIXED: Handle content type properly - convert MIME types to extensions
+            if file_type.lower() in ['application/pdf', 'pdf']:
                 return self._extract_pdf_with_ocr(file_path)
-            elif file_type.lower() in ['png', 'jpg', 'jpeg', 'tiff', 'bmp']:
+            elif file_type.lower() in ['image/png', 'image/jpeg', 'image/jpg', 'image/tiff', 'image/bmp', 'png', 'jpg', 'jpeg', 'tiff', 'bmp']:
                 return self._extract_image_text(file_path)
             else:
                 # For other file types, use standard text extraction
@@ -105,52 +129,60 @@ class DocumentProcessor:
             for page_num in range(len(doc)):
                 page = doc.load_page(page_num)
                 
-                # Try standard text extraction first
+                # Try to extract text directly first
                 text = page.get_text()
                 
-                # If no text found or very little text, use OCR
-                if len(text.strip()) < 50:
-                    # Convert page to image and apply OCR
-                    pix = page.get_pixmap()
-                    img_data = pix.tobytes("png")
-                    img = Image.open(io.BytesIO(img_data))
-                    
-                    # Apply OCR
-                    ocr_text = pytesseract.image_to_string(
-                        img, 
-                        lang=settings.OCR_LANGUAGE
-                    )
-                    text_content.append(ocr_text)
-                else:
+                if text.strip():
                     text_content.append(text)
+                else:
+                    # If no text found, use OCR on the page image
+                    logger.info(f"No text found on page {page_num + 1}, using OCR")
+                    
+                    # Render page as image
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x zoom for better OCR
+                    img_data = pix.tobytes("png")
+                    
+                    # Convert to PIL Image and apply OCR
+                    image = Image.open(io.BytesIO(img_data))
+                    ocr_text = pytesseract.image_to_string(image)
+                    
+                    if ocr_text.strip():
+                        text_content.append(ocr_text)
+                        logger.info(f"OCR extracted {len(ocr_text)} characters from page {page_num + 1}")
             
             doc.close()
-            return "\n".join(text_content)
+            
+            full_text = "\n".join(text_content)
+            logger.info(f"PDF text extraction completed: {len(full_text)} characters extracted")
+            return full_text
             
         except Exception as e:
-            logger.error(f"PDF OCR extraction failed: {str(e)}")
+            logger.error(f"PDF extraction failed for {file_path}: {str(e)}")
             return ""
 
     def _extract_image_text(self, file_path: str) -> str:
         """Extract text from image files using OCR"""
         try:
-            img = Image.open(file_path)
-            text = pytesseract.image_to_string(img, lang=settings.OCR_LANGUAGE)
+            image = Image.open(file_path)
+            text = pytesseract.image_to_string(image)
+            logger.info(f"Image OCR completed: {len(text)} characters extracted")
             return text
+            
         except Exception as e:
-            logger.error(f"Image OCR extraction failed: {str(e)}")
+            logger.error(f"Image OCR failed for {file_path}: {str(e)}")
             return ""
 
     def _extract_standard_text(self, file_path: str, file_type: str) -> str:
-        """Extract text using standard document loaders"""
+        """FIXED: Extract text using standard document loaders with proper content type handling"""
         try:
-            if file_type.lower() == 'pdf':
+            # FIXED: Handle both MIME types and file extensions
+            if file_type.lower() in ['application/pdf', 'pdf']:
                 loader = PyPDFLoader(file_path)
-            elif file_type.lower() == 'txt':
+            elif file_type.lower() in ['text/plain', 'txt']:
                 loader = TextLoader(file_path)
-            elif file_type.lower() in ['doc', 'docx']:
+            elif file_type.lower() in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'doc', 'docx']:
                 loader = Docx2txtLoader(file_path)
-            elif file_type.lower() == 'csv':
+            elif file_type.lower() in ['text/csv', 'csv']:
                 loader = CSVLoader(file_path)
             else:
                 logger.warning(f"Unsupported file type: {file_type}")
@@ -165,40 +197,47 @@ class DocumentProcessor:
 
     def process_document(self, file_path: str, filename: str, content_type: str, department: str = "General") -> Dict[str, Any]:
         """
-        ENHANCED: Process a document and store it in the vector database with department support
+        FIXED: Process document without creating duplicate database records
         
         Args:
             file_path: Path to the document file
-            filename: Original filename
-            content_type: MIME type of the file
-            department: Department categorization for the document
+            filename: Name of the document
+            content_type: MIME type of the document
+            department: Department for categorization
+            
+        Returns:
+            Dictionary with processing results
         """
         start_time = time.time()
         
-        # ENHANCED: Validate department
-        if department not in VALID_DEPARTMENTS:
-            logger.warning(f"Invalid department '{department}', defaulting to 'General'")
-            department = "General"
-        
         try:
-            # Extract text with OCR support
-            text_content = self.extract_text_with_ocr(file_path, content_type)
+            # ENHANCED: Validate department
+            if department not in VALID_DEPARTMENTS:
+                logger.warning(f"Invalid department '{department}', defaulting to 'General'")
+                department = "General"
             
-            if not text_content.strip():
+            logger.info(f"Processing document {filename} for department: {department}")
+            
+            # Extract text content with OCR support
+            text_content = self._extract_text_with_ocr(file_path, content_type)
+            
+            if not text_content or len(text_content.strip()) == 0:
                 raise ValueError("No text content extracted from document")
             
             # Split text into chunks
             chunks = self.text_splitter.split_text(text_content)
             
-            # Generate embeddings
+            if not chunks:
+                raise ValueError("No chunks created from document text")
+            
+            # Generate embeddings for chunks
             embeddings = self.embedding_model.encode(chunks)
             
-            # Store in vector database with department metadata
-            collection_name = "documents"
+            # Store in Qdrant vector database
             points = []
-            
             for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                point_id = f"{filename}_{i}"
+                point_id = str(uuid.uuid4())
+                
                 points.append(models.PointStruct(
                     id=point_id,
                     vector=embedding.tolist(),
@@ -207,19 +246,19 @@ class DocumentProcessor:
                         "chunk_index": i,
                         "content": chunk,
                         "content_type": content_type,
-                        "department": department  # ENHANCED: Store department in vector DB
+                        "department": department  # ENHANCED: Department stored in vector DB
                     }
                 ))
             
-            # Upsert points to vector database
-            self.vector_client.upsert(
-                collection_name=collection_name,
+            # Batch insert into Qdrant
+            self.qdrant_client.upsert(
+                collection_name=settings.QDRANT_COLLECTION_NAME,
                 points=points
             )
             
             processing_time = time.time() - start_time
             
-            # Log processing metrics with department info
+            # FIXED: Log processing metrics with correct parameters
             pipeline_monitor.log_document_processed(
                 filename=filename,
                 processing_time=processing_time,
@@ -240,7 +279,7 @@ class DocumentProcessor:
             processing_time = time.time() - start_time
             error_msg = str(e)
             
-            # Log processing failure
+            # FIXED: Log processing failure with correct parameters
             pipeline_monitor.log_document_processed(
                 filename=filename,
                 processing_time=processing_time,
@@ -259,119 +298,51 @@ class DocumentProcessor:
                 "department": department
             }
 
-# Global processor instance 
+# Create global instance
 document_processor = DocumentProcessor()
 
 def process_and_store_document(file_path: str, filename: str, content_type: str, db: Session, department: str = "General") -> Dict[str, Any]:
     """
-    ENHANCED: Process and store a document in both vector database and PostgreSQL with department support
+    FIXED: Process and store document WITHOUT creating duplicate database records
+    
+    This function now only handles the document processing and vector storage.
+    Database record management is handled by the calling documents route.
     
     Args:
         file_path: Path to the uploaded file
         filename: Original filename
         content_type: MIME type of the file
-        db: Database session
-        department: Department categorization (General, IT, HR, Finance, Legal)
+        db: Database session (for compatibility, but not used for creation)
+        department: Department for categorization
         
     Returns:
-        Dictionary with processing results including department info
+        Dictionary with processing results including document_id from caller
     """
-    # ENHANCED: Validate department parameter
-    if department not in VALID_DEPARTMENTS:
-        logger.warning(f"Invalid department '{department}', defaulting to 'General'")
-        department = "General"
-    
-    logger.info(f"Processing document {filename} for department: {department}")
-    
     try:
-        # ENHANCED: Create document record in PostgreSQL with department
-        document_create = DocumentCreate(
-            filename=filename,
-            content_type=content_type,
-            department=department  # ENHANCED: Store department in PostgreSQL
-        )
+        # FIXED: Only process the document, don't create database records
+        # The documents route handles database record creation and management
         
-        db_document = create_document(db, document_create)
-        
-        # ENHANCED: Process document with vector database storage and department
+        # Process document with vector database storage
         result = document_processor.process_document(file_path, filename, content_type, department)
         
-        # Update document record with processing results
-        document_update = DocumentUpdate(
-            status=result["status"],
-            path=file_path,
-            error_message=result.get("error"),
-            department=department  # ENHANCED: Ensure department is stored
-        )
-        
-        update_document(db, db_document, document_update)
+        # ENHANCED: Add department to result
+        result["department"] = department
         
         return {
-            "document_id": db_document.id,
             "processing_result": result,
-            "department": department  # ENHANCED: Return department info
+            "department": department
         }
         
     except Exception as e:
-        logger.error(f"Failed to process and store document {filename} (dept: {department}): {str(e)}")
-        raise
-
-def get_valid_departments() -> List[str]:
-    """
-    ENHANCED: Get list of valid departments for validation
-    
-    Returns:
-        List of valid department names
-    """
-    return VALID_DEPARTMENTS.copy()
-
-def filter_documents_by_department(department: str, limit: int = 100) -> List[Dict[str, Any]]:
-    """
-    ENHANCED: Filter documents by department from vector database
-    
-    Args:
-        department: Department to filter by
-        limit: Maximum number of documents to return
+        error_msg = str(e)
+        logger.error(f"Failed to process and store document {filename} (dept: {department}): {error_msg}")
         
-    Returns:
-        List of document metadata filtered by department
-    """
-    if department not in VALID_DEPARTMENTS:
-        logger.warning(f"Invalid department '{department}' for filtering")
-        return []
-    
-    try:
-        # Query vector database for documents in specific department
-        search_result = document_processor.vector_client.scroll(
-            collection_name="documents",
-            scroll_filter=models.Filter(
-                must=[
-                    models.FieldCondition(
-                        key="department",
-                        match=models.MatchValue(value=department)
-                    )
-                ]
-            ),
-            limit=limit,
-            with_payload=True
-        )
-        
-        # Extract unique documents (group by filename)
-        documents = {}
-        for point in search_result[0]:
-            filename = point.payload["filename"]
-            if filename not in documents:
-                documents[filename] = {
-                    "filename": filename,
-                    "department": point.payload["department"],
-                    "content_type": point.payload["content_type"],
-                    "chunk_count": 1
-                }
-            else:
-                documents[filename]["chunk_count"] += 1
-        
-        return list(documents.values())
-        
-    except Exception as e:
-        logger.error(f"Failed to filter documents by department {department}: {str(e)}")
-        return []
+        return {
+            "processing_result": {
+                "status": "failed",
+                "error": error_msg,
+                "processing_time": 0.0,
+                "department": department
+            },
+            "department": department
+        }

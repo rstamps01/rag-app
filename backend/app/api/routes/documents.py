@@ -1,397 +1,388 @@
-"""
-Corrected Documents Route - GitHub Codebase Compatible
-Fixes all identified issues while maintaining existing functionality
-"""
+# File Path: /backend/app/api/routes/documents.py
+# SCHEMA-COMPATIBLE VERSION - Uses existing schema classes and field names
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, status, Form, Depends
-from typing import List, Optional, Dict, Any
 import os
 import uuid
 import time
 import logging
-from pathlib import Path
-from datetime import datetime
-
-# CORRECTED: Add proper database imports
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form, BackgroundTasks
 from sqlalchemy.orm import Session
+
+# FIXED: Import from existing schema structure
+from app.schemas.documents import Document, DocumentCreate, DocumentUpdate, DocumentList
+from app.crud.crud_document import create_document, get_documents, get_document_by_id, update_document
 from app.db.session import get_db
-
-# CORRECTED: Add proper CRUD and schema imports
-from app.crud.crud_document import create_document, update_document, get_document, get_documents
-from app.schemas.documents import DocumentCreate, DocumentUpdate
-
-# Import the document processor with CORRECT signature
 from app.services.document_processor import process_and_store_document
-
-# Import database models
-from app.models.models import Document
-
-# Pydantic models for API responses
-from pydantic import BaseModel, Field
-
-# CORRECTED: DocumentMetadata with field mapping for compatibility
-class DocumentMetadata(BaseModel):
-    """
-    Frontend-compatible schema that maps database fields to expected field names
-    """
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    filename: str
-    department: str = "General"
-    content_type: Optional[str] = None
-    file_size: int  # Maps from db.size
-    upload_time: float = Field(default_factory=lambda: datetime.now().timestamp())  # Maps from db.upload_date
-    status: str = "pending"
-    path: Optional[str] = None
-    error_message: Optional[str] = None
-
-    @classmethod
-    def from_db_document(cls, db_doc: Document, department: str = "General"):
-        """Convert database Document to frontend-compatible DocumentMetadata"""
-        return cls(
-            id=db_doc.id,
-            filename=db_doc.filename,
-            department=department or db_doc.department or "General",
-            content_type=db_doc.content_type,
-            file_size=db_doc.size or 0,  # Map size → file_size
-            upload_time=db_doc.upload_date.timestamp() if db_doc.upload_date else time.time(),  # Map upload_date → upload_time
-            status=db_doc.status or "pending",
-            path=db_doc.path,
-            error_message=db_doc.error_message
-        )
-
-class DocumentList(BaseModel):
-    """Compatible document list response"""
-    documents: List[DocumentMetadata]
-    total_count: int
-
-logger = logging.getLogger(__name__)
+from app.core.config import settings
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-# Valid departments (preserved from existing implementation)
-VALID_DEPARTMENTS = ["General", "IT", "HR", "Finance", "Legal"]
-
-# Global placeholder database for status tracking (preserved for compatibility)
+# In-memory storage for immediate status tracking (placeholder DB)
 documents_db = {}
 
-async def process_document_pipeline(
-    doc_id: str, 
-    file_path: str, 
-    filename: str, 
-    content_type: str,
-    department: str,
-    db_document_id: str
-):
+# ENHANCED: Department validation
+VALID_DEPARTMENTS = ["General", "IT", "HR", "Finance", "Legal"]
+
+async def process_document_pipeline(doc_id: str, file_path: str, filename: str, content_type: str, department: str, db_document_id: str):
     """
-    CORRECTED: Background task with proper function signature and database integration
-    """
-    print(f"--- PRINT: [BACKGROUND TASK process_document_pipeline ENTRY] doc_id: {doc_id}, file: {filename}, department: {department} ---")
-    logger.info(f"--- LOGGER: [BACKGROUND TASK process_document_pipeline ENTRY] doc_id: {doc_id}, file: {filename}, department: {department} ---")
+    FIXED: Background task for document processing with corrected status logic
     
-    global documents_db
+    Args:
+        doc_id: Unique document processing ID
+        file_path: Path to uploaded file
+        filename: Original filename
+        content_type: MIME type
+        department: Department for categorization
+        db_document_id: Database document ID from initial creation
+    """
     processing_start_time = time.time()
     
-    # Create new database session for background task
-    from app.db.session import SessionLocal
-    db = SessionLocal()
+    logger.info(f"--- LOGGER: [BACKGROUND TASK process_document_pipeline ENTRY] doc_id: {doc_id}, file: {filename}, department: {department} ---")
+    print(f"--- PRINT: [BACKGROUND TASK process_document_pipeline ENTRY] doc_id: {doc_id}, file: {filename}, department: {department} ---")
     
     try:
         logger.info(f"[{doc_id}] Inside try block of process_document_pipeline.")
         
-        # 1. Update Status to Processing (both systems)
+        # 1. Update status to processing in placeholder DB
         if doc_id in documents_db:
             documents_db[doc_id]["status"] = "processing"
             documents_db[doc_id]["department"] = department
             logger.info(f"[{doc_id}] Status set to 'processing' and department set to '{department}' in placeholder DB.")
         
-        # Update database status
-        db_document = get_document(db, db_document_id)
-        if db_document:
-            document_update = DocumentUpdate(status="processing")
-            update_document(db, db_document, document_update)
-            logger.info(f"[{doc_id}] Status set to 'processing' in database.")
-
-        # 2. CORRECTED: Call the function with the ACTUAL GitHub signature
-        logger.info(f"[{doc_id}] Attempting to call document_processor.process_and_store_document for file: {file_path}")
-        
-        # Call with GitHub codebase signature: (file_path, filename, content_type, db)
-        result = process_and_store_document(
-            file_path=file_path,
-            filename=filename,
-            content_type=content_type,
-            db=db
-        )
-        
-        logger.info(f"[{doc_id}] Successfully called process_and_store_document with GitHub-compatible signature")
-        logger.info(f"[{doc_id}] Processing result: {result}")
-
-        # 3. CORRECTED: Handle department separately (since it's not in the main function)
-        if department and department != "General":
-            db_document = get_document(db, db_document_id)
+        # 2. Update status to processing in database
+        db = next(get_db())
+        try:
+            db_document = get_document_by_id(db, db_document_id)
             if db_document:
-                department_update = DocumentUpdate(department=department)
-                update_document(db, db_document, department_update)
-                logger.info(f"[{doc_id}] Department '{department}' updated in database.")
-
-        # 4. Update Status to Completed (both systems)
-        if doc_id in documents_db:
-            documents_db[doc_id]["status"] = "completed"
-            processing_time = time.time() - processing_start_time
-            logger.info(f"[{doc_id}] Status set to 'completed' in placeholder DB. Processing time: {processing_time:.2f}s")
-        
-        # Update database status
-        db_document = get_document(db, db_document_id)
-        if db_document:
-            completion_update = DocumentUpdate(status="completed")
-            update_document(db, db_document, completion_update)
-            logger.info(f"[{doc_id}] Status set to 'completed' in database.")
+                document_update = DocumentUpdate(
+                    status="processing"
+                )
+                update_document(db, db_document, document_update)
+                logger.info(f"[{doc_id}] Status set to 'processing' in database.")
+            
+            # 3. FIXED: Call document processor with correct signature and handle result
+            logger.info(f"[{doc_id}] Attempting to call document_processor.process_and_store_document for file: {file_path}")
+            
+            # FIXED: Call with GitHub-compatible signature (4 parameters)
+            result = process_and_store_document(
+                file_path=file_path,
+                filename=filename,
+                content_type=content_type,
+                db=db
+            )
+            
+            logger.info(f"[{doc_id}] Successfully called process_and_store_document with GitHub-compatible signature")
+            logger.info(f"[{doc_id}] Processing result: {result}")
+            
+            # 4. FIXED: Update status based on actual processing result
+            if isinstance(result, dict):
+                processing_result = result.get("processing_result", {})
+                actual_status = processing_result.get("status", "completed" if result.get("success", False) else "failed")
+                error_message = processing_result.get("error") or result.get("error")
+            else:
+                # If result is not a dict, assume success
+                actual_status = "completed"
+                error_message = None
+            
+            # Update placeholder DB with actual result
+            if doc_id in documents_db:
+                documents_db[doc_id]["status"] = actual_status
+                if error_message:
+                    documents_db[doc_id]["error_message"] = error_message
+                processing_time = time.time() - processing_start_time
+                logger.info(f"[{doc_id}] Status set to '{actual_status}' in placeholder DB. Processing time: {processing_time:.2f}s")
+            else:
+                logger.warning(f"[{doc_id}] doc_id not found in placeholder DB to set status to '{actual_status}'.")
+            
+            # Update database with actual result
+            if db_document:
+                document_update = DocumentUpdate(
+                    status=actual_status,
+                    error_message=error_message
+                )
+                update_document(db, db_document, document_update)
+                logger.info(f"[{doc_id}] Status set to '{actual_status}' in database.")
+                
+        finally:
+            db.close()
 
     except Exception as e:
         error_msg = f"[BACKGROUND TASK] Unhandled error in processing pipeline for doc_id {doc_id}: {e}"
         logger.error(error_msg, exc_info=True)
         print(f"--- PRINT: [BACKGROUND TASK process_document_pipeline ERROR] doc_id: {doc_id}, error: {e} ---")
         
-        # Update error status in both systems
+        # FIXED: Set status to failed on error
         if doc_id in documents_db:
             documents_db[doc_id]["status"] = "failed"
             documents_db[doc_id]["error_message"] = str(e)
             logger.info(f"[{doc_id}] Status set to 'failed' in placeholder DB due to unhandled error.")
         
-        # Update database error status
+        # Update database status to failed
+        db = next(get_db())
         try:
-            db_document = get_document(db, db_document_id)
+            db_document = get_document_by_id(db, db_document_id)
             if db_document:
-                error_update = DocumentUpdate(status="failed", error_message=str(e))
-                update_document(db, db_document, error_update)
+                document_update = DocumentUpdate(
+                    status="failed",
+                    error_message=str(e)
+                )
+                update_document(db, db_document, document_update)
                 logger.info(f"[{doc_id}] Status set to 'failed' in database.")
-        except Exception as db_error:
-            logger.error(f"[{doc_id}] Failed to update database error status: {db_error}")
+        finally:
+            db.close()
     
     finally:
-        # Always close the database session
-        db.close()
         logger.info(f"--- LOGGER: [BACKGROUND TASK process_document_pipeline EXIT] doc_id: {doc_id} ---")
         print(f"--- PRINT: [BACKGROUND TASK process_document_pipeline EXIT] doc_id: {doc_id} ---")
 
-@router.post("/", response_model=DocumentMetadata, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/", response_model=Document, status_code=status.HTTP_202_ACCEPTED)
 async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    department: str = Form(default="General"),
-    db: Session = Depends(get_db)  # CORRECTED: Add database dependency
+    department: str = Form("General"),
+    db: Session = Depends(get_db)
 ):
     """
-    CORRECTED: Upload document with proper GitHub codebase integration
-    """
-    logger.info(f"--- API POST /documents - Received file: {file.filename}, Department: {department} ---")
+    FIXED: Upload document with corrected status logic and single document creation
     
-    # Validate department (preserved from existing implementation)
+    Args:
+        background_tasks: FastAPI background tasks
+        file: Uploaded file
+        department: Department for categorization (default: General)
+        db: Database session
+        
+    Returns:
+        Document with upload confirmation
+    """
+    
+    # ENHANCED: Validate department
     if department not in VALID_DEPARTMENTS:
         logger.warning(f"Invalid department '{department}', defaulting to 'General'")
         department = "General"
     
-    # Generate unique document ID
+    # Generate unique document ID for tracking
     doc_id = str(uuid.uuid4())
     
-    # Create upload directory if it doesn't exist
-    upload_dir = Path("/app/data/uploads")
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save file with unique name
-    unique_filename = f"{doc_id}_{file.filename}"
-    file_path = upload_dir / unique_filename
+    logger.info(f"--- API POST /documents - Received file: {file.filename}, Department: {department} ---")
     
     try:
-        # Save uploaded file
+        # 1. Save uploaded file
+        upload_dir = "/app/data/uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        file_extension = os.path.splitext(file.filename)[1]
+        unique_filename = f"{doc_id}_{file.filename}"
+        file_path = os.path.join(upload_dir, unique_filename)
+        
+        # Save file to disk
         with open(file_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
         
         file_size = len(content)
-        upload_time = time.time()
-        content_type = file.content_type or "application/octet-stream"
         logger.info(f"[{doc_id}] File saved: {file_path}, size: {file_size}")
         
-        # CORRECTED: Create document in database using GitHub codebase CRUD
+        # 2. FIXED: Create single document record in database
         document_create = DocumentCreate(
             filename=file.filename,
-            content_type=content_type
+            content_type=file.content_type
         )
         
         db_document = create_document(db, document_create)
         logger.info(f"[{doc_id}] Document created in database with ID: {db_document.id}")
         
-        # Store metadata in placeholder DB for compatibility
+        # 3. Store in placeholder DB for immediate status tracking
         documents_db[doc_id] = {
-            "id": doc_id,
+            "id": str(db_document.id),
             "filename": file.filename,
+            "content_type": file.content_type,
             "department": department,
-            "content_type": content_type,
-            "file_size": file_size,
-            "upload_time": upload_time,
-            "status": "pending",
-            "path": str(file_path),
-            "error_message": None,
-            "db_document_id": db_document.id  # Link to database record
+            "size": file_size,
+            "status": "uploaded",
+            "upload_date": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "path": file_path
         }
         
         logger.info(f"[{doc_id}] Initial metadata saved to placeholder DB with department: {department}.")
         
-        # CORRECTED: Add background task with all required parameters
+        # 4. Add background processing task
         logger.info(f"[{doc_id}] Adding background task for file: {file_path}")
+        
         background_tasks.add_task(
             process_document_pipeline,
             doc_id=doc_id,
-            file_path=str(file_path),
+            file_path=file_path,
             filename=file.filename,
-            content_type=content_type,
+            content_type=file.content_type,
             department=department,
-            db_document_id=db_document.id
+            db_document_id=str(db_document.id)
         )
+        
         logger.info(f"[{doc_id}] Successfully added background task.")
         
-        # Return frontend-compatible metadata
-        return DocumentMetadata(
-            id=doc_id,
+        # 5. FIXED: Return response using existing Document schema
+        return Document(
+            id=str(db_document.id),
             filename=file.filename,
-            department=department,
-            content_type=content_type,
-            file_size=file_size,
-            upload_time=upload_time,
-            status="pending",
-            path=str(file_path)
+            content_type=file.content_type,
+            size=file_size,
+            upload_date=time.strftime("%Y-%m-%d %H:%M:%S"),
+            status="uploaded",  # Initial status
+            path=file_path
         )
         
     except Exception as e:
-        logger.error(f"[{doc_id}] Error uploading document: {str(e)}", exc_info=True)
+        logger.error(f"[{doc_id}] Upload failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error uploading document: {str(e)}"
+            detail=f"Failed to upload document: {str(e)}"
         )
 
 @router.get("/", response_model=DocumentList)
 async def list_documents(
-    skip: int = 0, 
+    skip: int = 0,
     limit: int = 100,
     department: Optional[str] = None,
-    db: Session = Depends(get_db)  # CORRECTED: Add database dependency
+    db: Session = Depends(get_db)
 ):
     """
-    CORRECTED: List documents from both database and filesystem with proper integration
+    FIXED: List documents with proper database integration
+    
+    Args:
+        skip: Number of documents to skip
+        limit: Maximum number of documents to return
+        department: Filter by department (optional)
+        db: Database session
+        
+    Returns:
+        DocumentList
     """
+    
     try:
-        # Get documents from database (GitHub codebase approach)
-        db_documents = get_documents(db, skip=skip, limit=limit, department=department)
+        # Get documents from database
+        documents = get_documents(db, skip=skip, limit=limit, department=department)
         
-        documents = []
+        # Convert to response format using existing Document schema
+        result = []
+        for doc in documents:
+            # FIXED: Map database fields to existing Document schema fields
+            doc_response = Document(
+                id=str(doc.id),
+                filename=doc.filename,
+                content_type=doc.content_type,
+                size=getattr(doc, 'file_size', 0) or getattr(doc, 'size', 0),  # Handle both field names
+                upload_date=doc.upload_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(doc, 'upload_time') and doc.upload_time else "Invalid Date",
+                status=doc.status or "unknown",
+                path=doc.path or ""
+            )
+            result.append(doc_response)
         
-        # Convert database documents to frontend-compatible format
-        for db_doc in db_documents:
-            doc_metadata = DocumentMetadata.from_db_document(db_doc, db_doc.department)
-            documents.append(doc_metadata)
+        logger.info(f"API GET /documents - Listing documents, skip={skip}, limit={limit}, returning {len(result)} documents")
         
-        # Also check placeholder DB for any additional documents
-        for doc_id, doc_data in documents_db.items():
-            # Only add if not already in database results
-            if not any(d.id == doc_id for d in documents):
-                documents.append(DocumentMetadata(**doc_data))
-        
-        # Apply pagination to combined results
-        paginated_docs = documents[skip:skip + limit]
-        total_count = len(documents)
-        
-        logger.info(f"API GET /documents - Listing documents, skip={skip}, limit={limit}, returning {len(paginated_docs)} of {total_count}")
-        return DocumentList(documents=paginated_docs, total_count=total_count)
+        return DocumentList(
+            documents=result,
+            total=len(result),
+            skip=skip,
+            limit=limit
+        )
         
     except Exception as e:
-        logger.error(f"Error listing documents: {str(e)}", exc_info=True)
+        logger.error(f"Failed to list documents: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing documents: {str(e)}"
+            detail=f"Failed to list documents: {str(e)}"
         )
 
-@router.get("/departments")
-async def get_departments():
-    """
-    Get list of available departments (preserved from existing implementation)
-    """
-    return {
-        "departments": VALID_DEPARTMENTS
-    }
-
-@router.get("/{document_id}", response_model=DocumentMetadata)
-async def get_document_by_id(
+@router.get("/{document_id}", response_model=Document)
+async def get_document(
     document_id: str,
     db: Session = Depends(get_db)
 ):
     """
-    CORRECTED: Get document by ID from database or placeholder
+    Get specific document by ID
+    
+    Args:
+        document_id: Document ID
+        db: Database session
+        
+    Returns:
+        Document
     """
+    
     try:
-        # First try database
-        db_document = get_document(db, document_id)
-        if db_document:
-            return DocumentMetadata.from_db_document(db_document, db_document.department)
+        document = get_document_by_id(db, document_id)
         
-        # Fallback to placeholder DB
-        if document_id in documents_db:
-            return DocumentMetadata(**documents_db[document_id])
-        
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error retrieving document {document_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving document: {str(e)}"
-        )
-
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_document(
-    document_id: str,
-    db: Session = Depends(get_db)
-):
-    """
-    CORRECTED: Delete document from both database and filesystem
-    """
-    try:
-        # Delete from database
-        from app.crud.crud_document import delete_document as crud_delete_document
-        db_deleted = crud_delete_document(db, document_id)
-        
-        # Delete from placeholder DB
-        placeholder_deleted = False
-        if document_id in documents_db:
-            file_path = documents_db[document_id].get("path")
-            if file_path and os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                    logger.info(f"[{document_id}] Deleted file: {file_path}")
-                except Exception as e:
-                    logger.error(f"[{document_id}] Failed to delete file {file_path}: {e}")
-            
-            del documents_db[document_id]
-            placeholder_deleted = True
-            logger.info(f"[{document_id}] Deleted from placeholder DB.")
-        
-        if not db_deleted and not placeholder_deleted:
+        if not document:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Document not found"
             )
         
-        return None
+        # FIXED: Map database fields to existing Document schema
+        return Document(
+            id=str(document.id),
+            filename=document.filename,
+            content_type=document.content_type,
+            size=getattr(document, 'file_size', 0) or getattr(document, 'size', 0),
+            upload_date=document.upload_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(document, 'upload_time') and document.upload_time else "Invalid Date",
+            status=document.status or "unknown",
+            path=document.path or ""
+        )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting document {document_id}: {str(e)}", exc_info=True)
+        logger.error(f"Failed to get document {document_id}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting document: {str(e)}"
+            detail=f"Failed to get document: {str(e)}"
+        )
+
+@router.delete("/{document_id}")
+async def delete_document(
+    document_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete document by ID
+    
+    Args:
+        document_id: Document ID
+        db: Database session
+        
+    Returns:
+        Success message
+    """
+    
+    try:
+        document = get_document_by_id(db, document_id)
+        
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found"
+            )
+        
+        # Delete file if it exists
+        if document.path and os.path.exists(document.path):
+            os.remove(document.path)
+            logger.info(f"Deleted file: {document.path}")
+        
+        # Delete from database
+        db.delete(document)
+        db.commit()
+        
+        logger.info(f"Deleted document: {document_id}")
+        
+        return {"message": "Document deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete document {document_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete document: {str(e)}"
         )
