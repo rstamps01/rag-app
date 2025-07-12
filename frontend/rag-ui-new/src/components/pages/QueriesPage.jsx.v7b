@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Send, Clock, FileText, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
-import { api, apiHelpers } from '../../lib/api';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { MessageSquare, Send, Clock, FileText, AlertCircle, CheckCircle, Zap } from 'lucide-react';
+import { api } from '@/lib/api';
 
 const QueriesPage = () => {
   const [query, setQuery] = useState('');
@@ -11,7 +17,7 @@ const QueriesPage = () => {
   const [queryHistory, setQueryHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  // ✅ CORRECTED: Submit query using proper API helper
+  // ✅ CORRECTED: Based on actual backend API structure
   const handleSubmitQuery = async () => {
     if (!query.trim()) {
       setError('Please enter a query.');
@@ -23,8 +29,14 @@ const QueriesPage = () => {
     setResponse(null);
 
     try {
-      // ✅ CORRECTED: Use API helper with correct parameters
-      const queryResponse = await apiHelpers.submitQuery(query, department);
+      // ✅ CORRECTED: Use actual backend endpoint and request structure
+      const response = await api.post('/api/v1/queries/ask', {
+        query: query.trim(),  // ← Correct property name from backend schema
+        department: department || 'General'  // ← Correct property name from backend schema
+      });
+
+      // ✅ CORRECTED: Handle actual backend response structure (QueryResponse)
+      const queryResponse = response.data;
       
       setResponse({
         query: queryResponse.query,
@@ -41,9 +53,6 @@ const QueriesPage = () => {
       // Refresh query history after successful query
       await fetchQueryHistory();
       
-      // Clear the query input
-      setQuery('');
-      
     } catch (err) {
       console.error('Query error:', err);
       
@@ -54,8 +63,6 @@ const QueriesPage = () => {
         setError('Server error during query processing. Please check the backend logs.');
       } else if (err.code === 'ERR_NETWORK') {
         setError('Network error. Please check if the backend server is accessible.');
-      } else if (err.response?.status === 413) {
-        setError('Query too large. Please shorten your query and try again.');
       } else {
         setError(err.response?.data?.detail || err.message || 'Failed to process query.');
       }
@@ -64,24 +71,23 @@ const QueriesPage = () => {
     }
   };
 
-  // ✅ CORRECTED: Fetch query history using API helper with cache busting
+  // ✅ CORRECTED: Fetch query history using actual backend endpoint
   const fetchQueryHistory = async () => {
     setHistoryLoading(true);
     
     try {
-      // ✅ CORRECTED: Use API helper to get query history
-      const history = await apiHelpers.getQueryHistory(10);
+      // ✅ CORRECTED: Use actual backend endpoint
+      const response = await api.get('/api/v1/queries/history?limit=10');
       
-      // ✅ CORRECTED: Handle different response formats
-      const historyArray = Array.isArray(history) ? history : (history.queries || []);
-      setQueryHistory(historyArray);
+      // ✅ CORRECTED: Handle actual backend response (List[QueryHistoryResponse])
+      const history = response.data || [];
+      setQueryHistory(history);
       
-      console.log(`✅ Fetched ${historyArray.length} query history entries`);
+      console.log(`✅ Fetched ${history.length} query history entries`);
       
     } catch (err) {
       console.error('Error fetching query history:', err);
       // Don't show error for history fetch failure, just log it
-      setQueryHistory([]); // Set empty array on error
     } finally {
       setHistoryLoading(false);
     }
@@ -107,17 +113,9 @@ const QueriesPage = () => {
 
   // ✅ IMPROVED: Get relevance score color
   const getRelevanceColor = (score) => {
-    if (score >= 0.8) return 'bg-green-100 text-green-800 border-green-200';
-    if (score >= 0.6) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    return 'bg-red-100 text-red-800 border-red-200';
-  };
-
-  // ✅ IMPROVED: Handle Enter key press in textarea
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmitQuery();
-    }
+    if (score >= 0.8) return 'bg-green-100 text-green-800';
+    if (score >= 0.6) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-red-100 text-red-800';
   };
 
   useEffect(() => {
@@ -128,109 +126,104 @@ const QueriesPage = () => {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Query Interface</h1>
-        <button 
-          onClick={fetchQueryHistory} 
-          disabled={historyLoading}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
-        >
-          <RefreshCw size={16} className={historyLoading ? 'animate-spin' : ''} />
+        <Button onClick={fetchQueryHistory} disabled={historyLoading} variant="outline">
           {historyLoading ? 'Refreshing...' : 'Refresh History'}
-        </button>
+        </Button>
       </div>
 
       {/* Query Input Section */}
-      <div className="bg-white rounded-lg border shadow-sm">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <MessageSquare size={20} />
             Ask a Question
-          </h2>
-          <p className="text-gray-600 mt-1">
+          </CardTitle>
+          <CardDescription>
             Enter your question and select a department to get AI-powered answers from your documents.
-          </p>
-        </div>
-        <div className="p-6 space-y-4">
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-2">Department</label>
-            <select 
-              value={department} 
-              onChange={(e) => setDepartment(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="General">General</option>
-              <option value="IT">IT</option>
-              <option value="HR">HR</option>
-              <option value="Finance">Finance</option>
-              <option value="Legal">Legal</option>
-            </select>
+            <Select value={department} onValueChange={setDepartment}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="General">General</SelectItem>
+                <SelectItem value="IT">IT</SelectItem>
+                <SelectItem value="HR">HR</SelectItem>
+                <SelectItem value="Finance">Finance</SelectItem>
+                <SelectItem value="Legal">Legal</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-2">Your Question</label>
-            <textarea
+            <Textarea
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Enter your question here... (Press Enter to submit, Shift+Enter for new line)"
+              placeholder="Enter your question here..."
               rows={4}
-              className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              className="resize-none"
             />
           </div>
 
-          <button 
+          <Button 
             onClick={handleSubmitQuery} 
             disabled={loading || !query.trim()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full"
           >
             {loading ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 Processing...
               </>
             ) : (
               <>
-                <Send size={16} />
+                <Send size={16} className="mr-2" />
                 Submit Query
               </>
             )}
-          </button>
+          </Button>
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Query Response Section */}
       {response && (
-        <div className="bg-white rounded-lg border shadow-sm">
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
               <CheckCircle size={20} className="text-green-600" />
               Response
-            </h2>
-            <div className="flex flex-wrap gap-2 text-sm text-gray-600 mt-2">
+            </CardTitle>
+            <div className="flex gap-2 text-sm text-gray-600">
               {response.model && (
-                <span className="px-2 py-1 border rounded text-xs">Model: {response.model}</span>
+                <Badge variant="outline">Model: {response.model}</Badge>
               )}
               {response.processing_time && (
-                <span className="px-2 py-1 border rounded text-xs flex items-center gap-1">
-                  <Clock size={12} />
+                <Badge variant="outline">
+                  <Clock size={12} className="mr-1" />
                   {formatProcessingTime(response.processing_time)}
-                </span>
+                </Badge>
               )}
               {response.gpu_accelerated && (
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 border border-blue-200 rounded text-xs flex items-center gap-1">
-                  <Zap size={12} />
+                <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                  <Zap size={12} className="mr-1" />
                   GPU Accelerated
-                </span>
+                </Badge>
               )}
             </div>
-          </div>
-          <div className="p-6 space-y-4">
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div>
               <h4 className="font-medium mb-2">Question:</h4>
               <p className="text-gray-700 bg-gray-50 p-3 rounded">{response.query}</p>
@@ -238,7 +231,7 @@ const QueriesPage = () => {
 
             <div>
               <h4 className="font-medium mb-2">Answer:</h4>
-              <div className="bg-white p-4 border rounded">
+              <div className="prose max-w-none bg-white p-4 border rounded">
                 {response.response.split('\n').map((paragraph, index) => (
                   <p key={index} className="mb-2 last:mb-0">{paragraph}</p>
                 ))}
@@ -256,9 +249,9 @@ const QueriesPage = () => {
                           <FileText size={16} className="text-gray-500" />
                           <span className="font-medium">{source.document_name}</span>
                         </div>
-                        <span className={`px-2 py-1 rounded text-xs font-medium border ${getRelevanceColor(source.relevance_score)}`}>
+                        <Badge className={getRelevanceColor(source.relevance_score)}>
                           {Math.round(source.relevance_score * 100)}% relevant
-                        </span>
+                        </Badge>
                       </div>
                       {source.content_snippet && (
                         <p className="text-sm text-gray-600 italic">
@@ -270,22 +263,22 @@ const QueriesPage = () => {
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Query History Section */}
-      <div className="bg-white rounded-lg border shadow-sm">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <Clock size={20} />
             Recent Queries
-          </h2>
-          <p className="text-gray-600 mt-1">
+          </CardTitle>
+          <CardDescription>
             View your recent query history and responses.
-          </p>
-        </div>
-        <div className="p-6">
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
           {historyLoading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
@@ -299,25 +292,25 @@ const QueriesPage = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {queryHistory.map((item, index) => (
-                <div key={item.id || index} className="border rounded p-4 hover:bg-gray-50">
+              {queryHistory.map((item) => (
+                <div key={item.id} className="border rounded p-4 hover:bg-gray-50">
                   <div className="flex justify-between items-start mb-2">
                     <h5 className="font-medium text-gray-900">
-                      {item.query_text || item.query}
+                      {item.query_text}
                     </h5>
                     <div className="flex gap-2 text-xs">
                       {item.llm_model_used && (
-                        <span className="px-2 py-1 border rounded">{item.llm_model_used}</span>
+                        <Badge variant="outline">{item.llm_model_used}</Badge>
                       )}
                       {item.processing_time_ms && (
-                        <span className="px-2 py-1 border rounded">
+                        <Badge variant="outline">
                           {formatProcessingTime(item.processing_time_ms)}
-                        </span>
+                        </Badge>
                       )}
                       {item.gpu_accelerated && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 border border-blue-200 rounded flex items-center">
+                        <Badge variant="outline" className="bg-blue-100 text-blue-800">
                           <Zap size={10} />
-                        </span>
+                        </Badge>
                       )}
                     </div>
                   </div>
@@ -333,15 +326,15 @@ const QueriesPage = () => {
                       {item.department_filter && `Department: ${item.department_filter}`}
                     </span>
                     <span>
-                      {formatTimestamp(item.query_timestamp || item.timestamp)}
+                      {formatTimestamp(item.query_timestamp)}
                     </span>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

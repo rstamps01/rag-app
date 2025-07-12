@@ -1,305 +1,339 @@
-// In src/components/monitoring/PipelineDashboard.jsx
-// import {loadEsm} from 'load-esm';
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'; // "~/components/ui/cards"; //'../ui/card'; // 'load-esm';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'; //"~/components/ui/tabs"; //'load-esm'; // '../ui/tabs';
-import { Button } from '../ui/button'; //"~/components/ui/buttons"; //'load-esm';  //'../ui/button';
-import api, { endpoints } from "../../lib/api";  //../lib/api// import api, { endpoints } from 'app.api.route';  //../lib/api
+import { Activity, Clock, Zap, AlertCircle, CheckCircle, RefreshCw, TrendingUp, Database, Cpu } from 'lucide-react';
+import { apiHelpers } from '../../lib/api';
 
-
-function PipelineDashboard() {
+const MonitoringDashboard = () => {
   const [pipelines, setPipelines] = useState([]);
-  const [selectedPipeline, setSelectedPipeline] = useState(null);
-  const [pipelineEvents, setPipelineEvents] = useState([]);
-  const [stats, setStats] = useState({});
-  const [refreshInterval, setRefreshInterval] = useState(5000);
-  const [isAutoRefresh, setIsAutoRefresh] = useState(true);
+  const [stats, setStats] = useState(null);
+  const [health, setHealth] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  // Fetch pipelines
-  useEffect(() => {
-    const fetchPipelines = async () => {
-      try {
-        const response = await api.get('/api/monitoring/pipelines');
-        setPipelines(response.data.pipelines);
+  // ✅ CORRECTED: Fetch monitoring data using proper API helpers
+  const fetchMonitoringData = async () => {
+    setLoading(true);
+    setError('');
 
-        // Auto-select the most recent pipeline
-        if (response.data.pipelines.length > 0 && !selectedPipeline) {
-          setSelectedPipeline(response.data.pipelines[0]);
-        }
-      } catch (error) {
-        console.error('Error fetching pipelines:', error);
-      }
-    };
+    try {
+      // ✅ CORRECTED: Use API helpers with proper error handling
+      const [pipelinesData, statsData, healthData] = await Promise.allSettled([
+        apiHelpers.getMonitoringPipelines(),
+        apiHelpers.getMonitoringStats(),
+        apiHelpers.getMonitoringHealth()
+      ]);
 
-    fetchPipelines();
-    (async () => {
-      const esmModule = await loadEsm('esm-module');
-    })();
-
-    // Set up auto-refresh
-    if (isAutoRefresh) {
-      const interval = setInterval(fetchPipelines, refreshInterval);
-      return () => clearInterval(interval);
-    }
-  }, [isAutoRefresh, refreshInterval, selectedPipeline]);
-
-  // Fetch pipeline events when a pipeline is selected
-  useEffect(() => {
-    const fetchPipelineEvents = async () => {
-      if (!selectedPipeline) return;
-
-      try {
-        const response = await api.get(`/api/monitoring/pipelines/${selectedPipeline}`);
-        setPipelineEvents(response.data.events);
-      } catch (error) {
-        console.error('Error fetching pipeline events:', error);
-      }
-    };
-
-    fetchPipelineEvents();
-
-    // Set up auto-refresh
-    if (isAutoRefresh && selectedPipeline) {
-      const interval = setInterval(fetchPipelineEvents, refreshInterval);
-      return () => clearInterval(interval);
-    }
-  }, [selectedPipeline, isAutoRefresh, refreshInterval]);
-
-  // Fetch stats
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await api.get('/api/monitoring/stats');
-        setStats(response.data.stats);
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-      }
-    };
-
-    fetchStats();
-
-    // Set up auto-refresh
-    if (isAutoRefresh) {
-      const interval = setInterval(fetchStats, refreshInterval);
-      return () => clearInterval(interval);
-    }
-  }, [isAutoRefresh, refreshInterval]);
-
-  // Process pipeline events for visualization
-  const processedEvents = React.useMemo(() => {
-    if (!pipelineEvents.length) return [];
-
-    // Sort events by timestamp
-    const sortedEvents = [...pipelineEvents].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)
-    );
-
-    // Calculate durations between stages
-    let lastTimestamp = null;
-    return sortedEvents.map(event => {
-      const timestamp = new Date(event.timestamp);
-      let duration = 0;
-
-      if (lastTimestamp) {
-        duration = timestamp - lastTimestamp;
+      // Handle pipelines data
+      if (pipelinesData.status === 'fulfilled') {
+        const pipelineArray = Array.isArray(pipelinesData.value) 
+          ? pipelinesData.value 
+          : (pipelinesData.value?.pipelines || []);
+        setPipelines(pipelineArray);
+        console.log(`✅ Fetched ${pipelineArray.length} pipeline entries`);
+      } else {
+        console.warn('Failed to fetch pipelines:', pipelinesData.reason);
+        setPipelines([]);
       }
 
-      lastTimestamp = timestamp;
+      // Handle stats data
+      if (statsData.status === 'fulfilled') {
+        setStats(statsData.value);
+        console.log('✅ Fetched monitoring stats:', statsData.value);
+      } else {
+        console.warn('Failed to fetch stats:', statsData.reason);
+        setStats(null);
+      }
 
-      return {
-        ...event,
-        formattedTimestamp: timestamp.toLocaleTimeString(),
-        duration
-      };
-    });
-  }, [pipelineEvents]);
+      // Handle health data
+      if (healthData.status === 'fulfilled') {
+        setHealth(healthData.value);
+        console.log('✅ Fetched health data:', healthData.value);
+      } else {
+        console.warn('Failed to fetch health:', healthData.reason);
+        setHealth(null);
+      }
 
-  // Render pipeline flow diagram
-  const renderPipelineFlow = () => {
-    if (!processedEvents.length) {
-      return <div className="text-center p-4">No pipeline data available</div>;
+      setLastRefresh(new Date());
+
+    } catch (err) {
+      console.error('Error fetching monitoring data:', err);
+      setError('Failed to fetch monitoring data. Please check if the monitoring endpoints are available.');
+    } finally {
+      setLoading(false);
     }
-
-    // Create a visual representation of the pipeline flow
-    return (
-      <div className="flex flex-col space-y-4">
-        <div className="grid grid-cols-5 gap-4">
-          {['Document Upload', 'Text Extraction', 'Embedding Generation', 'Vector Storage', 'Query Processing'].map((stage, index) => (
-            <Card key={index} className={`p-4 ${getStageHighlight(stage)}`}>
-              <CardTitle className="text-sm">{stage}</CardTitle>
-              <CardContent className="p-2">
-                {getStageMetrics(stage)}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={processedEvents}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="stage" />
-            <YAxis label={{ value: 'Duration (ms)', angle: -90, position: 'insideLeft' }} />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="data.processing_time_ms" name="Processing Time (ms)" fill="#8884d8" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    );
   };
 
-  // Helper function to highlight active stages
-  const getStageHighlight = (stage) => {
-    // Implement logic to highlight the current active stage
-    return "bg-gray-100";
+  // ✅ IMPROVED: Format duration helper
+  const formatDuration = (ms) => {
+    if (!ms) return 'N/A';
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(2)}s`;
+    return `${(ms / 60000).toFixed(2)}m`;
   };
 
-  // Helper function to get metrics for each stage
-  const getStageMetrics = (stage) => {
-    // Implement logic to display relevant metrics for each stage
-    return <div className="text-xs">Processing...</div>;
+  // ✅ IMPROVED: Format timestamp helper
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString();
+    } catch {
+      return 'Invalid Date';
+    }
   };
+
+  // ✅ IMPROVED: Get status color helper
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+      case 'success':
+      case 'healthy':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'processing':
+      case 'running':
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'failed':
+      case 'error':
+      case 'unhealthy':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'pending':
+      case 'waiting':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  // ✅ IMPROVED: Get status icon helper
+  const getStatusIcon = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+      case 'success':
+      case 'healthy':
+        return <CheckCircle size={16} className="text-green-600" />;
+      case 'processing':
+      case 'running':
+      case 'in_progress':
+        return <Activity size={16} className="text-blue-600" />;
+      case 'failed':
+      case 'error':
+      case 'unhealthy':
+        return <AlertCircle size={16} className="text-red-600" />;
+      default:
+        return <Clock size={16} className="text-gray-600" />;
+    }
+  };
+
+  useEffect(() => {
+    fetchMonitoringData();
+    
+    // ✅ IMPROVED: Auto-refresh every 30 seconds
+    const interval = setInterval(fetchMonitoringData, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">RAG Pipeline Monitoring</h1>
-
-      <div className="flex justify-between mb-4">
-        <div className="flex space-x-2">
-          <select
-            className="border rounded p-2"
-            value={selectedPipeline || ''}
-            onChange={(e) => setSelectedPipeline(e.target.value)}
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Pipeline Monitoring</h1>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-600">
+            Last updated: {formatTimestamp(lastRefresh)}
+          </span>
+          <button 
+            onClick={fetchMonitoringData} 
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
           >
-            <option value="">Select Pipeline</option>
-            {pipelines.map(pipeline => (
-              <option key={pipeline} value={pipeline}>{pipeline}</option>
-            ))}
-          </select>
-
-          <Button onClick={() => {
-            setPipelines([]);
-            setSelectedPipeline(null);
-            setPipelineEvents([]);
-          } }>
-            Refresh
-          </Button>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={isAutoRefresh}
-              onChange={() => setIsAutoRefresh(!isAutoRefresh)}
-              className="mr-2" />
-            Auto-refresh
-          </label>
-
-          <select
-            className="border rounded p-2"
-            value={refreshInterval}
-            onChange={(e) => setRefreshInterval(Number(e.target.value))}
-            disabled={!isAutoRefresh}
-          >
-            <option value={1000}>1 second</option>
-            <option value={5000}>5 seconds</option>
-            <option value={10000}>10 seconds</option>
-            <option value={30000}>30 seconds</option>
-          </select>
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
         </div>
       </div>
 
-      <Tabs defaultValue="flow">
-        <TabsList>
-          <TabsTrigger value="flow">Pipeline Flow</TabsTrigger>
-          <TabsTrigger value="events">Raw Events</TabsTrigger>
-          <TabsTrigger value="stats">Statistics</TabsTrigger>
-        </TabsList>
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded flex items-center gap-2">
+          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
+          <p className="text-red-800">{error}</p>
+        </div>
+      )}
 
-        <TabsContent value="flow" className="p-4">
-          {renderPipelineFlow()}
-        </TabsContent>
-
-        <TabsContent value="events" className="p-4">
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border">
-              <thead>
-                <tr>
-                  <th className="border p-2">Timestamp</th>
-                  <th className="border p-2">Stage</th>
-                  <th className="border p-2">Duration (ms)</th>
-                  <th className="border p-2">Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {processedEvents.map((event, index) => (
-                  <tr key={index}>
-                    <td className="border p-2">{event.formattedTimestamp}</td>
-                    <td className="border p-2">{event.stage}</td>
-                    <td className="border p-2">{event.duration}</td>
-                    <td className="border p-2">
-                      <pre className="text-xs overflow-x-auto">
-                        {JSON.stringify(event.data, null, 2)}
-                      </pre>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* System Health Overview */}
+      {health && (
+        <div className="bg-white rounded-lg border shadow-sm">
+          <div className="p-6 border-b">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Activity size={20} />
+              System Health
+            </h2>
           </div>
-        </TabsContent>
-
-        <TabsContent value="stats" className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Document Processing</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={[
-                    { name: 'Last 24h', documents: stats.documents_24h || 0 },
-                    { name: 'Last 7d', documents: stats.documents_7d || 0 },
-                    { name: 'Total', documents: stats.total_documents || 0 }
-                  ]}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="documents" stroke="#8884d8" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Query Processing</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={[
-                    { name: 'Last 24h', queries: stats.queries_24h || 0 },
-                    { name: 'Last 7d', queries: stats.queries_7d || 0 },
-                    { name: 'Total', queries: stats.total_queries || 0 }
-                  ]}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="queries" stroke="#82ca9d" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className={`inline-flex items-center gap-2 px-3 py-2 rounded border ${getStatusColor(health.status)}`}>
+                  {getStatusIcon(health.status)}
+                  <span className="font-medium">{health.status || 'Unknown'}</span>
+                </div>
+                <p className="text-sm text-gray-600 mt-1">Overall Status</p>
+              </div>
+              
+              {health.uptime && (
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {formatDuration(health.uptime)}
+                  </div>
+                  <p className="text-sm text-gray-600">Uptime</p>
+                </div>
+              )}
+              
+              {health.version && (
+                <div className="text-center">
+                  <div className="text-lg font-semibold text-gray-900">
+                    {health.version}
+                  </div>
+                  <p className="text-sm text-gray-600">Version</p>
+                </div>
+              )}
+            </div>
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
+
+      {/* Statistics Overview */}
+      {stats && (
+        <div className="bg-white rounded-lg border shadow-sm">
+          <div className="p-6 border-b">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <TrendingUp size={20} />
+              Statistics
+            </h2>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {stats.total_pipelines !== undefined && (
+                <div className="text-center p-4 border rounded">
+                  <div className="text-3xl font-bold text-blue-600">
+                    {stats.total_pipelines}
+                  </div>
+                  <p className="text-sm text-gray-600">Total Pipelines</p>
+                </div>
+              )}
+              
+              {stats.successful_pipelines !== undefined && (
+                <div className="text-center p-4 border rounded">
+                  <div className="text-3xl font-bold text-green-600">
+                    {stats.successful_pipelines}
+                  </div>
+                  <p className="text-sm text-gray-600">Successful</p>
+                </div>
+              )}
+              
+              {stats.failed_pipelines !== undefined && (
+                <div className="text-center p-4 border rounded">
+                  <div className="text-3xl font-bold text-red-600">
+                    {stats.failed_pipelines}
+                  </div>
+                  <p className="text-sm text-gray-600">Failed</p>
+                </div>
+              )}
+              
+              {stats.average_processing_time && (
+                <div className="text-center p-4 border rounded">
+                  <div className="text-3xl font-bold text-purple-600">
+                    {formatDuration(stats.average_processing_time)}
+                  </div>
+                  <p className="text-sm text-gray-600">Avg Processing Time</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pipeline History */}
+      <div className="bg-white rounded-lg border shadow-sm">
+        <div className="p-6 border-b">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Database size={20} />
+            Recent Pipelines
+          </h2>
+          <p className="text-gray-600 mt-1">
+            View recent document processing pipeline executions.
+          </p>
+        </div>
+        <div className="p-6">
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Loading pipeline data...</p>
+            </div>
+          ) : pipelines.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Database size={48} className="mx-auto mb-4 opacity-50" />
+              <p>No pipeline data available.</p>
+              <p className="text-sm">Process some documents to see pipeline activity here!</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pipelines.slice(0, 10).map((pipeline, index) => (
+                <div key={pipeline.id || index} className="border rounded p-4 hover:bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h4 className="font-medium text-gray-900">
+                        {pipeline.document_id || pipeline.name || `Pipeline ${index + 1}`}
+                      </h4>
+                      <p className="text-sm text-gray-600">
+                        {pipeline.description || 'Document processing pipeline'}
+                      </p>
+                    </div>
+                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded border text-sm ${getStatusColor(pipeline.status)}`}>
+                      {getStatusIcon(pipeline.status)}
+                      <span>{pipeline.status || 'Unknown'}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-500">Started:</span>
+                      <p className="font-medium">{formatTimestamp(pipeline.start_time || pipeline.created_at)}</p>
+                    </div>
+                    
+                    {pipeline.end_time && (
+                      <div>
+                        <span className="text-gray-500">Completed:</span>
+                        <p className="font-medium">{formatTimestamp(pipeline.end_time)}</p>
+                      </div>
+                    )}
+                    
+                    {pipeline.processing_time && (
+                      <div>
+                        <span className="text-gray-500">Duration:</span>
+                        <p className="font-medium">{formatDuration(pipeline.processing_time)}</p>
+                      </div>
+                    )}
+                    
+                    {pipeline.gpu_accelerated && (
+                      <div className="flex items-center gap-1">
+                        <Zap size={14} className="text-blue-600" />
+                        <span className="text-blue-600 font-medium">GPU Accelerated</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {pipeline.error_message && (
+                    <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                      <p className="text-sm text-red-800">{pipeline.error_message}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
-}
+};
 
-export default PipelineDashboard;
+export default MonitoringDashboard;

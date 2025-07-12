@@ -1,0 +1,111 @@
+# nginx.conf - Fix for 413 Upload Error and API Routing Issues
+# Place this file in your frontend Docker build context
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    # ✅ FIX: Increase client_max_body_size to allow larger file uploads
+    client_max_body_size 100M;  # Allow up to 100MB uploads
+    client_body_timeout 60s;    # Increase timeout for large uploads
+    client_header_timeout 60s;  # Increase header timeout
+    
+    # ✅ FIX: Increase proxy timeouts for backend processing
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+    
+    # ✅ FIX: Enable gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+
+    # ✅ FIX: Logging configuration
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log /var/log/nginx/access.log main;
+    error_log /var/log/nginx/error.log warn;
+
+    server {
+        listen 80;
+        server_name localhost;
+        
+        # ✅ FIX: Serve static frontend files
+        location / {
+            root /usr/share/nginx/html;
+            index index.html index.htm;
+            try_files $uri $uri/ /index.html;
+            
+            # ✅ FIX: Cache static assets
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+                expires 1y;
+                add_header Cache-Control "public, immutable";
+            }
+        }
+
+        # ✅ FIX: Proxy API requests to backend with proper headers
+        location /api/ {
+            proxy_pass http://backend-07:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # ✅ FIX: Handle large request bodies for file uploads
+            proxy_request_buffering off;
+            proxy_buffering off;
+            
+            # ✅ FIX: Increase proxy timeouts for long-running operations
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 300s;    # 5 minutes for document processing
+            proxy_read_timeout 300s;    # 5 minutes for document processing
+        }
+
+        # ✅ FIX: Health check endpoint
+        location /health {
+            proxy_pass http://backend-07:8000/health;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # ✅ FIX: Handle CORS preflight requests
+        location ~* ^/api/.*$ {
+            if ($request_method = 'OPTIONS') {
+                add_header 'Access-Control-Allow-Origin' '*';
+                add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS';
+                add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization';
+                add_header 'Access-Control-Max-Age' 1728000;
+                add_header 'Content-Type' 'text/plain; charset=utf-8';
+                add_header 'Content-Length' 0;
+                return 204;
+            }
+            
+            proxy_pass http://backend-07:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # ✅ FIX: Add CORS headers for actual requests
+            add_header 'Access-Control-Allow-Origin' '*' always;
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+        }
+
+        # ✅ FIX: Error pages
+        error_page 404 /index.html;
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+            root /usr/share/nginx/html;
+        }
+    }
+}

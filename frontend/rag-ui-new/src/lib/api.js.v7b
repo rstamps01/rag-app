@@ -1,17 +1,19 @@
-// ✅ CORRECTED API Configuration - Fixes endpoint and caching issues
+// ✅ CORRECTED API Configuration - Based on Actual Backend Implementation
 // File Path: frontend/rag-ui-new/src/lib/api.js
 
 import axios from 'axios';
 
-// ✅ CORRECTED: Use proper backend URL configuration
+// ✅ CORRECTED: Use relative URLs to avoid CORS issues
+// This works because the frontend and backend should be served from the same domain
+// or properly configured with CORS middleware (which the backend already has)
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? '' // Use relative URLs in production (nginx proxy handles routing)
-  : 'http://localhost:8000'; // Direct backend URL in development
+  ? '' // Use relative URLs in production
+  : ''; // Use relative URLs in development too
 
 // Create axios instance with base configuration
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // 60 second timeout for long-running operations
+  timeout: 30000, // 30 second timeout for long-running operations
   headers: {
     'Content-Type': 'application/json',
   },
@@ -23,13 +25,13 @@ const endpoints = {
   documents: '/api/v1/documents/',
   documentById: (id) => `/api/v1/documents/${id}`,
   
-  // ✅ CORRECTED: Query endpoints - based on actual backend routes  
+  // Query endpoints - based on actual backend routes  
   queries: {
     ask: '/api/v1/queries/ask',           // ← Correct endpoint from backend
     history: '/api/v1/queries/history'    // ← Correct endpoint from backend
   },
   
-  // ✅ CORRECTED: Monitoring endpoints - based on actual backend routes
+  // Monitoring endpoints - based on actual backend routes
   monitoring: {
     pipelines: '/api/v1/monitoring/pipelines',
     pipelineById: (id) => `/api/v1/monitoring/pipelines/${id}`,
@@ -41,6 +43,19 @@ const endpoints = {
   system: {
     health: '/health',                    // ← Correct endpoint from backend
     root: '/'                            // ← Root endpoint from backend
+  },
+  
+  // Auth endpoints (if implemented)
+  auth: {
+    login: '/api/v1/auth/login',
+    logout: '/api/v1/auth/logout',
+    register: '/api/v1/auth/register'
+  },
+  
+  // Admin endpoints (if implemented)
+  admin: {
+    users: '/api/v1/admin/users',
+    settings: '/api/v1/admin/settings'
   }
 };
 
@@ -48,7 +63,7 @@ const endpoints = {
 const formatApiError = (error) => {
   // Handle network errors
   if (error.code === 'ERR_NETWORK') {
-    return 'Network error. Please check your connection and ensure the server is running.';
+    return 'Network error. Please check your connection and ensure the server is running on the expected port.';
   }
   
   // Handle timeout errors
@@ -70,8 +85,6 @@ const formatApiError = (error) => {
         return 'Forbidden. You do not have permission to perform this action.';
       case 404:
         return data?.detail || 'Resource not found.';
-      case 413:
-        return 'File too large. Please upload a smaller file (max 100MB).';
       case 422:
         // ✅ Handle FastAPI validation errors specifically
         if (data?.detail && Array.isArray(data.detail)) {
@@ -96,17 +109,9 @@ const formatApiError = (error) => {
   return error.message || 'An unexpected error occurred.';
 };
 
-// ✅ IMPROVED: Request interceptor with cache busting for development
+// ✅ IMPROVED: Request interceptor for debugging and authentication
 api.interceptors.request.use(
   (config) => {
-    // ✅ FIX: Add cache busting for GET requests in development to prevent 304 responses
-    if (process.env.NODE_ENV === 'development' && config.method === 'get') {
-      config.params = {
-        ...config.params,
-        _t: Date.now() // Add timestamp to prevent caching
-      };
-    }
-    
     // Log API requests in development
     if (process.env.NODE_ENV === 'development') {
       console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`);
@@ -129,12 +134,12 @@ api.interceptors.request.use(
   }
 );
 
-// ✅ IMPROVED: Response interceptor with better error handling
+// ✅ IMPROVED: Response interceptor for debugging and error handling
 api.interceptors.response.use(
   (response) => {
     // Log API responses in development
     if (process.env.NODE_ENV === 'development') {
-      console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url} - ${response.status}`);
+      console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`);
       console.log('📥 Response Data:', response.data);
     }
     
@@ -172,65 +177,88 @@ api.interceptors.response.use(
   }
 );
 
-// ✅ CORRECTED: Helper functions for specific API calls
+// ✅ IMPROVED: Helper functions for common API operations
 const apiHelpers = {
   // Document operations
-  async getDocuments(skip = 0, limit = 10) {
-    const response = await api.get(`${endpoints.documents}?skip=${skip}&limit=${limit}`);
-    return response.data;
-  },
-
-  async uploadDocument(file) {
+  async uploadDocument(file, onProgress = null) {
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await api.post(endpoints.documents, formData, {
+    const config = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-    });
-    return response.data;
+    };
+    
+    if (onProgress) {
+      config.onUploadProgress = (progressEvent) => {
+        const percentCompleted = Math.round(
+          (progressEvent.loaded * 100) / progressEvent.total
+        );
+        onProgress(percentCompleted);
+      };
+    }
+    
+    return api.post(endpoints.documents, formData, config);
   },
-
+  
+  async getDocuments(skip = 0, limit = 10) {
+    return api.get(`${endpoints.documents}?skip=${skip}&limit=${limit}`);
+  },
+  
   async deleteDocument(documentId) {
-    const response = await api.delete(endpoints.documentById(documentId));
-    return response.data;
+    return api.delete(endpoints.documentById(documentId));
   },
-
+  
   // Query operations
   async submitQuery(query, department = 'General') {
-    const response = await api.post(endpoints.queries.ask, {
-      query: query.trim(),  // ← Correct property name from backend schema
-      department: department || 'General'  // ← Correct property name from backend schema
+    return api.post(endpoints.queries.ask, {
+      query: query,
+      department: department
     });
-    return response.data;
   },
-
-  async getQueryHistory(limit = 10) {
-    const response = await api.get(`${endpoints.queries.history}?limit=${limit}`);
-    return response.data;
+  
+  async getQueryHistory(skip = 0, limit = 50, userId = null) {
+    let url = `${endpoints.queries.history}?skip=${skip}&limit=${limit}`;
+    if (userId) {
+      url += `&user_id=${userId}`;
+    }
+    return api.get(url);
   },
-
+  
   // Monitoring operations
   async getMonitoringPipelines() {
-    const response = await api.get(endpoints.monitoring.pipelines);
-    return response.data;
+    return api.get(endpoints.monitoring.pipelines);
   },
-
+  
+  async getPipelineDetails(pipelineId) {
+    return api.get(endpoints.monitoring.pipelineById(pipelineId));
+  },
+  
   async getMonitoringStats() {
-    const response = await api.get(endpoints.monitoring.stats);
-    return response.data;
+    return api.get(endpoints.monitoring.stats);
   },
-
-  async getMonitoringHealth() {
-    const response = await api.get(endpoints.monitoring.health);
-    return response.data;
+  
+  // Health checks
+  async checkHealth() {
+    return api.get(endpoints.system.health);
   },
+  
+  async checkMonitoringHealth() {
+    return api.get(endpoints.monitoring.health);
+  }
+};
 
-  // System operations
-  async getSystemHealth() {
+// ✅ IMPROVED: Connection test function
+const testConnection = async () => {
+  try {
     const response = await api.get(endpoints.system.health);
-    return response.data;
+    console.log('✅ Backend connection successful:', response.data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    const errorMessage = formatApiError(error);
+    console.error('❌ Backend connection failed:', errorMessage);
+    return { success: false, error: errorMessage };
   }
 };
 
@@ -239,6 +267,42 @@ export {
   api as default, 
   api, 
   endpoints, 
-  formatApiError,
-  apiHelpers
+  formatApiError, 
+  apiHelpers, 
+  testConnection 
 };
+
+// ✅ USAGE EXAMPLES:
+/*
+// Basic API usage:
+import { api, endpoints } from '@/lib/api';
+
+// Get documents
+const response = await api.get(endpoints.documents);
+
+// Submit query
+const queryResponse = await api.post(endpoints.queries.ask, {
+  query: "What is the company policy?",
+  department: "HR"
+});
+
+// Using helper functions:
+import { apiHelpers } from '@/lib/api';
+
+// Upload document with progress
+await apiHelpers.uploadDocument(file, (progress) => {
+  console.log(`Upload progress: ${progress}%`);
+});
+
+// Get documents with pagination
+const docs = await apiHelpers.getDocuments(0, 10);
+
+// Submit query
+const result = await apiHelpers.submitQuery("What is the policy?", "HR");
+
+// Test connection
+const connectionTest = await testConnection();
+if (!connectionTest.success) {
+  console.error('Backend not available:', connectionTest.error);
+}
+*/

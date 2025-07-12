@@ -1,0 +1,334 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Upload, FileText, AlertCircle, CheckCircle, Clock, Trash2 } from 'lucide-react';
+import { api } from '@/lib/api';
+
+const DocumentsPage = () => {
+  const [documentList, setDocumentList] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [itemsPerPage] = useState(10);
+
+  // ✅ CORRECTED: Based on actual backend API structure
+  const fetchDocuments = async (skip = 0, limit = 10) => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      // ✅ CORRECTED: Use actual backend endpoint
+      const response = await api.get(`/api/v1/documents/?skip=${skip}&limit=${limit}`);
+      
+      // ✅ CORRECTED: Handle actual backend response structure
+      const documents = response.data.documents || [];
+      const total = response.data.total_count || 0;  // ← Correct property name from backend
+      
+      setDocumentList(documents);
+      setTotalCount(total);
+      
+      console.log(`✅ Fetched ${documents.length} documents out of ${total} total`);
+      
+    } catch (err) {
+      console.error('Error fetching documents:', err);
+      
+      // ✅ IMPROVED: Enhanced error handling
+      if (err.response?.status === 404) {
+        setError('Documents endpoint not found. Please check if the backend is running.');
+      } else if (err.code === 'ERR_NETWORK') {
+        setError('Network error. Please check if the backend server is accessible.');
+      } else if (err.response?.status === 500) {
+        setError('Server error. Please check the backend logs for details.');
+      } else {
+        setError(err.response?.data?.detail || err.message || 'Failed to fetch document list.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileUpload = async () => {
+    if (!selectedFile) {
+      setUploadStatus('Please select a file first.');
+      return;
+    }
+
+    setUploadStatus('Uploading...');
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+      // ✅ CORRECTED: Use actual backend endpoint
+      const response = await api.post('/api/v1/documents/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // ✅ CORRECTED: Handle actual backend response (DocumentMetadata)
+      const uploadedDoc = response.data;
+      setUploadStatus(`✅ File "${uploadedDoc.filename}" uploaded successfully! Processing in background...`);
+      setSelectedFile(null);
+      
+      // Reset file input
+      const fileInput = document.getElementById('file-upload');
+      if (fileInput) fileInput.value = '';
+      
+      // Refresh document list
+      await fetchDocuments(currentPage * itemsPerPage, itemsPerPage);
+      
+    } catch (err) {
+      console.error('Upload error:', err);
+      setUploadStatus(`❌ Upload failed: ${err.response?.data?.detail || err.message}`);
+    }
+  };
+
+  const handleDeleteDocument = async (documentId, filename) => {
+    if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+      return;
+    }
+
+    try {
+      // ✅ CORRECTED: Use actual backend endpoint
+      await api.delete(`/api/v1/documents/${documentId}`);
+      setUploadStatus(`✅ Document "${filename}" deleted successfully.`);
+      
+      // Refresh document list
+      await fetchDocuments(currentPage * itemsPerPage, itemsPerPage);
+      
+    } catch (err) {
+      console.error('Delete error:', err);
+      setUploadStatus(`❌ Delete failed: ${err.response?.data?.detail || err.message}`);
+    }
+  };
+
+  // ✅ IMPROVED: Format file size helper
+  const formatFileSize = (bytes) => {
+    if (!bytes) return 'N/A';
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  // ✅ IMPROVED: Format upload date helper
+  const formatUploadDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString();
+    } catch {
+      return 'Invalid Date';
+    }
+  };
+
+  // ✅ IMPROVED: Get status badge component
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      'pending': { color: 'bg-yellow-100 text-yellow-800', icon: Clock },
+      'processing': { color: 'bg-blue-100 text-blue-800', icon: Clock },
+      'completed': { color: 'bg-green-100 text-green-800', icon: CheckCircle },
+      'uploaded': { color: 'bg-green-100 text-green-800', icon: CheckCircle },
+      'failed': { color: 'bg-red-100 text-red-800', icon: AlertCircle },
+    };
+
+    const config = statusConfig[status] || statusConfig['pending'];
+    const IconComponent = config.icon;
+
+    return (
+      <Badge className={`${config.color} flex items-center gap-1`}>
+        <IconComponent size={12} />
+        {status}
+      </Badge>
+    );
+  };
+
+  // Pagination handlers
+  const handlePreviousPage = () => {
+    if (currentPage > 0) {
+      const newPage = currentPage - 1;
+      setCurrentPage(newPage);
+      fetchDocuments(newPage * itemsPerPage, itemsPerPage);
+    }
+  };
+
+  const handleNextPage = () => {
+    const maxPage = Math.ceil(totalCount / itemsPerPage) - 1;
+    if (currentPage < maxPage) {
+      const newPage = currentPage + 1;
+      setCurrentPage(newPage);
+      fetchDocuments(newPage * itemsPerPage, itemsPerPage);
+    }
+  };
+
+  useEffect(() => {
+    fetchDocuments();
+  }, []);
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Document Management</h1>
+        <Button onClick={() => fetchDocuments(currentPage * itemsPerPage, itemsPerPage)} disabled={loading}>
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </Button>
+      </div>
+
+      {/* Upload Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload size={20} />
+            Upload Document
+          </CardTitle>
+          <CardDescription>
+            Upload PDF, TXT, or DOCX files for processing and querying.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="file-upload">Select File</Label>
+            <Input
+              id="file-upload"
+              type="file"
+              accept=".pdf,.txt,.docx"
+              onChange={(e) => setSelectedFile(e.target.files[0])}
+              className="mt-1"
+            />
+          </div>
+          <Button onClick={handleFileUpload} disabled={!selectedFile || loading}>
+            <Upload size={16} className="mr-2" />
+            Upload Document
+          </Button>
+          {uploadStatus && (
+            <Alert>
+              <AlertDescription>{uploadStatus}</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Documents List */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText size={20} />
+            Uploaded Documents ({totalCount})
+          </CardTitle>
+          <CardDescription>
+            Manage your uploaded documents and view their processing status.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <Alert className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Loading documents...</p>
+            </div>
+          ) : documentList.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <FileText size={48} className="mx-auto mb-4 opacity-50" />
+              <p>No documents uploaded yet.</p>
+              <p className="text-sm">Upload your first document to get started!</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-3 font-medium">Filename</th>
+                      <th className="text-left p-3 font-medium">Size</th>
+                      <th className="text-left p-3 font-medium">Type</th>
+                      <th className="text-left p-3 font-medium">Status</th>
+                      <th className="text-left p-3 font-medium">Upload Date</th>
+                      <th className="text-left p-3 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {documentList.map((doc) => (
+                      <tr key={doc.id} className="border-b hover:bg-gray-50">
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <FileText size={16} className="text-gray-500" />
+                            {/* ✅ CORRECTED: Use actual backend property names */}
+                            <span className="font-medium">{doc.filename || 'Unknown'}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-gray-600">
+                          {formatFileSize(doc.size)}
+                        </td>
+                        <td className="p-3 text-gray-600">
+                          {doc.content_type || 'N/A'}
+                        </td>
+                        <td className="p-3">
+                          {getStatusBadge(doc.status)}
+                        </td>
+                        <td className="p-3 text-gray-600">
+                          {/* ✅ CORRECTED: Use actual backend property name */}
+                          {formatUploadDate(doc.upload_date)}
+                        </td>
+                        <td className="p-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteDocument(doc.id, doc.filename)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {totalCount > itemsPerPage && (
+                <div className="flex justify-between items-center mt-4 pt-4 border-t">
+                  <div className="text-sm text-gray-600">
+                    Showing {currentPage * itemsPerPage + 1} to {Math.min((currentPage + 1) * itemsPerPage, totalCount)} of {totalCount} documents
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePreviousPage}
+                      disabled={currentPage === 0}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleNextPage}
+                      disabled={currentPage >= Math.ceil(totalCount / itemsPerPage) - 1}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default DocumentsPage;
