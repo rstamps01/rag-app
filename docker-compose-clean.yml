@@ -1,0 +1,223 @@
+# Docker Compose Configuration for vastdata RAG Application
+# Optimized for /home/vastdata/rag-app-07/ deployment with local model cache
+
+# version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres-07:
+    image: postgres:15
+    container_name: rag-postgres-07
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-raguser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-ragdb}
+    volumes:
+      - postgres_data-07:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - rag-network-07
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raguser}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Qdrant Vector Database
+  qdrant-07:
+    image: qdrant/qdrant:latest
+    container_name: rag-qdrant-07
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data-07:/qdrant/storage
+    networks:
+      - rag-network-07
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Backend Service with vastdata Cache Integration
+  backend-07:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: rag-backend-07
+    environment:
+      # Database Configuration
+      - DATABASE_URL=${DATABASE_URL:-postgresql://raguser:ragpassword@postgres-07:5432/ragdb}
+      - POSTGRES_USER=${POSTGRES_USER:-raguser}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ragpassword}
+      - POSTGRES_DB=${POSTGRES_DB:-ragdb}
+      
+      # Vector Database
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant-07:6333}
+      - QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME:-documents}
+      
+      # Model Configuration
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - LLM_MODEL_NAME=${LLM_MODEL_NAME:-mistralai/Mistral-7B-Instruct-v0.2}
+      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-sentence-transformers/all-MiniLM-L6-v2}
+      
+      # Cache Configuration (vastdata specific)
+      - HF_HOME=/root/.cache/huggingface
+      - MODELS_CACHE_DIR=/app/models_cache
+      - TRANSFORMERS_CACHE=/root/.cache/huggingface/transformers
+      - HF_HUB_CACHE=/root/.cache/huggingface/hub
+      - HF_HUB_OFFLINE=false
+      
+      # Security
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRE_HOURS=${JWT_EXPIRE_HOURS:-24}
+      
+      # Application
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # GPU Configuration for RTX 5090
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    
+    volumes:
+      # vastdata Cache Mappings (Critical for Performance)
+      - /home/vastdata/rag-app-07/backend/models_cache:/app/models_cache:ro
+      - /home/vastdata/rag-app-07/huggingface_cache:/root/.cache/huggingface:ro
+      
+      # Application Data
+      - backend_logs-07:/app/logs
+      - uploaded_documents-07:/app/uploads
+    
+    ports:
+      - "8000:8000"
+    
+    networks:
+      - rag-network-07
+    
+    depends_on:
+      postgres-07:
+        condition: service_healthy
+      qdrant-07:
+        condition: service_healthy
+    
+    restart: unless-stopped
+    
+    # GPU Support for RTX 5090
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Frontend Service
+  frontend-07:
+    build:
+      context: ./frontend/rag-ui-new
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: rag-frontend-07
+    environment:
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:8000}
+      - REACT_APP_ENVIRONMENT=${ENVIRONMENT:-production}
+    ports:
+      - "3000:80"
+    networks:
+      - rag-network-07
+    depends_on:
+      - backend-07
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Model Cache Initialization Service (Optional)
+  model-cache-init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.cache-init
+    container_name: rag-cache-init-07
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - HF_HOME=/root/.cache/huggingface
+      - MODELS_CACHE_DIR=/app/models_cache
+    volumes:
+      # vastdata Cache Mappings for Initialization
+      - /home/vastdata/rag-app-07/backend/models_cache:/app/models_cache
+      - /home/vastdata/rag-app-07/huggingface_cache:/root/.cache/huggingface
+    networks:
+      - rag-network-07
+    profiles:
+      - cache-init
+    command: python /app/scripts/initialize_model_cache.py
+
+# Networks
+networks:
+  rag-network-07:
+    driver: bridge
+    name: rag-network-07
+
+# Volumes
+volumes:
+  # Database Storage
+  postgres_data-07:
+    driver: local
+    name: postgres_data-07
+  
+  qdrant_data-07:
+    driver: local
+    name: qdrant_data-07
+  
+  # Application Storage
+  backend_logs-07:
+    driver: local
+    name: backend_logs-07
+  
+  uploaded_documents-07:
+    driver: local
+    name: uploaded_documents-07
+
+# Additional Configuration for vastdata Deployment
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-restart-policy: &restart-policy
+  restart: unless-stopped
+
+# Environment-specific overrides
+x-development: &development-overrides
+  environment:
+    - DEBUG=true
+    - LOG_LEVEL=DEBUG
+  volumes:
+    - ./backend:/app:delegated  # Development hot reload
+
+x-production: &production-overrides
+  environment:
+    - DEBUG=false
+    - LOG_LEVEL=INFO
+  logging: *default-logging
