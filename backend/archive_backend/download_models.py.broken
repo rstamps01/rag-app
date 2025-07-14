@@ -23,6 +23,7 @@ import sys
 from huggingface_hub import login
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoModel
 import torch
 
 # Configure logging
@@ -35,9 +36,11 @@ logger = logging.getLogger("model_downloader")
 
 # Model configuration
 EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # Updated to latest stable version
-#CACHE_DIR = "/app/models_cache"
-CACHE_DIR = "./models_cache"
+# LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # Updated to latest stable version
+LLM_MODEL_NAME = "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
+# LLM_MODEL_NAME = "TheBloke/Mistral-7B-Instruct-v0.2-AWQ"  # Updated to latest stable version
+# CACHE_DIR = "/app/models_cache"
+CACHE_DIR = "./test2"
 # HF_TOKEN = os.environ.get("HUGGINGFACE_TOKEN") # rag-app-05 shows ("HUGGING_FACE_HUB_TOKEN")
 
 def main():
@@ -76,15 +79,15 @@ def main():
         logger.info(f"Downloading LLM model: {LLM_MODEL_NAME}")
        
         # Download tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(
-            LLM_MODEL_NAME,
-            cache_dir=CACHE_DIR
-        )
-        logger.info("Successfully downloaded tokenizer")
+    #    tokenizer = AutoTokenizer.from_pretrained(
+    #        LLM_MODEL_NAME,
+    #        cache_dir=CACHE_DIR
+    #    )
+    #    logger.info("Successfully downloaded tokenizer")
         
         # Download model
         dtype = torch.float16 if device == "cuda" else torch.float32
-        model = AutoModelForCausalLM.from_pretrained(
+        model = AutoModel.from_pretrained(
             LLM_MODEL_NAME,
             torch_dtype=dtype,
             cache_dir=CACHE_DIR,
