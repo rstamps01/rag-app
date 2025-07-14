@@ -1,0 +1,260 @@
+{
+  "timestamp": 1752518022.0099752,
+  "datetime": "2025-07-14 11:33:42",
+  "user": "vastdata",
+  "validation_type": "corrected_hf_cache_structure",
+  "cache_directories": {
+    "backend_cache": {
+      "path": "/home/vastdata/rag-app-07/backend/models_cache",
+      "exists": true,
+      "is_directory": true,
+      "readable": true,
+      "writable": true,
+      "size_mb": 27804.17
+    },
+    "hf_cache": {
+      "path": "/home/vastdata/.cache/huggingface/hub",
+      "exists": true,
+      "is_directory": true,
+      "readable": true,
+      "writable": true,
+      "size_mb": 27804.17
+    }
+  },
+  "model_validation": {
+    "backend_cache": {
+      "mistralai/Mistral-7B-Instruct-v0.2": {
+        "model_name": "mistralai/Mistral-7B-Instruct-v0.2",
+        "type": "llm",
+        "cache_name": "mistralai--Mistral-7B-Instruct-v0.2",
+        "model_dir": "/home/vastdata/rag-app-07/backend/models_cache/models--mistralai--Mistral-7B-Instruct-v0.2",
+        "exists": true,
+        "integrity": 1.0,
+        "found_files": [
+          "config.json",
+          "tokenizer.json",
+          "tokenizer_config.json",
+          "special_tokens_map.json"
+        ],
+        "missing_files": [],
+        "snapshot_path": "/home/vastdata/rag-app-07/backend/models_cache/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c",
+        "total_size_mb": 13814.26,
+        "file_details": {
+          "config.json": {
+            "exists": true,
+            "size_bytes": 596,
+            "size_mb": 0.0,
+            "path": "/home/vastdata/rag-app-07/backend/models_cache/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/config.json"
+          },
+          "tokenizer.json": {
+            "exists": true,
+            "size_bytes": 1795188,
+            "size_mb": 1.71,
+            "path": "/home/vastdata/rag-app-07/backend/models_cache/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/tokenizer.json"
+          },
+          "tokenizer_config.json": {
+            "exists": true,
+            "size_bytes": 2103,
+            "size_mb": 0.0,
+            "path": "/home/vastdata/rag-app-07/backend/models_cache/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/tokenizer_config.json"
+          },
+          "special_tokens_map.json": {
+            "exists": true,
+            "size_bytes": 414,
+            "size_mb": 0.0,
+            "path": "/home/vastdata/rag-app-07/backend/models_cache/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/special_tokens_map.json"
+          },
+          "model-00002-of-00003.safetensors": {
+            "exists": true,
+            "size_bytes": 4999819336,
+            "size_mb": 4768.2,
+            "path": "/home/vastdata/rag-app-07/backend/models_cache/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/model-00002-of-00003.safetensors",
+            "type": "model_weights"
+          },
+          "model-00003-of-00003.safetensors": {
+            "exists": true,
+            "size_bytes": 4540516344,
+            "size_mb": 4330.17,
+            "path": "/home/vastdata/rag-app-07/backend/models_cache/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/model-00003-of-00003.safetensors",
+            "type": "model_weights"
+          },
+          "model-00001-of-00003.safetensors": {
+            "exists": true,
+            "size_bytes": 4943162336,
+            "size_mb": 4714.17,
+            "path": "/home/vastdata/rag-app-07/backend/models_cache/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/model-00001-of-00003.safetensors",
+            "type": "model_weights"
+          }
+        },
+        "snapshot_hash": "3ad372fc79158a2148299e3318516c786aeded6c",
+        "total_files_found": 7
+      },
+      "sentence-transformers/all-MiniLM-L6-v2": {
+        "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+        "type": "embedding",
+        "cache_name": "sentence-transformers--all-MiniLM-L6-v2",
+        "model_dir": "/home/vastdata/rag-app-07/backend/models_cache/models--sentence-transformers--all-MiniLM-L6-v2",
+        "exists": true,
+        "integrity": 1.0,
+        "found_files": [
+          "config.json",
+          "tokenizer.json",
+          "config_sentence_transformers.json"
+        ],
+        "missing_files": [],
+        "snapshot_path": "/home/vastdata/rag-app-07/backend/models_cache/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf",
+        "total_size_mb": 87.1,
+        "file_details": {
+          "config.json": {
+            "exists": true,
+            "size_bytes": 612,
+            "size_mb": 0.0,
+            "path": "/home/vastdata/rag-app-07/backend/models_cache/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf/config.json"
+          },
+          "tokenizer.json": {
+            "exists": true,
+            "size_bytes": 466247,
+            "size_mb": 0.44,
+            "path": "/home/vastdata/rag-app-07/backend/models_cache/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf/tokenizer.json"
+          },
+          "config_sentence_transformers.json": {
+            "exists": true,
+            "size_bytes": 116,
+            "size_mb": 0.0,
+            "path": "/home/vastdata/rag-app-07/backend/models_cache/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf/config_sentence_transformers.json"
+          },
+          "model.safetensors": {
+            "exists": true,
+            "size_bytes": 90868376,
+            "size_mb": 86.66,
+            "path": "/home/vastdata/rag-app-07/backend/models_cache/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf/model.safetensors",
+            "type": "model_weights"
+          }
+        },
+        "snapshot_hash": "c9745ed1d9f207416be6d2e6f8de32d1f16199bf",
+        "total_files_found": 4
+      }
+    },
+    "hf_cache": {
+      "mistralai/Mistral-7B-Instruct-v0.2": {
+        "model_name": "mistralai/Mistral-7B-Instruct-v0.2",
+        "type": "llm",
+        "cache_name": "mistralai--Mistral-7B-Instruct-v0.2",
+        "model_dir": "/home/vastdata/.cache/huggingface/hub/models--mistralai--Mistral-7B-Instruct-v0.2",
+        "exists": true,
+        "integrity": 1.0,
+        "found_files": [
+          "config.json",
+          "tokenizer.json",
+          "tokenizer_config.json",
+          "special_tokens_map.json"
+        ],
+        "missing_files": [],
+        "snapshot_path": "/home/vastdata/.cache/huggingface/hub/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c",
+        "total_size_mb": 13814.26,
+        "file_details": {
+          "config.json": {
+            "exists": true,
+            "size_bytes": 596,
+            "size_mb": 0.0,
+            "path": "/home/vastdata/.cache/huggingface/hub/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/config.json"
+          },
+          "tokenizer.json": {
+            "exists": true,
+            "size_bytes": 1795188,
+            "size_mb": 1.71,
+            "path": "/home/vastdata/.cache/huggingface/hub/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/tokenizer.json"
+          },
+          "tokenizer_config.json": {
+            "exists": true,
+            "size_bytes": 2103,
+            "size_mb": 0.0,
+            "path": "/home/vastdata/.cache/huggingface/hub/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/tokenizer_config.json"
+          },
+          "special_tokens_map.json": {
+            "exists": true,
+            "size_bytes": 414,
+            "size_mb": 0.0,
+            "path": "/home/vastdata/.cache/huggingface/hub/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/special_tokens_map.json"
+          },
+          "model-00002-of-00003.safetensors": {
+            "exists": true,
+            "size_bytes": 4999819336,
+            "size_mb": 4768.2,
+            "path": "/home/vastdata/.cache/huggingface/hub/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/model-00002-of-00003.safetensors",
+            "type": "model_weights"
+          },
+          "model-00003-of-00003.safetensors": {
+            "exists": true,
+            "size_bytes": 4540516344,
+            "size_mb": 4330.17,
+            "path": "/home/vastdata/.cache/huggingface/hub/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/model-00003-of-00003.safetensors",
+            "type": "model_weights"
+          },
+          "model-00001-of-00003.safetensors": {
+            "exists": true,
+            "size_bytes": 4943162336,
+            "size_mb": 4714.17,
+            "path": "/home/vastdata/.cache/huggingface/hub/models--mistralai--Mistral-7B-Instruct-v0.2/snapshots/3ad372fc79158a2148299e3318516c786aeded6c/model-00001-of-00003.safetensors",
+            "type": "model_weights"
+          }
+        },
+        "snapshot_hash": "3ad372fc79158a2148299e3318516c786aeded6c",
+        "total_files_found": 7
+      },
+      "sentence-transformers/all-MiniLM-L6-v2": {
+        "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+        "type": "embedding",
+        "cache_name": "sentence-transformers--all-MiniLM-L6-v2",
+        "model_dir": "/home/vastdata/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2",
+        "exists": true,
+        "integrity": 1.0,
+        "found_files": [
+          "config.json",
+          "tokenizer.json",
+          "config_sentence_transformers.json"
+        ],
+        "missing_files": [],
+        "snapshot_path": "/home/vastdata/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf",
+        "total_size_mb": 87.1,
+        "file_details": {
+          "config.json": {
+            "exists": true,
+            "size_bytes": 612,
+            "size_mb": 0.0,
+            "path": "/home/vastdata/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf/config.json"
+          },
+          "tokenizer.json": {
+            "exists": true,
+            "size_bytes": 466247,
+            "size_mb": 0.44,
+            "path": "/home/vastdata/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf/tokenizer.json"
+          },
+          "config_sentence_transformers.json": {
+            "exists": true,
+            "size_bytes": 116,
+            "size_mb": 0.0,
+            "path": "/home/vastdata/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf/config_sentence_transformers.json"
+          },
+          "model.safetensors": {
+            "exists": true,
+            "size_bytes": 90868376,
+            "size_mb": 86.66,
+            "path": "/home/vastdata/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/c9745ed1d9f207416be6d2e6f8de32d1f16199bf/model.safetensors",
+            "type": "model_weights"
+          }
+        },
+        "snapshot_hash": "c9745ed1d9f207416be6d2e6f8de32d1f16199bf",
+        "total_files_found": 4
+      }
+    }
+  },
+  "summary": {
+    "total_models": 2,
+    "backend_cache_complete": 2,
+    "hf_cache_complete": 2,
+    "backend_cache_percentage": 100.0,
+    "hf_cache_percentage": 100.0,
+    "overall_status": "healthy"
+  }
+}
