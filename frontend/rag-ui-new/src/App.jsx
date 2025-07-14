@@ -7,12 +7,12 @@ import DocumentsPage from './components/pages/DocumentsPage'; // <-- Import Docu
 import QueriesPage from './components/pages/QueriesPage';   // <-- Import QueriesPage
 import PipelineDashboard from './components/monitoring/PipelineDashboard'; // Assuming this path is correct
 
-// In your main App.jsx or router configuration
-import { Route } from 'react-router-dom';
-import InnovativeMonitoringDashboard from './components/monitoring/InnovativeMonitoringDashboard';
+// In your main App.jsx or router configuration - NEW
+// import { Route } from 'react-router-dom';
+// import InnovativeMonitoringDashboard from './components/monitoring/InnovativeMonitoringDashboard';
 
-// Add route
-<Route path="/monitoring" element={<InnovativeMonitoringDashboard />} />
+// Add route - NEW
+// <Route path="/monitoring" element={<InnovativeMonitoringDashboard />} />
 
 function App() {
   return (
