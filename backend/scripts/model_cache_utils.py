@@ -1,480 +1,627 @@
 #!/usr/bin/env python3
 """
-Revised Model Cache Utilities for Actual Directory Structure
-Optimized for /home/vastdata/rag-app-07/ deployment with existing cache
+Model Cache Utilities for RAG Application - Host Environment Compatible
+Provides efficient model caching and loading for Mistral v0.2 and embedding models
+Optimized for RTX 5090 GPU acceleration
+Works in both host and container environments
 """
 
 import os
 import sys
-import logging
 import json
-import shutil
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
-import time
+import logging
 import hashlib
+from pathlib import Path
+from typing import Dict, Any, Optional, List, Union
+import time
 
 logger = logging.getLogger(__name__)
 
+def detect_environment() -> str:
+    """
+    Detect if running in container or host environment
+    
+    Returns:
+        'container' if running in Docker container, 'host' if running on host
+    """
+    # Check for container indicators
+    if os.path.exists('/.dockerenv'):
+        return 'container'
+    
+    # Check if we're in a typical container path structure
+    if os.getcwd().startswith('/app'):
+        return 'container'
+    
+    # Check for vastdata user (host environment indicator)
+    if 'vastdata' in os.path.expanduser('~'):
+        return 'host'
+    
+    # Default to host if uncertain
+    return 'host'
+
+def get_environment_paths() -> Dict[str, str]:
+    """
+    Get appropriate cache paths based on environment
+    
+    Returns:
+        Dictionary with backend_cache_dir and hf_cache_dir paths
+    """
+    env = detect_environment()
+    
+    if env == 'container':
+        # Container environment paths
+        return {
+            'backend_cache_dir': os.environ.get('MODELS_CACHE_DIR', '/app/models_cache'),
+            'hf_cache_dir': os.environ.get('HF_HOME', '/root/.cache/huggingface')
+        }
+    else:
+        # Host environment paths (vastdata)
+        base_dir = '/home/vastdata/rag-app-07'
+        return {
+            'backend_cache_dir': f'{base_dir}/backend/models_cache',
+            'hf_cache_dir': f'{base_dir}/huggingface_cache'
+        }
+
 class ModelCacheManager:
     """
-    Enhanced Model Cache Manager for Actual vastdata Deployment
+    Advanced Model Cache Manager for RAG Application
     Handles both manual cache and HuggingFace cache structures
+    Environment-aware (host vs container)
     """
     
-    def __init__(
-        self,
-        cache_dir: Optional[str] = None,
-        hf_cache_dir: Optional[str] = None,
-        user: str = "vastdata"
-    ):
+    def __init__(self, 
+                 backend_cache_dir: Optional[str] = None,
+                 hf_cache_dir: Optional[str] = None):
         """
-        Initialize cache manager with actual deployment paths
+        Initialize ModelCacheManager with cache directories
         
         Args:
-            cache_dir: Manual models cache directory
-            hf_cache_dir: HuggingFace cache directory  
-            user: System user (vastdata)
+            backend_cache_dir: Path to backend models cache
+            hf_cache_dir: Path to HuggingFace cache
         """
-        self.user = user
-        self.base_dir = f"/home/{user}/rag-app-07"
+        # Detect environment and get appropriate paths
+        env_paths = get_environment_paths()
         
-        # Set cache directories based on actual structure
-        self.cache_dir = Path(cache_dir) if cache_dir else Path(self.base_dir) / "backend" / "models_cache"
-        self.hf_cache_dir = Path(hf_cache_dir) if hf_cache_dir else Path(self.base_dir) / "huggingface_cache"
-        self.hf_hub_dir = self.hf_cache_dir / "hub"
+        # Set up cache directories with environment detection
+        self.backend_cache_dir = Path(backend_cache_dir or env_paths['backend_cache_dir'])
+        self.hf_cache_dir = Path(hf_cache_dir or env_paths['hf_cache_dir'])
         
-        # Ensure directories exist
-        self._ensure_directories()
+        # Detect environment
+        self.environment = detect_environment()
+        
+        # Ensure cache directories exist (only if we have write permissions)
+        try:
+            self.backend_cache_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            logger.debug(f"No write permission for {self.backend_cache_dir}")
+        
+        try:
+            self.hf_cache_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            logger.debug(f"No write permission for {self.hf_cache_dir}")
         
         # Model configurations
         self.supported_models = {
             "mistralai/Mistral-7B-Instruct-v0.2": {
                 "type": "llm",
                 "cache_name": "models--mistralai--Mistral-7B-Instruct-v0.2",
-                "required_files": ["config.json", "tokenizer.json", "tokenizer_config.json"]
+                "required_files": [
+                    "config.json",
+                    "tokenizer.json", 
+                    "tokenizer_config.json",
+                    "special_tokens_map.json"
+                ],
+                "model_files_pattern": "model-*.safetensors"
             },
             "sentence-transformers/all-MiniLM-L6-v2": {
-                "type": "embedding", 
+                "type": "embedding",
                 "cache_name": "models--sentence-transformers--all-MiniLM-L6-v2",
-                "required_files": ["config.json", "tokenizer.json", "pytorch_model.bin"]
+                "required_files": [
+                    "config.json",
+                    "tokenizer.json",
+                    "config_sentence_transformers.json"
+                ],
+                "model_files_pattern": "model.safetensors"
             }
         }
         
-        logger.info(f"Cache manager initialized for user: {user}")
-        logger.info(f"Manual cache: {self.cache_dir}")
-        logger.info(f"HuggingFace cache: {self.hf_cache_dir}")
-    
-    def _ensure_directories(self):
-        """Ensure all required cache directories exist with proper permissions"""
-        directories = [
-            self.cache_dir,
-            self.hf_cache_dir,
-            self.hf_hub_dir
-        ]
-        
-        for directory in directories:
-            try:
-                directory.mkdir(parents=True, exist_ok=True)
-                # Set permissions for vastdata user
-                os.chmod(directory, 0o755)
-                logger.debug(f"Directory ensured: {directory}")
-            except Exception as e:
-                logger.warning(f"Failed to create directory {directory}: {e}")
+        logger.info(f"ModelCacheManager initialized in {self.environment} environment:")
+        logger.info(f"  Backend cache: {self.backend_cache_dir}")
+        logger.info(f"  HuggingFace cache: {self.hf_cache_dir}")
     
     def is_model_cached(self, model_name: str) -> bool:
         """
         Check if model is available in any cache location
         
         Args:
-            model_name: Model identifier (e.g., 'mistralai/Mistral-7B-Instruct-v0.2')
+            model_name: Model identifier (e.g., "mistralai/Mistral-7B-Instruct-v0.2")
             
         Returns:
-            True if model is found in cache
+            True if model is found in cache, False otherwise
         """
         try:
-            # Check both manual cache and HuggingFace cache
-            manual_path = self._get_manual_cache_path(model_name)
-            hf_path = self._get_hf_cache_path(model_name)
-            
-            manual_exists = manual_path and manual_path.exists()
-            hf_exists = hf_path and hf_path.exists()
-            
-            if manual_exists:
-                logger.info(f"Model {model_name} found in manual cache: {manual_path}")
+            # Check backend cache first
+            if self._is_model_in_backend_cache(model_name):
+                logger.debug(f"Model {model_name} found in backend cache")
                 return True
-            elif hf_exists:
-                logger.info(f"Model {model_name} found in HuggingFace cache: {hf_path}")
+            
+            # Check HuggingFace cache
+            if self._is_model_in_hf_cache(model_name):
+                logger.debug(f"Model {model_name} found in HuggingFace cache")
                 return True
-            else:
-                logger.info(f"Model {model_name} not found in cache")
-                return False
-                
+            
+            logger.debug(f"Model {model_name} not found in any cache")
+            return False
+            
         except Exception as e:
             logger.error(f"Error checking cache for {model_name}: {e}")
             return False
     
+    def _is_model_in_backend_cache(self, model_name: str) -> bool:
+        """Check if model exists in backend cache"""
+        if model_name not in self.supported_models:
+            return False
+        
+        cache_name = self.supported_models[model_name]["cache_name"]
+        model_dir = self.backend_cache_dir / cache_name
+        
+        if not model_dir.exists():
+            return False
+        
+        # Check for snapshot directory structure
+        snapshots_dir = model_dir / "snapshots"
+        if snapshots_dir.exists():
+            # Find any snapshot directory
+            snapshot_dirs = [d for d in snapshots_dir.iterdir() if d.is_dir()]
+            if snapshot_dirs:
+                # Check if required files exist in snapshot
+                snapshot_dir = snapshot_dirs[0]  # Use first available snapshot
+                return self._validate_model_files(snapshot_dir, model_name)
+        
+        # Check for direct model files (alternative structure)
+        return self._validate_model_files(model_dir, model_name)
+    
+    def _is_model_in_hf_cache(self, model_name: str) -> bool:
+        """Check if model exists in HuggingFace cache"""
+        if model_name not in self.supported_models:
+            return False
+        
+        cache_name = self.supported_models[model_name]["cache_name"]
+        
+        # Check in hub directory
+        hub_dir = self.hf_cache_dir / "hub" / cache_name
+        if hub_dir.exists():
+            snapshots_dir = hub_dir / "snapshots"
+            if snapshots_dir.exists():
+                snapshot_dirs = [d for d in snapshots_dir.iterdir() if d.is_dir()]
+                if snapshot_dirs:
+                    snapshot_dir = snapshot_dirs[0]
+                    return self._validate_model_files(snapshot_dir, model_name)
+        
+        # Check direct in hf_cache_dir (alternative structure for vastdata)
+        direct_model_dir = self.hf_cache_dir / cache_name
+        if direct_model_dir.exists():
+            snapshots_dir = direct_model_dir / "snapshots"
+            if snapshots_dir.exists():
+                snapshot_dirs = [d for d in snapshots_dir.iterdir() if d.is_dir()]
+                if snapshot_dirs:
+                    snapshot_dir = snapshot_dirs[0]
+                    return self._validate_model_files(snapshot_dir, model_name)
+        
+        return False
+    
+    def _validate_model_files(self, model_dir: Path, model_name: str) -> bool:
+        """Validate that required model files exist"""
+        try:
+            if not model_dir.exists():
+                return False
+            
+            model_config = self.supported_models[model_name]
+            required_files = model_config["required_files"]
+            
+            # Check required configuration files
+            for file_name in required_files:
+                file_path = model_dir / file_name
+                if not file_path.exists():
+                    logger.debug(f"Missing required file: {file_path}")
+                    return False
+            
+            # Check for model weight files
+            model_pattern = model_config["model_files_pattern"]
+            if "*" in model_pattern:
+                # Pattern matching for multiple files
+                pattern_prefix = model_pattern.split("*")[0]
+                pattern_suffix = model_pattern.split("*")[1]
+                
+                model_files = [
+                    f for f in model_dir.iterdir() 
+                    if f.name.startswith(pattern_prefix) and f.name.endswith(pattern_suffix)
+                ]
+                
+                if not model_files:
+                    logger.debug(f"No model files matching pattern {model_pattern}")
+                    return False
+            else:
+                # Single file check
+                model_file = model_dir / model_pattern
+                if not model_file.exists():
+                    logger.debug(f"Missing model file: {model_file}")
+                    return False
+            
+            logger.debug(f"Model validation successful for {model_name} in {model_dir}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error validating model files: {e}")
+            return False
+    
     def get_model_cache_path(self, model_name: str) -> Optional[Path]:
         """
-        Get the actual cache path for a model
+        Get the path to cached model, preferring backend cache
         
         Args:
             model_name: Model identifier
             
         Returns:
-            Path to cached model or None if not found
+            Path to model cache directory or None if not found
         """
         try:
-            # Priority: Manual cache first, then HuggingFace cache
-            manual_path = self._get_manual_cache_path(model_name)
-            if manual_path and manual_path.exists():
-                return manual_path
+            # Prefer backend cache
+            if self._is_model_in_backend_cache(model_name):
+                cache_name = self.supported_models[model_name]["cache_name"]
+                model_dir = self.backend_cache_dir / cache_name
+                
+                # Return snapshot directory if it exists
+                snapshots_dir = model_dir / "snapshots"
+                if snapshots_dir.exists():
+                    snapshot_dirs = [d for d in snapshots_dir.iterdir() if d.is_dir()]
+                    if snapshot_dirs:
+                        return snapshot_dirs[0]  # Return first available snapshot
+                
+                return model_dir
             
-            hf_path = self._get_hf_cache_path(model_name)
-            if hf_path and hf_path.exists():
-                return hf_path
+            # Fallback to HuggingFace cache
+            if self._is_model_in_hf_cache(model_name):
+                cache_name = self.supported_models[model_name]["cache_name"]
+                
+                # Check hub directory first
+                hub_dir = self.hf_cache_dir / "hub" / cache_name
+                if hub_dir.exists():
+                    snapshots_dir = hub_dir / "snapshots"
+                    if snapshots_dir.exists():
+                        snapshot_dirs = [d for d in snapshots_dir.iterdir() if d.is_dir()]
+                        if snapshot_dirs:
+                            return snapshot_dirs[0]
+                
+                # Check direct directory (vastdata structure)
+                direct_dir = self.hf_cache_dir / cache_name
+                if direct_dir.exists():
+                    snapshots_dir = direct_dir / "snapshots"
+                    if snapshots_dir.exists():
+                        snapshot_dirs = [d for d in snapshots_dir.iterdir() if d.is_dir()]
+                        if snapshot_dirs:
+                            return snapshot_dirs[0]
             
-            logger.warning(f"No cache path found for {model_name}")
+            logger.warning(f"Model {model_name} not found in any cache")
             return None
             
         except Exception as e:
             logger.error(f"Error getting cache path for {model_name}: {e}")
             return None
     
-    def _get_manual_cache_path(self, model_name: str) -> Optional[Path]:
-        """Get manual cache path for model"""
-        if model_name not in self.supported_models:
-            return None
-        
-        cache_name = self.supported_models[model_name]["cache_name"]
-        return self.cache_dir / cache_name
-    
-    def _get_hf_cache_path(self, model_name: str) -> Optional[Path]:
-        """Get HuggingFace cache path for model"""
-        if model_name not in self.supported_models:
-            return None
-        
-        cache_name = self.supported_models[model_name]["cache_name"]
-        model_dir = self.hf_hub_dir / cache_name
-        
-        if not model_dir.exists():
-            return None
-        
-        # Find the latest snapshot
-        snapshots_dir = model_dir / "snapshots"
-        if not snapshots_dir.exists():
-            return None
-        
-        # Get the most recent snapshot
-        snapshots = [d for d in snapshots_dir.iterdir() if d.is_dir()]
-        if not snapshots:
-            return None
-        
-        # Return the first (or most recent) snapshot
-        return snapshots[0]
-    
-    def verify_model_integrity(self, model_name: str) -> Dict[str, Any]:
-        """
-        Verify model cache integrity
-        
-        Args:
-            model_name: Model identifier
-            
-        Returns:
-            Dictionary with verification results
-        """
-        result = {
-            "model_name": model_name,
-            "cached": False,
-            "cache_path": None,
-            "integrity_check": False,
-            "missing_files": [],
-            "file_sizes": {},
-            "verification_time": time.time()
-        }
-        
-        try:
-            cache_path = self.get_model_cache_path(model_name)
-            if not cache_path:
-                return result
-            
-            result["cached"] = True
-            result["cache_path"] = str(cache_path)
-            
-            # Check required files
-            if model_name in self.supported_models:
-                required_files = self.supported_models[model_name]["required_files"]
-                missing_files = []
-                file_sizes = {}
-                
-                for file_name in required_files:
-                    file_path = cache_path / file_name
-                    if file_path.exists():
-                        file_sizes[file_name] = file_path.stat().st_size
-                    else:
-                        missing_files.append(file_name)
-                
-                result["missing_files"] = missing_files
-                result["file_sizes"] = file_sizes
-                result["integrity_check"] = len(missing_files) == 0
-            
-            logger.info(f"Model {model_name} integrity check: {result['integrity_check']}")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error verifying {model_name}: {e}")
-            result["error"] = str(e)
-            return result
-    
     def get_cache_info(self) -> Dict[str, Any]:
-        """Get comprehensive cache information"""
-        info = {
-            "user": self.user,
-            "base_dir": str(self.base_dir),
-            "cache_directories": {
-                "manual_cache": str(self.cache_dir),
-                "hf_cache": str(self.hf_cache_dir),
-                "hf_hub": str(self.hf_hub_dir)
-            },
-            "directory_status": {},
-            "models": {},
-            "total_size_mb": 0,
-            "last_updated": time.time()
-        }
+        """
+        Get comprehensive cache information
         
-        # Check directory status
-        for name, path_str in info["cache_directories"].items():
-            path = Path(path_str)
-            info["directory_status"][name] = {
-                "exists": path.exists(),
-                "readable": path.exists() and os.access(path, os.R_OK),
-                "writable": path.exists() and os.access(path, os.W_OK),
-                "size_mb": self._get_directory_size(path) if path.exists() else 0
+        Returns:
+            Dictionary with cache status and statistics
+        """
+        try:
+            info = {
+                "environment": self.environment,
+                "backend_cache": {
+                    "path": str(self.backend_cache_dir),
+                    "exists": self.backend_cache_dir.exists(),
+                    "readable": os.access(self.backend_cache_dir, os.R_OK) if self.backend_cache_dir.exists() else False,
+                    "writable": os.access(self.backend_cache_dir, os.W_OK) if self.backend_cache_dir.exists() else False,
+                    "models": {}
+                },
+                "hf_cache": {
+                    "path": str(self.hf_cache_dir),
+                    "exists": self.hf_cache_dir.exists(),
+                    "readable": os.access(self.hf_cache_dir, os.R_OK) if self.hf_cache_dir.exists() else False,
+                    "writable": os.access(self.hf_cache_dir, os.W_OK) if self.hf_cache_dir.exists() else False,
+                    "models": {}
+                },
+                "supported_models": list(self.supported_models.keys()),
+                "cache_summary": {
+                    "total_models_supported": len(self.supported_models),
+                    "models_in_backend_cache": 0,
+                    "models_in_hf_cache": 0,
+                    "models_available": 0
+                }
             }
-        
-        # Check supported models
-        total_size = 0
-        for model_name in self.supported_models:
-            model_info = self.verify_model_integrity(model_name)
-            info["models"][model_name] = model_info
             
-            if model_info["cached"] and model_info["file_sizes"]:
-                model_size = sum(model_info["file_sizes"].values()) / (1024 * 1024)  # MB
-                total_size += model_size
-        
-        info["total_size_mb"] = round(total_size, 2)
-        
-        return info
-    
-    def _get_directory_size(self, path: Path) -> float:
-        """Get directory size in MB"""
-        try:
-            total_size = 0
-            for file_path in path.rglob("*"):
-                if file_path.is_file():
-                    total_size += file_path.stat().st_size
-            return round(total_size / (1024 * 1024), 2)  # MB
+            # Check each supported model
+            for model_name in self.supported_models:
+                backend_available = self._is_model_in_backend_cache(model_name)
+                hf_available = self._is_model_in_hf_cache(model_name)
+                
+                info["backend_cache"]["models"][model_name] = backend_available
+                info["hf_cache"]["models"][model_name] = hf_available
+                
+                if backend_available:
+                    info["cache_summary"]["models_in_backend_cache"] += 1
+                if hf_available:
+                    info["cache_summary"]["models_in_hf_cache"] += 1
+                if backend_available or hf_available:
+                    info["cache_summary"]["models_available"] += 1
+            
+            return info
+            
         except Exception as e:
-            logger.warning(f"Error calculating size for {path}: {e}")
-            return 0.0
+            logger.error(f"Error getting cache info: {e}")
+            return {"error": str(e)}
     
-    def copy_from_external_cache(
-        self, 
-        model_name: str, 
-        external_path: Union[str, Path],
-        target_cache: str = "manual"
-    ) -> bool:
+    def validate_cache_integrity(self) -> Dict[str, Any]:
         """
-        Copy model from external cache location
+        Perform comprehensive cache integrity validation
         
-        Args:
-            model_name: Model identifier
-            external_path: Source path
-            target_cache: Target cache type ('manual' or 'hf')
-            
         Returns:
-            True if copy successful
+            Detailed validation report
         """
         try:
-            external_path = Path(external_path)
-            if not external_path.exists():
-                logger.error(f"External path does not exist: {external_path}")
-                return False
+            start_time = time.time()
             
-            if target_cache == "manual":
-                target_path = self._get_manual_cache_path(model_name)
-            else:
-                target_path = self._get_hf_cache_path(model_name)
+            validation_report = {
+                "timestamp": start_time,
+                "environment": self.environment,
+                "validation_type": "comprehensive_integrity_check",
+                "models": {},
+                "summary": {
+                    "total_models": len(self.supported_models),
+                    "valid_models": 0,
+                    "invalid_models": 0,
+                    "missing_models": 0
+                }
+            }
             
-            if not target_path:
-                logger.error(f"Cannot determine target path for {model_name}")
-                return False
+            for model_name in self.supported_models:
+                model_report = {
+                    "model_name": model_name,
+                    "backend_cache": self._validate_cache_location(model_name, "backend"),
+                    "hf_cache": self._validate_cache_location(model_name, "hf"),
+                    "overall_status": "unknown"
+                }
+                
+                # Determine overall status
+                backend_valid = model_report["backend_cache"]["valid"]
+                hf_valid = model_report["hf_cache"]["valid"]
+                
+                if backend_valid or hf_valid:
+                    model_report["overall_status"] = "valid"
+                    validation_report["summary"]["valid_models"] += 1
+                else:
+                    backend_exists = model_report["backend_cache"]["exists"]
+                    hf_exists = model_report["hf_cache"]["exists"]
+                    
+                    if backend_exists or hf_exists:
+                        model_report["overall_status"] = "invalid"
+                        validation_report["summary"]["invalid_models"] += 1
+                    else:
+                        model_report["overall_status"] = "missing"
+                        validation_report["summary"]["missing_models"] += 1
+                
+                validation_report["models"][model_name] = model_report
             
-            # Create target directory
-            target_path.parent.mkdir(parents=True, exist_ok=True)
+            validation_time = time.time() - start_time
+            validation_report["validation_time_seconds"] = validation_time
             
-            # Copy files
-            if external_path.is_file():
-                shutil.copy2(external_path, target_path)
-            else:
-                shutil.copytree(external_path, target_path, dirs_exist_ok=True)
+            logger.info(f"Cache validation completed in {validation_time:.2f} seconds")
+            logger.info(f"Results: {validation_report['summary']['valid_models']} valid, "
+                       f"{validation_report['summary']['invalid_models']} invalid, "
+                       f"{validation_report['summary']['missing_models']} missing")
             
-            logger.info(f"Successfully copied {model_name} to {target_path}")
-            return True
+            return validation_report
             
         except Exception as e:
-            logger.error(f"Error copying {model_name}: {e}")
-            return False
+            logger.error(f"Cache validation failed: {e}")
+            return {"error": str(e)}
     
-    def cleanup_cache(self, keep_models: Optional[List[str]] = None) -> Dict[str, Any]:
-        """
-        Clean up cache, optionally keeping specified models
-        
-        Args:
-            keep_models: List of model names to keep
-            
-        Returns:
-            Cleanup results
-        """
-        if keep_models is None:
-            keep_models = list(self.supported_models.keys())
-        
-        result = {
-            "cleaned_models": [],
-            "kept_models": keep_models,
-            "space_freed_mb": 0,
-            "errors": []
-        }
-        
+    def _validate_cache_location(self, model_name: str, cache_type: str) -> Dict[str, Any]:
+        """Validate model in specific cache location"""
         try:
-            # Clean manual cache
-            if self.cache_dir.exists():
-                for model_dir in self.cache_dir.iterdir():
-                    if model_dir.is_dir():
-                        model_name = self._cache_name_to_model_name(model_dir.name)
-                        if model_name and model_name not in keep_models:
-                            size_mb = self._get_directory_size(model_dir)
-                            shutil.rmtree(model_dir)
-                            result["cleaned_models"].append(model_name)
-                            result["space_freed_mb"] += size_mb
+            if cache_type == "backend":
+                exists = self._is_model_in_backend_cache(model_name)
+                cache_path = self.backend_cache_dir / self.supported_models[model_name]["cache_name"]
+            else:  # hf
+                exists = self._is_model_in_hf_cache(model_name)
+                cache_name = self.supported_models[model_name]["cache_name"]
+                # Try both hub and direct paths
+                hub_path = self.hf_cache_dir / "hub" / cache_name
+                direct_path = self.hf_cache_dir / cache_name
+                cache_path = hub_path if hub_path.exists() else direct_path
             
-            logger.info(f"Cache cleanup completed: {result}")
-            return result
-            
+            if exists:
+                actual_path = self.get_model_cache_path(model_name)
+                file_count = len(list(actual_path.iterdir())) if actual_path else 0
+                
+                return {
+                    "exists": True,
+                    "valid": True,
+                    "path": str(actual_path),
+                    "file_count": file_count
+                }
+            else:
+                return {
+                    "exists": cache_path.exists(),
+                    "valid": False,
+                    "path": str(cache_path),
+                    "file_count": 0
+                }
+                
         except Exception as e:
-            logger.error(f"Error during cache cleanup: {e}")
-            result["errors"].append(str(e))
-            return result
-    
-    def _cache_name_to_model_name(self, cache_name: str) -> Optional[str]:
-        """Convert cache directory name to model name"""
-        for model_name, config in self.supported_models.items():
-            if config["cache_name"] == cache_name:
-                return model_name
-        return None
+            return {
+                "exists": False,
+                "valid": False,
+                "error": str(e),
+                "file_count": 0
+            }
 
-def find_model_in_cache(
-    model_name: str, 
-    cache_dirs: Optional[List[str]] = None,
-    user: str = "vastdata"
-) -> Optional[str]:
+def find_model_in_cache(model_name: str, cache_dirs: Optional[List[str]] = None) -> Optional[str]:
     """
     Find model in cache directories
     
     Args:
         model_name: Model identifier
-        cache_dirs: List of cache directories to search
-        user: System user
+        cache_dirs: Optional list of cache directories to search
         
     Returns:
-        Path to model if found
+        Path to model if found, None otherwise
     """
-    if cache_dirs is None:
-        base_dir = f"/home/{user}/rag-app-07"
+    try:
+        # Use default cache manager if no specific directories provided
+        if cache_dirs is None:
+            cache_manager = ModelCacheManager()
+            cache_path = cache_manager.get_model_cache_path(model_name)
+            return str(cache_path) if cache_path else None
+        
+        # Search in provided directories
+        for cache_dir in cache_dirs:
+            cache_manager = ModelCacheManager(backend_cache_dir=cache_dir)
+            if cache_manager.is_model_cached(model_name):
+                cache_path = cache_manager.get_model_cache_path(model_name)
+                return str(cache_path) if cache_path else None
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error finding model in cache: {e}")
+        return None
+
+def setup_cache_environment():
+    """
+    Set up cache environment variables and directories
+    """
+    try:
+        env_paths = get_environment_paths()
+        
+        # Set up environment variables for HuggingFace
+        cache_vars = {
+            'HF_HOME': env_paths['hf_cache_dir'],
+            'TRANSFORMERS_CACHE': f"{env_paths['hf_cache_dir']}/transformers",
+            'HF_DATASETS_CACHE': f"{env_paths['hf_cache_dir']}/datasets",
+            'HF_HUB_CACHE': f"{env_paths['hf_cache_dir']}/hub",
+            'MODELS_CACHE_DIR': env_paths['backend_cache_dir']
+        }
+        
+        for var, value in cache_vars.items():
+            if var not in os.environ:
+                os.environ[var] = value
+                logger.debug(f"Set {var}={value}")
+        
+        # Create cache directories (if we have permissions)
         cache_dirs = [
-            f"{base_dir}/backend/models_cache",
-            f"{base_dir}/huggingface_cache/hub"
+            env_paths['backend_cache_dir'],
+            env_paths['hf_cache_dir'],
+            f"{env_paths['hf_cache_dir']}/transformers",
+            f"{env_paths['hf_cache_dir']}/hub"
         ]
-    
-    manager = ModelCacheManager(user=user)
-    cache_path = manager.get_model_cache_path(model_name)
-    return str(cache_path) if cache_path else None
-
-def setup_cache_environment(user: str = "vastdata"):
-    """
-    Set up cache environment variables for actual deployment
-    
-    Args:
-        user: System user
-    """
-    base_dir = f"/home/{user}/rag-app-07"
-    
-    # Set environment variables
-    os.environ["MODELS_CACHE_DIR"] = f"{base_dir}/backend/models_cache"
-    os.environ["HF_HOME"] = f"{base_dir}/huggingface_cache"
-    os.environ["TRANSFORMERS_CACHE"] = f"{base_dir}/huggingface_cache/transformers"
-    os.environ["HF_HUB_CACHE"] = f"{base_dir}/huggingface_cache/hub"
-    
-    logger.info(f"Cache environment set up for user: {user}")
-    logger.info(f"MODELS_CACHE_DIR: {os.environ['MODELS_CACHE_DIR']}")
-    logger.info(f"HF_HOME: {os.environ['HF_HOME']}")
-
-def validate_actual_cache_structure(user: str = "vastdata") -> Dict[str, Any]:
-    """
-    Validate the actual cache structure matches expected format
-    
-    Args:
-        user: System user
         
+        for cache_dir in cache_dirs:
+            try:
+                Path(cache_dir).mkdir(parents=True, exist_ok=True)
+                logger.debug(f"Ensured cache directory exists: {cache_dir}")
+            except PermissionError:
+                logger.debug(f"No write permission for: {cache_dir}")
+        
+        logger.info("Cache environment setup completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to setup cache environment: {e}")
+        raise
+
+def get_cache_status() -> Dict[str, Any]:
+    """
+    Get current cache status for all supported models
+    
     Returns:
-        Validation results
+        Dictionary with cache status information
     """
-    manager = ModelCacheManager(user=user)
+    try:
+        cache_manager = ModelCacheManager()
+        return cache_manager.get_cache_info()
+    except Exception as e:
+        logger.error(f"Error getting cache status: {e}")
+        return {"error": str(e)}
+
+def validate_all_caches() -> Dict[str, Any]:
+    """
+    Validate integrity of all model caches
     
-    validation_result = {
-        "user": user,
-        "timestamp": time.time(),
-        "cache_structure_valid": True,
-        "issues": [],
-        "cache_info": manager.get_cache_info(),
-        "model_verification": {}
-    }
-    
-    # Verify each supported model
-    for model_name in manager.supported_models:
-        verification = manager.verify_model_integrity(model_name)
-        validation_result["model_verification"][model_name] = verification
-        
-        if not verification["cached"]:
-            validation_result["issues"].append(f"Model {model_name} not found in cache")
-            validation_result["cache_structure_valid"] = False
-        elif not verification["integrity_check"]:
-            validation_result["issues"].append(f"Model {model_name} has missing files: {verification['missing_files']}")
-            validation_result["cache_structure_valid"] = False
-    
-    return validation_result
+    Returns:
+        Comprehensive validation report
+    """
+    try:
+        cache_manager = ModelCacheManager()
+        return cache_manager.validate_cache_integrity()
+    except Exception as e:
+        logger.error(f"Error validating caches: {e}")
+        return {"error": str(e)}
+
+# Global cache manager instance
+_cache_manager = None
+
+def get_cache_manager() -> ModelCacheManager:
+    """Get or create global cache manager instance"""
+    global _cache_manager
+    if _cache_manager is None:
+        _cache_manager = ModelCacheManager()
+    return _cache_manager
 
 if __name__ == "__main__":
-    # Test the cache manager with actual structure
+    # Command line interface for cache utilities
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Model Cache Utilities")
+    parser.add_argument("--validate", action="store_true", help="Validate cache integrity")
+    parser.add_argument("--status", action="store_true", help="Show cache status")
+    parser.add_argument("--model", type=str, help="Check specific model")
+    parser.add_argument("--env", action="store_true", help="Show environment detection")
+    
+    args = parser.parse_args()
+    
+    # Set up logging
     logging.basicConfig(level=logging.INFO)
     
-    print("🔍 Validating actual cache structure...")
-    result = validate_actual_cache_structure()
+    if args.env:
+        env = detect_environment()
+        paths = get_environment_paths()
+        print(f"Environment: {env}")
+        print(f"Backend cache: {paths['backend_cache_dir']}")
+        print(f"HF cache: {paths['hf_cache_dir']}")
     
-    print(f"\n📊 Validation Results:")
-    print(f"User: {result['user']}")
-    print(f"Cache Structure Valid: {result['cache_structure_valid']}")
-    print(f"Issues: {len(result['issues'])}")
+    elif args.validate:
+        print("Validating cache integrity...")
+        result = validate_all_caches()
+        print(json.dumps(result, indent=2))
     
-    if result['issues']:
-        print("\n⚠️ Issues Found:")
-        for issue in result['issues']:
-            print(f"  - {issue}")
+    elif args.status:
+        print("Getting cache status...")
+        result = get_cache_status()
+        print(json.dumps(result, indent=2))
     
-    print(f"\n📁 Cache Info:")
-    cache_info = result['cache_info']
-    print(f"Total Size: {cache_info['total_size_mb']} MB")
+    elif args.model:
+        print(f"Checking model: {args.model}")
+        cache_manager = get_cache_manager()
+        is_cached = cache_manager.is_model_cached(args.model)
+        cache_path = cache_manager.get_model_cache_path(args.model)
+        
+        print(f"Model cached: {is_cached}")
+        if cache_path:
+            print(f"Cache path: {cache_path}")
     
-    for model_name, verification in result['model_verification'].items():
-        status = "✅" if verification['cached'] and verification['integrity_check'] else "❌"
-        print(f"{status} {model_name}: {'Cached' if verification['cached'] else 'Not Found'}")
+    else:
+        print("Model Cache Utilities - Environment Aware")
+        print("Use --help for available options")
+        print("Use --env to see environment detection")

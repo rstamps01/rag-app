@@ -67,6 +67,8 @@ pytesseract==0.3.10  # KEPT: Stable OCR functionality
 Pillow==11.2.1  # REVERTED: More stable version, avoid bleeding edge
   # pymupdf==1.22.5 # Previous working version
 pymupdf==1.23.8  # UPDATED: Better PDF processing performance
+email-validator==2.2.0 # Deployment requirement for email validation
+  # Not previously used, but included for compatibility
 
 # Text processing - LANGCHAIN VERSIONS KEPT FOR STABILITY
   # Previously working versions - KEEPING THESE AS THEY WORK

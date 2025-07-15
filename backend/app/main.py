@@ -1,8 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, APIRouter, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import auth, documents, queries, admin, system
+from app.api.routes import auth, documents, queries, admin, system, monitoring
 from app.core.config import settings
-from app.api.routes import monitoring
 from typing import List
 import os
 import logging

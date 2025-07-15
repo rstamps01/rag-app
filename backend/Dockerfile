@@ -87,7 +87,7 @@ RUN mkdir -p /app/data/uploads /app/data/logs /app/models_cache
 # RUN python3 download_models.py
 
 #### Potential Change to Local
-ENV TRANSFORMERS_CACHE=/app/models-cache
+ENV TRANSFORMERS_CACHE=/app/models_cache
 COPY models_cache/ /app/models_cache
 
 # === Application Code ===
