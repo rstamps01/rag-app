@@ -418,9 +418,9 @@ class ModelCacheManager:
             validation_report["validation_time_seconds"] = validation_time
             
             logger.info(f"Cache validation completed in {validation_time:.2f} seconds")
-            logger.info(f"Results: {validation_report["summary"]["valid_models"]} valid, "
-                       f"{validation_report["summary"]["invalid_models"]} invalid, "
-                       f"{validation_report["summary"]["missing_models"]} missing")
+            logger.info(f"Results: {validation_report['summary']['valid_models']} valid, "
+                       f"{validation_report['summary']['invalid_models']} invalid, "
+                       f"{validation_report['summary']['missing_models']} missing")
             
             return validation_report
             
