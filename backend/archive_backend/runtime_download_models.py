@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # Model configurations
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
 LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "mistralai/Mistral-7B-Instruct-v0.1")
-MODELS_CACHE_DIR = os.getenv("MODELS_CACHE_DIR", "/app/models_cache")
+MODELS_CACHE_DIR = os.getenv("MODELS_CACHE_DIR", "/app/models_cache/home")
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
 
 def check_models_exist():
@@ -54,7 +54,7 @@ def setup_environment():
     os.makedirs(MODELS_CACHE_DIR, exist_ok=True)
     
     # Set HuggingFace cache directory
-    os.environ['TRANSFORMERS_CACHE'] = MODELS_CACHE_DIR
+    # os.environ['TRANSFORMERS_CACHE'] = MODELS_CACHE_DIR
     os.environ['HF_HOME'] = MODELS_CACHE_DIR
     
     # Check authentication

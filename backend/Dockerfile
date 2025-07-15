@@ -26,6 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -76,11 +78,11 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # === Pre-download Models ===
 # Accept Hugging Face token as a build argument
 # ARG HUGGINGFACE_TOKEN
-ARG HUGGING_FACE_HUB_TOKEN
-ENV HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+# ARG HUGGING_FACE_HUB_TOKEN
+# ENV HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
 
 # Create necessary directories
-RUN mkdir -p /app/data/uploads /app/data/logs /app/models_cache
+RUN mkdir -p /app/data/uploads /app/data/logs /app/models_cache /app/models_cache/home
 
 # Copy and run the script to download models during build time.
 # COPY download_models.py .
@@ -88,7 +90,7 @@ RUN mkdir -p /app/data/uploads /app/data/logs /app/models_cache
 
 #### Potential Change to Local
 # ENV TRANSFORMERS_CACHE=/app/models_cache
-ENV HF_HOME=/app/models_cache
+ENV HF_HOME=/app/models_cache/home
 COPY models_cache/ /app/models_cache
 
 # === Application Code ===

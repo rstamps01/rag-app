@@ -28,6 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 # Set up Python environment
 # RUN python3 -m pip install --upgrade pip
 
@@ -74,7 +76,7 @@ COPY scripts/initialize_model_cache.py /app/scripts/
 RUN chmod +x /app/scripts/*.py
 
 # Set up cache environment variables
-ENV HF_HOME=/app/models_cache
+ENV HF_HOME=/app/models_cache/home
 ENV TRANSFORMERS_CACHE=/app/models_cache
 ENV HF_DATASETS_CACHE=/app/models_cache
 ENV HF_HUB_CACHE=/app/models_cache

@@ -22,22 +22,22 @@ def detect_environment() -> str:
     Detect if running in container or host environment
     
     Returns:
-        'container' if running in Docker container, 'host' if running on host
+        "container" if running in Docker container, "host" if running on host
     """
     # Check for container indicators
-    if os.path.exists('/.dockerenv'):
-        return 'container'
+    if os.path.exists("/.dockerenv"):
+        return "container"
     
-    # Check if we're in a typical container path structure
-    if os.getcwd().startswith('/app'):
-        return 'container'
+    # Check if we"re in a typical container path structure
+    if os.getcwd().startswith("/app"):
+        return "container"
     
     # Check for vastdata user (host environment indicator)
-    if 'vastdata' in os.path.expanduser('~'):
-        return 'host'
+    if "vastdata" in os.path.expanduser("~"):
+        return "host"
     
     # Default to host if uncertain
-    return 'host'
+    return "host"
 
 def get_environment_paths() -> Dict[str, str]:
     """
@@ -48,18 +48,18 @@ def get_environment_paths() -> Dict[str, str]:
     """
     env = detect_environment()
     
-    if env == 'container':
+    if env == "container":
         # Container environment paths
         return {
-            'backend_cache_dir': os.environ.get('MODELS_CACHE_DIR', '/app/models_cache'),
-            'hf_cache_dir': os.environ.get('HF_HOME', '/app/models_cache')
+            "backend_cache_dir": os.environ.get("MODELS_CACHE_DIR", "/app/models_cache"),
+            "hf_cache_dir": os.environ.get("HF_HOME", "/app/models_cache/home")
         }
     else:
         # Host environment paths (vastdata)
-        base_dir = '/home/vastdata/rag-app-07'
+        base_dir = "/home/vastdata/rag-app-07"
         return {
-            'backend_cache_dir': f'{base_dir}/backend/models_cache',
-            'hf_cache_dir': f'{base_dir}/backend/models_cache'
+            "backend_cache_dir": f"{base_dir}/backend/models_cache",
+            "hf_cache_dir": f"{base_dir}/backend/models_cache"
         }
 
 class ModelCacheManager:
@@ -83,8 +83,8 @@ class ModelCacheManager:
         env_paths = get_environment_paths()
         
         # Set up cache directories with environment detection
-        self.backend_cache_dir = Path(backend_cache_dir or env_paths['backend_cache_dir'])
-        self.hf_cache_dir = Path(hf_cache_dir or env_paths['hf_cache_dir'])
+        self.backend_cache_dir = Path(backend_cache_dir or env_paths["backend_cache_dir"])
+        self.hf_cache_dir = Path(hf_cache_dir or env_paths["hf_cache_dir"])
         
         # Detect environment
         self.environment = detect_environment()
@@ -418,9 +418,9 @@ class ModelCacheManager:
             validation_report["validation_time_seconds"] = validation_time
             
             logger.info(f"Cache validation completed in {validation_time:.2f} seconds")
-            logger.info(f"Results: {validation_report['summary']['valid_models']} valid, "
-                       f"{validation_report['summary']['invalid_models']} invalid, "
-                       f"{validation_report['summary']['missing_models']} missing")
+            logger.info(f"Results: {validation_report["summary"]["valid_models"]} valid, "
+                       f"{validation_report["summary"]["invalid_models"]} invalid, "
+                       f"{validation_report["summary"]["missing_models"]} missing")
             
             return validation_report
             
@@ -508,11 +508,11 @@ def setup_cache_environment():
         
         # Set up environment variables for HuggingFace
         cache_vars = {
-            'HF_HOME': env_paths['hf_cache_dir'],
-            'TRANSFORMERS_CACHE': f"{env_paths['hf_cache_dir']}/transformers",
-            'HF_DATASETS_CACHE': f"{env_paths['hf_cache_dir']}/datasets",
-            'HF_HUB_CACHE': f"{env_paths['hf_cache_dir']}/hub",
-            'MODELS_CACHE_DIR': env_paths['backend_cache_dir']
+            "HF_HOME": env_paths["hf_cache_dir"],
+            "TRANSFORMERS_CACHE": f"{env_paths["hf_cache_dir"]}/transformers",
+            "HF_DATASETS_CACHE": f"{env_paths["hf_cache_dir"]}/datasets",
+            "HF_HUB_CACHE": f"{env_paths["hf_cache_dir"]}/hub",
+            "MODELS_CACHE_DIR": env_paths["backend_cache_dir"]
         }
         
         for var, value in cache_vars.items():
@@ -522,10 +522,10 @@ def setup_cache_environment():
         
         # Create cache directories (if we have permissions)
         cache_dirs = [
-            env_paths['backend_cache_dir'],
-            env_paths['hf_cache_dir'],
-            f"{env_paths['hf_cache_dir']}/transformers",
-            f"{env_paths['hf_cache_dir']}/hub"
+            env_paths["backend_cache_dir"],
+            env_paths["hf_cache_dir"],
+            f"{env_paths["hf_cache_dir"]}/transformers",
+            f"{env_paths["hf_cache_dir"]}/hub"
         ]
         
         for cache_dir in cache_dirs:
@@ -598,8 +598,8 @@ if __name__ == "__main__":
         env = detect_environment()
         paths = get_environment_paths()
         print(f"Environment: {env}")
-        print(f"Backend cache: {paths['backend_cache_dir']}")
-        print(f"HF cache: {paths['hf_cache_dir']}")
+        print(f"Backend cache: {paths["backend_cache_dir"]}")
+        print(f"HF cache: {paths["hf_cache_dir"]}")
     
     elif args.validate:
         print("Validating cache integrity...")

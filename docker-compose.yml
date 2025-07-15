@@ -6,18 +6,16 @@
 services:
   # PostgreSQL Database
   postgres-07:
-    image: postgres:15
+    image: postgres:14.1-alpine
     container_name: postgres-07
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-rag}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag}
-      POSTGRES_DB: ${POSTGRES_DB:-rag}
-    volumes:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag
+    volumes: 
       - postgres_data-07:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - network-07
+    ports: 
+      - 5432:5432
+    networks: network-07
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag}"]
@@ -29,19 +27,15 @@ services:
   qdrant-07:
     image: qdrant/qdrant:latest
     container_name: qdrant-07
-    ports:
-      - "6333:6333"
-      - "6334:6334"
+    environment:
+      QDRANT__CLUSTER__ENABLED: "true"
     volumes:
       - qdrant_data-07:/qdrant/storage
-    networks:
-      - network-07
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/cluster"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      - uploaded_documents-07::/
+    ports: 
+      - 6333:6333
+      - 6334:633
+    driver: local
 
   # Backend Service with vastdata Cache Integration
   backend-07:
@@ -53,65 +47,51 @@ services:
     container_name: backend-07
     environment:
       # Database Configuration
-      - DATABASE_URL=${DATABASE_URL:-postgresql://rag:rag@postgres-07:5432/rag}
-      - POSTGRES_USER=${POSTGRES_USER:-rag}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-rag}
-      - POSTGRES_DB=${POSTGRES_DB:-rag}
-      
+      DATABASE_URL: postgresql://rag:rag@postgres-07:5432/rag
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag
+      POSTGRES_DB: rag 
       # Vector Database
-      - QDRANT_URL=${QDRANT_URL:-http://qdrant-07:6333}
-      - QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME:-rag}
-      
+      QDRANT_URL: http://qdrant-07:6333
+      QDRANT_COLLECTION_NAME: rag
       # Model Configuration
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - LLM_MODEL_NAME=${LLM_MODEL_NAME:-mistralai/Mistral-7B-Instruct-v0.2}
-      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-sentence-transformers/all-MiniLM-L6-v2}
-      
+      HUGGING_FACE_HUB_TOKEN: $HUGGING_FACE_HUB_TOKEN
+      LLM_MODEL_NAME: mistralai/Mistral-7B-Instruct-v0.2
+      EMBEDDING_MODEL_NAME: sentence-transformers/all-MiniLM-L6-v2
       # Cache Configuration (vastdata specific)
-      - MODELS_CACHE_DIR=/app/models_cache
-      - HF_HOME=/app/models_cache
-      - HF_HUB_CACHE=/app/models_cache
-      - HOST_HF_CACHE=/app/models_cache
-      - HOST_MODELS_CACHE=/app/models_cache
-      
+      MODELS_CACHE_DIR: /app/models_cache
+      HF_HOME: /app/models_cache/home
+      HF_HUB_CACHE: /app/models_cache
+      HOST_HF_CACHE: /app/models_cache
+      HOST_MODELS_CACHE: /app/models_cache
       # Security
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
-    #  - JWT_EXPIRE_HOURS=${JWT_EXPIRE_HOURS:-24}
-      
+      JWT_SECRET: $JWT_SECRET
+      JWT_ALGORITHM: HS256
+      # JWT_EXPIRE_HOURS: 24
       # Application
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DEBUG=${DEBUG:-false}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      
+      ENVIRONMENT: production
+      DEBUG: false
+      LOG_LEVEL: INFO
       # GPU Configuration for RTX 5090
-      - CUDA_VISIBLE_DEVICES=1
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    
-    volumes:
+      CUDA_VISIBLE_DEVICES: 1
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
       # vastdata Cache Mappings (Critical for Performance)
-      - /home/vastdata/rag-app-07/backend/models_cache:/app/models_cache
-    #  - /home/vastdata/rag-app-07/huggingface_cache:/root/.cache/huggingface:ro
-      
-      # Application Data
-      - backend_logs-07:/app/logs
-      - uploaded_documents-07:/app/uploads
-    
+    volumes:
+      MODELS_CACHE_DIR: ./backend/models_cache:/app/models_cache   
+      LOGS_DIR: backend_logs-07:/app/data/logs
+      UPLOADS_DIR: uploaded_documents-07:/app/data/uploads
+      # /home/vastdata/rag-app-07/huggingface_cache:/root/.cache/huggingface:ro
     ports:
       - "8000:8000"
-    
     networks:
       - network-07
-    
     depends_on:
       postgres-07:
         condition: service_healthy
       qdrant-07:
         condition: service_healthy
-    
     restart: unless-stopped
-    
     # GPU Support for RTX 5090
     deploy:
       resources:
@@ -120,13 +100,23 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 60s
+
+  # Document Uploads and Processing Service
+  uploaded_documents-07:
+    networks:
+      - network-07
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl", "-f", "http://localhost:6333/cluster"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   # Frontend Service
   frontend-07:
@@ -137,10 +127,10 @@ services:
         - BUILDKIT_INLINE_CACHE=1
     container_name: frontend-07
     environment:
-      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:8000}
-      - REACT_APP_ENVIRONMENT=${ENVIRONMENT:-production}
+      REACT_APP_API_URL: http://localhost:8000
+      REACT_APP_ENVIRONMENT: production
     volumes:
-      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+      FRONT_ROUTE: ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
     #  - "3000:80"
       - "3000:3000"
@@ -162,12 +152,13 @@ services:
       dockerfile: Dockerfile.cache-init
     container_name: cache-init-07
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - HF_HOME=/app/models_cache
-      - MODELS_CACHE_DIR=/app/models_cache
+      MODELS_CACHE_DIR: /app/models_cache
+      HF_HOME: /app/models_cache/home
+      #HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      
     volumes:
-      # vastdata Cache Mappings for Initialization
-      - /home/vastdata/rag-app-07/backend/models_cache:/app/models_cache
+    #  -  vastdata Cache Mappings for Initialization
+      - ./backend/models_cache:/app/models_cache
     #  - /home/vastdata/rag-app-07/huggingface_cache:/root/.cache/huggingface
     networks:
       - network-07
