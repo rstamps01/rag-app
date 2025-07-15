@@ -509,9 +509,9 @@ def setup_cache_environment():
         # Set up environment variables for HuggingFace
         cache_vars = {
             "HF_HOME": env_paths["hf_cache_dir"],
-            "TRANSFORMERS_CACHE": f"{env_paths["hf_cache_dir"]}/transformers",
-            "HF_DATASETS_CACHE": f"{env_paths["hf_cache_dir"]}/datasets",
-            "HF_HUB_CACHE": f"{env_paths["hf_cache_dir"]}/hub",
+            "TRANSFORMERS_CACHE": f"{env_paths['hf_cache_dir']}/transformers",
+            "HF_DATASETS_CACHE": f"{env_paths['hf_cache_dir']}/datasets",
+            "HF_HUB_CACHE": f"{env_paths['hf_cache_dir']}/hub",
             "MODELS_CACHE_DIR": env_paths["backend_cache_dir"]
         }
         
@@ -524,8 +524,8 @@ def setup_cache_environment():
         cache_dirs = [
             env_paths["backend_cache_dir"],
             env_paths["hf_cache_dir"],
-            f"{env_paths["hf_cache_dir"]}/transformers",
-            f"{env_paths["hf_cache_dir"]}/hub"
+            f"{env_paths['hf_cache_dir']}/transformers",
+            f"{env_paths['hf_cache_dir']}/hub"
         ]
         
         for cache_dir in cache_dirs:
@@ -598,8 +598,8 @@ if __name__ == "__main__":
         env = detect_environment()
         paths = get_environment_paths()
         print(f"Environment: {env}")
-        print(f"Backend cache: {paths["backend_cache_dir"]}")
-        print(f"HF cache: {paths["hf_cache_dir"]}")
+        print(f"Backend cache: {paths['backend_cache_dir']}")
+        print(f"HF cache: {paths['hf_cache_dir']}")
     
     elif args.validate:
         print("Validating cache integrity...")
