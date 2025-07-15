@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     HUGGINGFACE_TOKEN: Optional[str] = os.getenv("HUGGINGFACE_TOKEN")
     
     # LLM Configuration
+    #LLM_MODEL_NAME: str = "mistralai/Mistral-7B-Instruct-v0.2"
     LLM_MODEL_NAME: str = "mistralai/Mistral-7B-Instruct-v0.2"
     CONTEXT_WINDOW_SIZE: int = 4096
     

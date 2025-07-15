@@ -35,7 +35,8 @@ logger = logging.getLogger("model_downloader")
 
 # Model configuration
 EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # Updated to latest stable version
+LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2'"
+#LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # Updated to latest stable version
 CACHE_DIR = "/app/models_cache"
 HF_TOKEN = os.environ.get("HUGGING_FACE_HUB_TOKEN")
 

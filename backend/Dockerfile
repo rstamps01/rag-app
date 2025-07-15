@@ -78,8 +78,8 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # === Pre-download Models ===
 # Accept Hugging Face token as a build argument
 # ARG HUGGINGFACE_TOKEN
-# ARG HUGGING_FACE_HUB_TOKEN
-# ENV HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+ARG HUGGING_FACE_HUB_TOKEN
+ENV HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
 
 # Create necessary directories
 RUN mkdir -p /app/data/uploads /app/data/logs /app/models_cache /app/models_cache/home

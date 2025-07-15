@@ -6,7 +6,7 @@ from transformers import AutoModel, AutoTokenizer
 MODEL_CACHE_DIR = "/app/models_cache"
 
 def load_mistral_model():
-    model_path = f"{MODEL_CACHE_DIR}/models--mistralai--Mistral-7B-Instruct-v0.2"
+    model_path = f"{MODEL_CACHE_DIR}/mistralai/Mistral-7B-Instruct-v0.2"
     
     # Load model and tokenizer
     model = AutoModel.from_pretrained(

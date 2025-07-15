@@ -19,7 +19,8 @@ from ..crud import crud_query_history
 logger = logging.getLogger(__name__)
 
 # --- Configuration ---
-LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # Updated to latest stable version
+LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"
+#LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"  # Updated to latest stable version
 # Make context window size configurable based on model
 MAX_CONTEXT_LENGTH = getattr(settings, "MAX_CONTEXT_LENGTH", 4096)
 MAX_NEW_TOKENS = getattr(settings, "MAX_NEW_TOKENS", 512)
