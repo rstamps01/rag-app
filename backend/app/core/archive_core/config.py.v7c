@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Database Configuration - UPDATED to match docker-compose.yml
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://raguser:ragpassword@postgres-07:5432/ragdb"
+        "postgresql://rag:rag@postgres-07:5432/rag"
     )
     
     # Security Configuration

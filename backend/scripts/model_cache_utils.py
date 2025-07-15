@@ -52,14 +52,14 @@ def get_environment_paths() -> Dict[str, str]:
         # Container environment paths
         return {
             'backend_cache_dir': os.environ.get('MODELS_CACHE_DIR', '/app/models_cache'),
-            'hf_cache_dir': os.environ.get('HF_HOME', '/root/.cache/huggingface')
+            'hf_cache_dir': os.environ.get('HF_HOME', '/app/models_cache')
         }
     else:
         # Host environment paths (vastdata)
         base_dir = '/home/vastdata/rag-app-07'
         return {
             'backend_cache_dir': f'{base_dir}/backend/models_cache',
-            'hf_cache_dir': f'{base_dir}/huggingface_cache'
+            'hf_cache_dir': f'{base_dir}/backend/models_cache'
         }
 
 class ModelCacheManager:

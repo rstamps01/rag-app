@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
     
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://raguser:ragpassword@postgres:5432/ragdb")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://rag:rag@postgres:5432/rag")
     
     # Vector Database
     QDRANT_URL: str = os.getenv("QDRANT_URL", "http://qdrant:6333")

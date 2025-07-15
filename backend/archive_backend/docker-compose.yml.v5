@@ -5,16 +5,16 @@ services:
     image: postgres:14
     container_name: rag-postgres
     environment:
-      POSTGRES_USER: raguser
-      POSTGRES_PASSWORD: ragpassword
-      POSTGRES_DB: ragdb
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag
+      POSTGRES_DB: rag
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U raguser -d ragdb"]
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -45,7 +45,7 @@ services:
       - "8000:8000"
     environment:
       - HUGGING_FACE_HUB_TOKEN=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
-      - DATABASE_URL=postgresql://raguser:ragpassword@postgres:5432/ragdb
+      - DATABASE_URL=postgresql://rag:rag@postgres:5432/rag
       - QDRANT_URL=http://qdrant:6333
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
     depends_on:

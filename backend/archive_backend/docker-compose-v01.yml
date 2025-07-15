@@ -6,16 +6,16 @@ services:
     image: postgres:14
     container_name: rag-postgres-07
     environment:
-      POSTGRES_USER: raguser
-      POSTGRES_PASSWORD: ragpassword
-      POSTGRES_DB: ragdb
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag
+      POSTGRES_DB: rag
     volumes:
       - postgres_data-07:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U raguser -d ragdb"]
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,7 +53,7 @@ services:
       - HF_TOKEN=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
       
       # Database connections
-      - DATABASE_URL=postgresql://raguser:ragpassword@postgres-07:5432/ragdb
+      - DATABASE_URL=postgresql://rag:rag@postgres-07:5432/rag
       - QDRANT_URL=http://qdrant-07:6333
       
       # Security

@@ -42,7 +42,7 @@ class ModelCacheManager:
         # Set cache directories based on actual structure
         self.cache_dir = Path(cache_dir) if cache_dir else Path(self.base_dir) / "backend" / "models_cache"
         self.hf_cache_dir = Path(hf_cache_dir) if hf_cache_dir else Path(self.base_dir) / "huggingface_cache"
-        self.hf_hub_dir = self.hf_cache_dir / "hub"
+        self.hf_hub_dir = self.hf_cache_dir / "huggingface_cache"
         
         # Ensure directories exist
         self._ensure_directories()
@@ -393,7 +393,7 @@ def find_model_in_cache(
         base_dir = f"/home/{user}/rag-app-07"
         cache_dirs = [
             f"{base_dir}/backend/models_cache",
-            f"{base_dir}/huggingface_cache/hub"
+            f"{base_dir}/huggingface_cache"
         ]
     
     manager = ModelCacheManager(user=user)
@@ -412,8 +412,8 @@ def setup_cache_environment(user: str = "vastdata"):
     # Set environment variables
     os.environ["MODELS_CACHE_DIR"] = f"{base_dir}/backend/models_cache"
     os.environ["HF_HOME"] = f"{base_dir}/huggingface_cache"
-    os.environ["TRANSFORMERS_CACHE"] = f"{base_dir}/huggingface_cache/transformers"
-    os.environ["HF_HUB_CACHE"] = f"{base_dir}/huggingface_cache/hub"
+    os.environ["TRANSFORMERS_CACHE"] = f"{base_dir}/huggingface_cache"
+    os.environ["HF_HUB_CACHE"] = f"{base_dir}/huggingface_cache"
     
     logger.info(f"Cache environment set up for user: {user}")
     logger.info(f"MODELS_CACHE_DIR: {os.environ['MODELS_CACHE_DIR']}")

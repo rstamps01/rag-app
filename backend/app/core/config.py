@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Database Configuration - UPDATED to match docker-compose.yml
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://raguser:ragpassword@postgres-07:5432/ragdb"
+        "postgresql://rag:rag@postgres-07:5432/rag"
     )
     
     # Security Configuration
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     # Vector Database Configuration - COMPLETE with missing QDRANT_COLLECTION_NAME
     QDRANT_HOST: str = os.getenv("QDRANT_HOST", "qdrant-07")
     QDRANT_PORT: int = int(os.getenv("QDRANT_PORT", "6333"))
-    QDRANT_COLLECTION_NAME: str = os.getenv("QDRANT_COLLECTION_NAME", "documents")
+    QDRANT_COLLECTION_NAME: str = os.getenv("QDRANT_COLLECTION_NAME", "rag")
     
     # GPU Configuration
     ENABLE_GPU: bool = True

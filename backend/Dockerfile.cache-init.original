@@ -1,0 +1,65 @@
+# Cache Initialization Dockerfile for RAG Application
+# Specialized container for model cache setup and validation
+# Optimized for RTX 5090 GPU support
+
+FROM nvidia/cuda:12.8-devel-ubuntu22.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_VISIBLE_DEVICES=0
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-dev \
+    git \
+    curl \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up Python environment
+RUN python3 -m pip install --upgrade pip
+
+# Install PyTorch with CUDA 12.8 support for RTX 5090
+# RS - RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+
+# Install HuggingFace and other dependencies
+RUN pip3 install \
+    #transformers>=4.36.0 \
+    transformers==4.53.2 \
+    # sentence-transformers>=2.2.0 \
+    sentence-transformers>=5.0.0 \
+    # huggingface_hub>=0.19.0 \
+    huggingface-hub==0.33.4 \
+    # accelerate>=0.20.0 \
+    accelerate>=0.18.0 \
+    # safetensors>=0.4.0 \
+    safetensors==0.5.3 \
+    # tokenizers>=0.15.0 \
+    tokenizers==0.21.2
+
+# Create application directory
+WORKDIR /app
+
+# Create cache directories
+RUN mkdir -p /app/models_cache /app/scripts /root/.cache/huggingface
+
+# Copy cache utilities and initialization scripts
+COPY scripts/model_cache_utils.py /app/scripts/
+COPY scripts/initialize_model_cache.py /app/scripts/
+
+# Make scripts executable
+RUN chmod +x /app/scripts/*.py
+
+# Set up cache environment variables
+ENV HF_HOME=/root/.cache/huggingface
+ENV TRANSFORMERS_CACHE=/root/.cache/huggingface/transformers
+ENV HF_DATASETS_CACHE=/root/.cache/huggingface/datasets
+ENV HF_HUB_CACHE=/root/.cache/huggingface/hub
+ENV MODELS_CACHE_DIR=/app/models_cache
+
+# Default command runs cache initialization
+CMD ["python3", "/app/scripts/initialize_model_cache.py"]
+

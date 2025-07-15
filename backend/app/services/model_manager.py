@@ -10,7 +10,7 @@ class ModelManager:
             # "gpt-j-6b": "EleutherAI/gpt-j-6B",
             # "llama-2-7b": "meta-llama/Llama-2-7b-hf",
             # "falcon-7b": "tiiuae/falcon-7b",
-            "mistral-7b": "mistralai/Mistral-7B-v0.1" # Keep only Mistral-7B
+            "mistral-7b": "mistralai/Mistral-7B-Instruct-v0.2" # Keep only Mistral-7B
         }
         self.use_gpu = configure_gpu()
     
