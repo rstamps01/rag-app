@@ -6,7 +6,7 @@ version: '3.8'
 services:
   # PostgreSQL Database
   postgres-07:
-    image: postgres:14
+    image: postgres:15
     container_name: postgres-07
     environment:
       POSTGRES_USER: rag
@@ -20,7 +20,7 @@ services:
       - network-07
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rag"]
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -41,8 +41,8 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/cluster"]
-      interval: 30s
-      timeout: 10s
+      interval: 10s
+      timeout: 5s
       retries: 5
 
   # Backend Service with vastdata Cache Integration
@@ -66,7 +66,8 @@ services:
       
       # Model Configuration
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - LLM_MODEL_NAME=mistralai/Mistral-7B-Instruct-v0.2
+    #  - LLM_MODEL_NAME=mistralai/Mistral-7B-Instruct-v0.2
+      - LLM_MODEL_NAME=TheBloke/Mistral-7B-Instruct-v0.2-GPTQ
       - EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
       
       # Cache Configuration (vastdata specific)
