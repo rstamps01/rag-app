@@ -44,7 +44,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - HUGGING_FACE_HUB_TOKEN=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
+      - HUGGING_FACE_HUB_TOKEN=add-key
       - DATABASE_URL=postgresql://rag:rag@postgres:5432/rag
       - QDRANT_URL=http://qdrant:6333
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
