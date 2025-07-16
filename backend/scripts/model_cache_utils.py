@@ -362,72 +362,156 @@ class ModelCacheManager:
         except Exception as e:
             logger.error(f"Error getting cache info: {e}")
             return {"error": str(e)}
+
+
+          ### --------------------------------------------------###
+
+
+
+          def validate_initialization(self) -> Dict[str, Any]:
+    """
+    Validate that initialization was successful
     
-    def validate_cache_integrity(self) -> Dict[str, Any]:
-        """
-        Perform comprehensive cache integrity validation
+    Returns:
+        Validation report
+    """
+    try:
+        logger.info("Validating cache initialization...")
         
-        Returns:
-            Detailed validation report
-        """
-        try:
-            start_time = time.time()
+        validation_report = {
+            "timestamp": time.time(),
+            "validation_type": "post_initialization",
+            "models": {},
+            "summary": {
+                "total_models": 0,
+                "valid_models": 0,
+                "invalid_models": 0,
+                "missing_models": 0
+            }
+        }
+        
+        for model_name in self.cache_manager.supported_models:
+            is_cached = self.cache_manager.is_model_cached(model_name)
+            cache_path = self.cache_manager.get_model_cache_path(model_name)
             
-            validation_report = {
-                "timestamp": start_time,
-                "environment": self.environment,
-                "validation_type": "comprehensive_integrity_check",
-                "models": {},
-                "summary": {
-                    "total_models": len(self.supported_models),
-                    "valid_models": 0,
-                    "invalid_models": 0,
-                    "missing_models": 0
-                }
+            model_validation = {
+                "model_name": model_name,
+                "is_cached": is_cached,
+                "cache_path": str(cache_path) if cache_path else None,
+                "status": "valid" if is_cached else "missing"
             }
             
-            for model_name in self.supported_models:
-                model_report = {
-                    "model_name": model_name,
-                    "backend_cache": self._validate_cache_location(model_name, "backend"),
-                    "hf_cache": self._validate_cache_location(model_name, "hf"),
-                    "overall_status": "unknown"
-                }
-                
-                # Determine overall status
-                backend_valid = model_report["backend_cache"]["valid"]
-                hf_valid = model_report["hf_cache"]["valid"]
-                
-                if backend_valid or hf_valid:
-                    model_report["overall_status"] = "valid"
-                    validation_report["summary"]["valid_models"] += 1
-                else:
-                    backend_exists = model_report["backend_cache"]["exists"]
-                    hf_exists = model_report["hf_cache"]["exists"]
-                    
-                    if backend_exists or hf_exists:
-                        model_report["overall_status"] = "invalid"
-                        validation_report["summary"]["invalid_models"] += 1
-                    else:
-                        model_report["overall_status"] = "missing"
-                        validation_report["summary"]["missing_models"] += 1
-                
-                validation_report["models"][model_name] = model_report
+            validation_report["models"][model_name] = model_validation
+            validation_report["summary"]["total_models"] += 1
             
-            validation_time = time.time() - start_time
-            validation_report["validation_time_seconds"] = validation_time
-            
-            logger.info(f"Cache validation completed in {validation_time:.2f} seconds")
-            logger.info(f"Results: {validation_report['summary']['valid_models']} valid, "
-                       f"{validation_report['summary']['invalid_models']} invalid, "
-                       f"{validation_report['summary']['missing_models']} missing")
-            
-            return validation_report
-            
-        except Exception as e:
-            logger.error(f"Cache validation failed: {e}")
-            return {"error": str(e)}
-    
+            if is_cached:
+                validation_report["summary"]["valid_models"] += 1
+                logger.info(f"✅ {model_name}: Valid")
+            else:
+                validation_report["summary"]["missing_models"] += 1
+                logger.warning(f"⚠️ {model_name}: Missing")
+        
+        # FIXED: Safe dictionary access with proper f-string syntax
+        summary = validation_report.get('summary', {})
+        valid_count = summary.get('valid_models', 0)
+        missing_count = summary.get('missing_models', 0)
+        total_count = summary.get('total_models', 0)
+        
+        logger.info(f"Validation Results: {valid_count} valid, {missing_count} missing out of {total_count} total models")
+        
+        return validation_report
+        
+    except Exception as e:
+        logger.error(f"Validation failed: {e}")
+        return {"error": str(e)}
+
+
+
+          ###---------------------------------------------------###
+
+
+#
+#
+#    def validate_cache_integrity(self) -> Dict[str, Any]:
+#        """
+#        Perform comprehensive cache integrity validation
+#        
+#        Returns:
+#            Detailed validation report
+#        """
+#        try:
+#            start_time = time.time()
+#            
+#            validation_report = {
+#                "timestamp": start_time,
+#                "environment": self.environment,
+#                "validation_type": "comprehensive_integrity_check",
+#                "models": {},
+#                "summary": {
+#                    "total_models": len(self.supported_models),
+#                    "valid_models": 0,
+#                    "invalid_models": 0,
+#                    "missing_models": 0
+#                }
+#            }
+#            
+#            for model_name in self.supported_models:
+#                model_report = {
+#                    "model_name": model_name,
+#                    "backend_cache": self._validate_cache_location(model_name, "backend"),
+#                    "hf_cache": self._validate_cache_location(model_name, "hf"),
+#                    "overall_status": "unknown"
+#                }
+#                
+#                # Determine overall status
+#                backend_valid = model_report["backend_cache"]["valid"]
+#                hf_valid = model_report["hf_cache"]["valid"]
+#                
+#                if backend_valid or hf_valid:
+#                    model_report["overall_status"] = "valid"
+#                    validation_report["summary"]["valid_models"] += 1
+#                else:
+#                    backend_exists = model_report["backend_cache"]["exists"]
+#                    hf_exists = model_report["hf_cache"]["exists"]
+#                    
+#                    if backend_exists or hf_exists:
+#                        model_report["overall_status"] = "invalid"
+#                        validation_report["summary"]["invalid_models"] += 1
+#                    else:
+#                        model_report["overall_status"] = "missing"
+#                        validation_report["summary"]["missing_models"] += 1
+#                
+#                validation_report["models"][model_name] = model_report
+#            
+#            validation_time = time.time() - start_time
+#            validation_report["validation_time_seconds"] = validation_time
+#            
+#            logger.info(f"Cache validation completed in {validation_time:.2f} seconds")
+#            logger.info(f"Results: {validation_report['summary']['valid_models']} valid, "
+#                       f"{validation_report['summary']['invalid_models']} invalid, "
+#                       f"{validation_report['summary']['missing_models']} missing")
+#            
+#            return validation_report
+#            
+#        except Exception as e:
+#            logger.error(f"Cache validation failed: {e}")
+#            return {"error": str(e)}
+# 
+#            #fddd 
+#           #asdasd
+#
+#
+#
+
+
+
+
+
+
+
+
+
+
     def _validate_cache_location(self, model_name: str, cache_type: str) -> Dict[str, Any]:
         """Validate model in specific cache location"""
         try:
