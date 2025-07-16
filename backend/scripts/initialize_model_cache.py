@@ -178,8 +178,7 @@ class ModelCacheInitializer:
             # Alternative cache locations to check
             alternative_locations = [
                 "/home/vastdata/rag-app-07/backend/models_cache",
-                "/home/vastdata/rag-app-07/backend/models_cache",
-                "/mnt/wslg/distro/home/vastdata/rag-app-07/backend/models_cache",
+                "/home/vastdata/rag-app-07/huggingface_cache",
                 "/app/host_cache",  # Potential host mount
                 "/cache",  # Alternative mount point
             ]

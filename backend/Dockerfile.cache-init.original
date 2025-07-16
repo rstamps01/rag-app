@@ -1,6 +1,7 @@
 # Cache Initialization Dockerfile for RAG Application
 # Specialized container for model cache setup and validation
 # Optimized for RTX 5090 GPU support
+# Original - Dockerfile.cache-init.original
 
 FROM nvidia/cuda:12.8-devel-ubuntu22.04
 
