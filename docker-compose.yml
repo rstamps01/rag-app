@@ -40,7 +40,7 @@ services:
       - network-07
     restart: unless-stopped
     healthcheck:
-      test: ["curl", "-f", "http://localhost:6333/cluster"] 
+      test: ["CMD", "curl", "-f", "http://localhost:6333/cluster"] 
       interval: 30s
       timeout: 10s
       retries: 5
