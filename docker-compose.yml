@@ -40,11 +40,11 @@ services:
       - network-07
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/cluster"]
-      interval: 10s
-      timeout: 5s
+      test: ["curl", "-f", "http://localhost:6333/cluster"] 
+      interval: 30s
+      timeout: 10s
       retries: 5
-
+    
   # Backend Service with vastdata Cache Integration
   backend-07:
     build:
@@ -66,17 +66,16 @@ services:
       
       # Model Configuration
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-    #  - LLM_MODEL_NAME=mistralai/Mistral-7B-Instruct-v0.2
-      - LLM_MODEL_NAME=TheBloke/Mistral-7B-Instruct-v0.2-GPTQ
+      - LLM_MODEL_NAME=mistralai/Mistral-7B-Instruct-v0.2
+      #- LLM_MODEL_NAME=TheBloke/Mistral-7B-Instruct-v0.2-GPTQ
       - EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
       
       # Cache Configuration (vastdata specific)
       - MODELS_CACHE_DIR=/app/models_cache
-      - HF_HOME=/app/models_cache
       - HF_HUB_CACHE=/app/models_cache/hub
-      - HOST_HF_CACHE=/app/models_cache
-      - HOST_MODELS_CACHE=/app/models_cache
-      
+      #- HOST_HF_CACHE=/app/models_cache
+      #- HOST_MODELS_CACHE=/app/models_cache
+      #- HF_HOME=/app/models_cache 
       # Security
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ALGORITHM=HS256
@@ -94,10 +93,10 @@ services:
     
     volumes:
       # vastdata Cache Mappings (Critical for Performance)
-      - ./backend/models_cache:/app/models_cache
+      - /home/vastdata/rag-app-07/backend/models_cache:/app/models_cache
       - backend_logs-07:/app/data/logs
       - uploaded_documents-07:/app/data/uploads
-      # - /home/vastdata/rag-app-07/huggingface_cache:/root/.cache/huggingface:ro
+      - /home/vastdata/rag-app-07/huggingface_cache:/root/.cache/huggingface:ro
     
     ports:
       - "8000:8000"
@@ -165,7 +164,7 @@ services:
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - MODELS_CACHE_DIR=/app/models_cache
-      - HF_HOME=/app/models_cache
+      - HF_HOME=/app/models_cache/home
     volumes:
       # vastdata Cache Mappings for Initialization
       - ./backend/models_cache:/app/models_cache

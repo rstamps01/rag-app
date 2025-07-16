@@ -8,9 +8,11 @@ FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
 
 ARG HUGGING_FACE_HUB_TOKEN
 ENV HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_VISIBLE_DEVICES=1
 
 # === Working Directory ===
 WORKDIR /app
@@ -31,21 +33,40 @@ COPY requirements.txt .
 
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+RUN pip3 install --no-cache-dir \
+    nvidia-cublas-cu12==12.8.4.1 \
+    nvidia-cuda-cupti-cu12==12.8.90 \
+    nvidia-cuda-nvrtc-cu12==12.8.93 \
+    nvidia-cuda-runtime-cu12==12.8.90 \
+    nvidia-cudnn-cu12==9.10.2.21 \
+    nvidia-cufft-cu12==11.3.3.83 \
+    nvidia-cufile-cu12==1.13.1.3 \
+    nvidia-curand-cu12==10.3.9.90 \
+    nvidia-cusolver-cu12==11.7.3.90 \
+    nvidia-cusparse-cu12==12.5.8.93 \
+    nvidia-cusparselt-cu12==0.7.1 \
+    nvidia-nccl-cu12==2.27.3 \
+    nvidia-nvjitlink-cu12==12.8.93 \
+    nvidia-nvshmem-cu12==3.3.9 \
+    nvidia-nvtx-cu12==12.8.90 \
+    --index-url https://download.pytorch.org/whl/nightly/cu128
 
-
-
-
+RUN pip3 install --no-cache-dir \
+    torch==2.9.0.dev20250708+cu128 \
+    torchvision==0.24.0.dev20250708+cu128 \
+    pytorch-triton==3.4.0+gitae848267 \
+    --index-url https://download.pytorch.org/whl/nightly/cu128
 
 RUN mkdir -p /app/data/uploads /app/data/logs /app/models_cache /app/models_cache/home
 
-ENV HF_HOME=/app/models_cache/home
-COPY models_cache/ /app/models_cache
+#ENV HF_HOME=/app/models_cache/home
+#COPY models_cache/ /app/models_cache
 
 COPY app/ ./app/
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000""python3", "/app/scripts/initialize""model""cache.py"]
 
 
 # === System Dependencies ===

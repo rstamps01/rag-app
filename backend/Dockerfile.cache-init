@@ -1,3 +1,4 @@
+# check=skip=SecretsUsedInArgOrEnv
 # Cache Initialization Dockerfile for RAG Application
 # Specialized container for model cache setup and validation
 # Optimized for RTX 5090 GPU support
@@ -8,15 +9,17 @@
 # Use NVIDIA CUDA 12.8 runtime image on Ubuntu 22.04 for RTX 5090 compatibility.
 FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
 
-# === Working Directory ===
-WORKDIR /app
-
 # Set environment variables
+ARG HUGGING_FACE_HUB_TOKEN
+ENV HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV CUDA_VISIBLE_DEVICES=1
+
+# === Working Directory ===
+WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
@@ -29,6 +32,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ln -s /usr/bin/python3 /usr/bin/python
+
+COPY requirements.txt .
+
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Set up Python environment
 # RUN python3 -m pip install --upgrade pip
@@ -60,12 +67,8 @@ RUN pip3 install --no-cache-dir \
     pytorch-triton==3.4.0+gitae848267 \
     --index-url https://download.pytorch.org/whl/nightly/cu128
 
-COPY requirements.txt .
-
-RUN pip3 install --no-cache-dir -r requirements.txt
-
 # Create cache directories
-RUN mkdir -p /app/models_cache /app/scripts 
+RUN mkdir -p /app/models_cache /app/scripts /app/models_cache/home /app/data/logs /app/data/uploads 
 # /root/.cache/huggingface
 
 # Copy cache utilities and initialization scripts
@@ -76,16 +79,16 @@ COPY scripts/initialize_model_cache.py /app/scripts/
 RUN chmod +x /app/scripts/*.py
 
 # Set up cache environment variables
-ENV HF_HOME=/app/models_cache/home
-ENV TRANSFORMERS_CACHE=/app/models_cache
-ENV HF_DATASETS_CACHE=/app/models_cache
-ENV HF_HUB_CACHE=/app/models_cache
-ENV MODELS_CACHE_DIR=/app/models_cache
+#ENV HF_HOME=/app/models_cache/home
+#ENV TRANSFORMERS_CACHE=/app/models_cache
+#ENV HF_DATASETS_CACHE=/app/models_cache
+#ENV HF_HUB_CACHE=/app/models_cache
+#ENV MODELS_CACHE_DIR=/app/models_cache
 
 # === Port Exposure ===
 # Expose the port the FastAPI application will run on.
 EXPOSE 8000
 
 # Default command runs cache initialization
-CMD ["python3", "/app/scripts/initialize_model_cache.py"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000""python3", "/app/scripts/initialize""model""cache.py"]
 

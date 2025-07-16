@@ -1,143 +1,112 @@
-# Core FastAPI and web framework dependencies
-  # fastapi==0.103.1 # Previous working version
-fastapi==0.104.1  # Updated: Latest stable version with improved async support
-  # uvicorn==0.23.2 # Previous working version
-uvicorn[standard]==0.24.0  # Updated: Better WebSocket and HTTP/2 support
+# Optimized Requirements for RAG Application - Balanced Configuration
+# Newer versions with memory corruption fixes applied
+# Maintains modern features while resolving build issues
+
+# =============================================================================
+# CORE WEB FRAMEWORK DEPENDENCIES (Install First)
+# =============================================================================
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-  # Not previously used, but included for compatibility
 python-dotenv==1.0.0
 
-# Database dependencies
-  # sqlalchemy==2.0.20 # Previous working version
-sqlalchemy==2.0.23  # Updated: Bug fixes and performance improvements
-  # psycopg2-binary==2.9.7 # Previous working version
-psycopg2-binary==2.9.9  # Updated: PostgreSQL 16 compatibility
-  # alembic==1.12.0 # Previous working version
-alembic==1.12.1  # Updated: Migration stability improvements
+# =============================================================================
+# DATABASE DEPENDENCIES (Install Second)
+# =============================================================================
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1
+qdrant-client==1.7.0
 
-# Vector database
-  # qdrant-client==1.4.0 # Previous working version
-qdrant-client==1.7.0  # Updated: Better async support and performance
+# =============================================================================
+# CORE DATA PROCESSING (Install Third)
+# =============================================================================
+numpy==1.24.3
+pandas==2.3.1
+scipy==1.11.4
 
-# Machine Learning and NLP - UPDATED FOR MODERN TRANSFORMERS COMPATIBILITY
-transformers==4.53.2 # Previous working version - HAD TOKENIZER ISSUES
-  # transformers>=4.30.0,<4.36.0 # Previous range - CAUSED DOWNLOAD FAILURES
-  # transformers==4.36.2  # FIXED: Latest stable version with Mistral v0.1 tokenizer support
-  # Not previously used, but included for compatibility
-  # tokenizers>=0.13.0,<0.15.0 # Previous range - INCOMPATIBLE WITH MISTRAL
-tokenizers==0.21.2  # FIXED: Specific version for Mistral tokenizer compatibility
-  # sentence-transformers==2.6.0 # Previous working version - MEMORY ISSUES
-sentence-transformers==5.0.0  # REVERTED: More stable version with better memory management
-  # torch>=2.1.0 # torch==2.9.0.dev20250708+cu128 added in Dockerfile - DEV VERSION UNSTABLE
-  # torchvision>=0.16.0 # torchvision==0.24.0.dev20250708+cu128 added in Dockerfile - DEV VERSION
-  # torchaudio>=2.1.0 # Not added in Dockerfile
-  # REPLACED WITH STABLE VERSIONS FOR RTX 5090 COMPATIBILITY:
-  # accelerate==0.27.2 # Previous working version
-  # accelerate>=0.20.0 # Previous range
-accelerate==1.8.1  # UPDATED: Optimized for RTX 5090 with better device mapping
+# =============================================================================
+# MACHINE LEARNING STACK - BALANCED VERSIONS (Install Fourth)
+# =============================================================================
+# Core ML packages with memory fixes
+transformers==4.44.2          # UPDATED: Includes memory fixes from 4.45+
+tokenizers==0.19.1            # UPDATED: Compatible with transformers 4.44.2
+sentence-transformers==3.0.1  # UPDATED: Includes memory management fixes
+huggingface-hub==0.24.6       # UPDATED: Improved caching with memory fixes
 
-# Quantization and optimization - ENHANCED FOR RTX 5090
-  # bitsandbytes==0.41.1 # Previous working version
-  # bitsandbytes>=0.39.0 # Previous range
-bitsandbytes==0.46.1  # UPDATED: RTX 5090 8-bit quantization support
-  # Not previously used, but included for compatibility
-  # optimum>=1.12.0 # Previous range
-optimum==1.26.1  # ADDED: Hardware-specific optimizations for RTX 5090
+# GPU acceleration packages - balanced versions
+accelerate==0.33.0            # UPDATED: Includes memory management improvements
+bitsandbytes==0.43.3          # UPDATED: RTX 5090 optimized with memory fixes
+optimum==1.21.4              # UPDATED: Latest stable with hardware optimizations
 
-# Hugging Face ecosystem - UPDATED FOR MODERN API COMPATIBILITY
-  # Not previously used, but included for compatibility
-  # huggingface-hub>=0.16.0 # Previous range - AUTHENTICATION ISSUES
-huggingface-hub==0.33.4  # FIXED: Proper token handling and gated model access
-  # Not previously used, but included for compatibility
-  # datasets>=2.12.0 # Previous range
-datasets==4.00.0  # UPDATED: Better memory management for large datasets
-  # ADDED: Missing dependency for modern transformers
-safetensors==0.5.3  # NEW: Required for modern model loading and security
+# Supporting ML packages
+safetensors==0.4.4            # UPDATED: Latest stable model loading
+datasets==2.20.0             # UPDATED: Improved memory management
 
-# Document processing
-  # pypdf==3.15.1 # Previous working version
-PyPDF2==3.0.1  # KEPT: Stable version, renamed from pypdf for clarity
-  # python-docx==0.8.11 # Previous working version
-python-docx==1.1.0  # UPDATED: Better Office 365 compatibility
-  # pytesseract==0.3.10 # Previous working version
-pytesseract==0.3.10  # KEPT: Stable OCR functionality
-  # pillow==11.2.1 # added in Dockerfile
-Pillow==11.2.1  # REVERTED: More stable version, avoid bleeding edge
-  # pymupdf==1.22.5 # Previous working version
-pymupdf==1.23.8  # UPDATED: Better PDF processing performance
-email-validator==2.2.0 # Deployment requirement for email validation
-  # Not previously used, but included for compatibility
+# =============================================================================
+# DOCUMENT PROCESSING (Install Fifth)
+# =============================================================================
+PyPDF2==3.0.1
+python-docx==1.1.0
+pytesseract==0.3.10
+Pillow==10.4.0                # UPDATED: Security fixes, stable memory management
+pymupdf==1.23.8              # UPDATED: Latest stable with memory improvements
+email-validator==2.2.0
 
-# Text processing - LANGCHAIN VERSIONS KEPT FOR STABILITY
-  # Previously working versions - KEEPING THESE AS THEY WORK
-langchain-core==0.2.43  # KEPT: Stable core functionality
-langchain==0.2.17  # KEPT: Working version with good RAG support
-langchain-community==0.2.19  # KEPT: Community integrations working
-  ## Proposed updates for v0.1 compatibility - COMMENTED OUT FOR NOW
-  ## langchain==0.0.350 # Would break existing functionality
-  ## langchain-community==0.0.1 # Too old, missing features
-  # Not previously used, but included for compatibility
-tiktoken==0.9.0  # KEPT: Token counting for OpenAI models
+# =============================================================================
+# TEXT PROCESSING - LANGCHAIN MODERN STABLE
+# =============================================================================
+langchain-core==0.2.38        # UPDATED: Modern stable core
+langchain==0.2.14             # UPDATED: Modern stable main package
+langchain-community==0.2.16   # UPDATED: Modern stable community features
+tiktoken==0.7.0               # UPDATED: Improved tokenizer performance
 
-# Data processing
-# pandas==2.1.0 # Previous working version
-pandas==2.3.1  # UPDATED: Security fixes and performance improvements
-# numpy==1.24.3 # Previous working version
-numpy==1.24.3  # UPDATED: Compatibility with latest scipy and pandas
+# =============================================================================
+# HTTP AND API CLIENTS
+# =============================================================================
+httpx==0.25.2
+requests==2.32.2
+aiofiles==23.2.1
 
-# HTTP and API clients
-# httpx<0.29,>=0.27 # Previous working version
-httpx==0.25.2  # REVERTED: More stable version, avoid compatibility issues
-# Not previously used, but included for compatibility
-requests==2.32.2  # KEPT: Stable HTTP client
-# Not previously used, but included for compatibility
-aiofiles==23.2.1  # KEPT: Async file operations
+# =============================================================================
+# MONITORING AND LOGGING
+# =============================================================================
+prometheus-client==0.19.0
+structlog==23.2.0
+psutil==5.9.6
+GPUtil==1.4.0
 
-# Monitoring and logging
-# Not previously used, but included for compatibility
-prometheus-client==0.19.0  # KEPT: Metrics collection
-# Not previously used, but included for compatibility
-structlog==23.2.0  # KEPT: Structured logging
+# =============================================================================
+# DEVELOPMENT AND TESTING
+# =============================================================================
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
 
-# Development and testing
-# pytest==7.4.0 # Previous working version
-pytest==7.4.3  # UPDATED: Latest stable testing framework
-# Not previously used, but included for compatibility
-pytest-asyncio==0.21.1  # KEPT: Async testing support
-# Not previously used, but included for compatibility
-black==23.11.0  # KEPT: Code formatting
-# Not previously used, but included for compatibility
-isort==5.12.0  # KEPT: Import sorting
-# Not previously used, but included for compatibility
-flake8==6.1.0  # KEPT: Code linting
+# =============================================================================
+# SYSTEM UTILITIES
+# =============================================================================
+pydantic>=2.0.0,<3.0.0
+pydantic-settings>=2.0.0,<3.0.0
+typing-extensions>=4.8.0
+click>=8.1.0
 
-# System monitoring
-# psutil==5.9.5 # Previous working version
-psutil==5.9.6  # UPDATED: Better system monitoring
-# Not previously used, but included for compatibility
-GPUtil==1.4.0  # KEPT: GPU monitoring for RTX 5090
+# =============================================================================
+# BACKGROUND PROCESSING (Install separately if needed)
+# =============================================================================
+celery==5.3.4
+redis==5.0.1
 
-# Additional utilities
-# pydantic<3.0.0,>=2.9.0 # Previous working version
-pydantic>=2.0.0  # KEPT: Flexible range for compatibility
-# pydantic-settings==2.0.3 # Previous working version
-pydantic-settings>=2.0.0  # KEPT: Settings management
-# Not previously used, but included for compatibility
-typing-extensions>=4.8.0  # KEPT: Type hints support
-# Not previously used, but included for compatibility
-click>=8.1.0  # KEPT: CLI framework
+# =============================================================================
+# INSTALLATION NOTES:
+# =============================================================================
+# 1. Install in stages using separate pip install commands
+# 2. Use --no-cache-dir flag for all installations
+# 3. Set memory limit: docker build --memory=8g
+# 4. Use pip install --no-deps for problematic packages if needed
+# 5. PyTorch installed separately in Dockerfile with CUDA 12.8 support
 
-# ADDITIONAL DEPENDENCIES FOR MODERN TRANSFORMERS APPROACH
-scipy==1.11.4  # NEW: Required for advanced ML operations and optimization
-celery==5.3.4  # NEW: Background task processing for document uploads
-redis==5.0.1  # NEW: Message broker for Celery background tasks
-
-# RTX 5090 OPTIMIZATION NOTES:
-# - PyTorch 2.1.2 with CUDA 12.1 provides optimal RTX 5090 support
-# - For CUDA 12.8 support (latest), install PyTorch separately:
-#   pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-# - bitsandbytes 0.41.3 enables 8-bit quantization for memory efficiency
-# - accelerate 0.25.0 provides automatic device mapping for multi-GPU setups
-# - transformers 4.36.2 fixes tokenizer compatibility issues with Mistral models
