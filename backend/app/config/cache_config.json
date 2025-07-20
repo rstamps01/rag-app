@@ -1,0 +1,67 @@
+{
+  "cache_settings": {
+    "base_cache_dir": "/app/models_cache",
+    "hf_cache_dir": "/app/models_cache/hub",
+    "transformers_cache_dir": "/app/models_cache/transformers",
+    "max_cache_size_gb": 50,
+    "cleanup_threshold_gb": 40,
+    "enable_symlinks": false,
+    "validate_on_startup": true
+  },
+  "models": {
+    "embedding_model": {
+      "name": "sentence-transformers/all-MiniLM-L6-v2",
+      "cache_subdir": "models--sentence-transformers--all-MiniLM-L6-v2",
+      "required_files": [
+        "config.json",
+        "pytorch_model.bin",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.txt"
+      ],
+      "optional_files": [
+        "modules.json",
+        "sentence_bert_config.json"
+      ]
+    },
+    "llm_model": {
+      "name": "mistralai/Mistral-7B-Instruct-v0.2",
+      "cache_subdir": "models--mistralai--Mistral-7B-Instruct-v0.2",
+      "required_files": [
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "pytorch_model.bin"
+      ],
+      "optional_files": [
+        "generation_config.json",
+        "special_tokens_map.json"
+      ]
+    }
+  },
+  "initialization": {
+    "download_on_missing": true,
+    "verify_integrity": true,
+    "create_completion_marker": true,
+    "completion_marker_file": ".initialization_complete",
+    "timeout_seconds": 1800,
+    "retry_attempts": 3,
+    "retry_delay_seconds": 10
+  },
+  "logging": {
+    "level": "INFO",
+    "log_cache_operations": true,
+    "log_file_operations": false,
+    "log_validation_details": true
+  },
+  "gpu_settings": {
+    "enable_gpu_cache": true,
+    "gpu_memory_fraction": 0.8,
+    "allow_memory_growth": true
+  },
+  "environment": {
+    "hf_hub_token_required": true,
+    "offline_mode": false,
+    "trust_remote_code": false
+  }
+}

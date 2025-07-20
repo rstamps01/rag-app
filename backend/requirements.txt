@@ -31,19 +31,19 @@ scipy==1.11.4
 # MACHINE LEARNING STACK - BALANCED VERSIONS (Install Fourth)
 # =============================================================================
 # Core ML packages with memory fixes
-transformers==4.44.2          # UPDATED: Includes memory fixes from 4.45+
-tokenizers==0.19.1            # UPDATED: Compatible with transformers 4.44.2
-sentence-transformers==3.0.1  # UPDATED: Includes memory management fixes
-huggingface-hub==0.24.6       # UPDATED: Improved caching with memory fixes
+transformers==4.36.2          # UPDATED: Includes memory fixes from 4.45+
+tokenizers                    # UPDATED: Compatible with transformers 4.44.2
+sentence-transformers         # UPDATED: Includes memory management fixes
+huggingface-hub               # UPDATED: Improved caching with memory fixes
 
 # GPU acceleration packages - balanced versions
 accelerate==0.33.0            # UPDATED: Includes memory management improvements
 bitsandbytes==0.43.3          # UPDATED: RTX 5090 optimized with memory fixes
-optimum==1.21.4              # UPDATED: Latest stable with hardware optimizations
+optimum==1.21.4               # UPDATED: Latest stable with hardware optimizations
 
 # Supporting ML packages
 safetensors==0.4.4            # UPDATED: Latest stable model loading
-datasets==2.20.0             # UPDATED: Improved memory management
+datasets==2.20.0              # UPDATED: Improved memory management
 
 # =============================================================================
 # DOCUMENT PROCESSING (Install Fifth)
@@ -52,16 +52,16 @@ PyPDF2==3.0.1
 python-docx==1.1.0
 pytesseract==0.3.10
 Pillow==10.4.0                # UPDATED: Security fixes, stable memory management
-pymupdf==1.23.8              # UPDATED: Latest stable with memory improvements
+pymupdf==1.23.8               # UPDATED: Latest stable with memory improvements
 email-validator==2.2.0
 
 # =============================================================================
 # TEXT PROCESSING - LANGCHAIN MODERN STABLE
 # =============================================================================
-langchain-core==0.2.38        # UPDATED: Modern stable core
-langchain==0.2.14             # UPDATED: Modern stable main package
-langchain-community==0.2.16   # UPDATED: Modern stable community features
-tiktoken==0.7.0               # UPDATED: Improved tokenizer performance
+langchain-core==0.2.43             # UPDATED: Modern stable core
+langchain==0.2.17                  # UPDATED: Modern stable main package
+langchain-community==0.2.19        # UPDATED: Modern stable community features
+tiktoken==0.9.0                    # UPDATED: Improved tokenizer performance
 
 # =============================================================================
 # HTTP AND API CLIENTS

@@ -1,0 +1,65 @@
+# Fixed Requirements for RAG Application
+# Stable versions that prevent memory corruption with CUDA 12.8
+
+# Core ML Libraries (stable versions)
+transformers==4.53.2 #Added
+# transformers==4.35.2
+sentence-transformers==2.2.2
+tokenizers==0.21.2 #Added
+accelerate==1.8.1 #Added
+bitsandbytes==0.46.1 #Added
+optimum==1.26.1 #Added
+datasets==4.00.0 #Added
+safetensors==0.5.3 #Added
+Pillow==11.2.1 #Added
+# email-validator==2.2.0 #Added
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.23
+alembic==1.13.1
+
+# Vector Database
+qdrant-client==1.7.0
+
+# Hugging Face ecosystem
+huggingface-hub==0.33.4 #Added
+safetensors==0.5.3 #Added
+
+# Document Processing
+pypdf2==3.0.1
+python-multipart==0.0.6
+pymupdf==1.23.8 #Added
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# HTTP Client
+httpx==0.25.2
+#requests==2.31.0
+requests==2.32.2 #Added
+
+# Utilities
+python-dotenv==1.0.0
+loguru==0.7.2
+numpy==1.24.4
+pandas==2.1.4
+
+# Development (optional)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Email validation (fixes previous error)
+email-validator==2.1.0
+
+# Additional stability packages
+packaging==23.2
+typing-extensions==4.8.0

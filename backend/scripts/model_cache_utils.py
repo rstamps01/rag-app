@@ -364,70 +364,66 @@ class ModelCacheManager:
             return {"error": str(e)}
 
 
-          ### --------------------------------------------------###
+    ### --------------------------------------------------###
 
+    def validate_initialization(self) -> Dict[str, Any]:
+        """
+        Validate that initialization was successful
 
+        Returns:
+            Validation report
+        """
+        try:
+            logger.info("Validating cache initialization...")
 
-          def validate_initialization(self) -> Dict[str, Any]:
-    """
-    Validate that initialization was successful
-    
-    Returns:
-        Validation report
-    """
-    try:
-        logger.info("Validating cache initialization...")
-        
-        validation_report = {
-            "timestamp": time.time(),
-            "validation_type": "post_initialization",
-            "models": {},
-            "summary": {
-                "total_models": 0,
-                "valid_models": 0,
-                "invalid_models": 0,
-                "missing_models": 0
+            validation_report = {
+                "timestamp": time.time(),
+                "validation_type": "post_initialization",
+                "models": {},
+                "summary": {
+                    "total_models": 0,
+                    "valid_models": 0,
+                    "invalid_models": 0,
+                    "missing_models": 0
+                }
             }
-        }
-        
-        for model_name in self.cache_manager.supported_models:
-            is_cached = self.cache_manager.is_model_cached(model_name)
-            cache_path = self.cache_manager.get_model_cache_path(model_name)
-            
-            model_validation = {
-                "model_name": model_name,
-                "is_cached": is_cached,
-                "cache_path": str(cache_path) if cache_path else None,
-                "status": "valid" if is_cached else "missing"
-            }
-            
-            validation_report["models"][model_name] = model_validation
-            validation_report["summary"]["total_models"] += 1
-            
-            if is_cached:
-                validation_report["summary"]["valid_models"] += 1
-                logger.info(f"✅ {model_name}: Valid")
-            else:
-                validation_report["summary"]["missing_models"] += 1
-                logger.warning(f"⚠️ {model_name}: Missing")
-        
-        # FIXED: Safe dictionary access with proper f-string syntax
-        summary = validation_report.get('summary', {})
-        valid_count = summary.get('valid_models', 0)
-        missing_count = summary.get('missing_models', 0)
-        total_count = summary.get('total_models', 0)
-        
-        logger.info(f"Validation Results: {valid_count} valid, {missing_count} missing out of {total_count} total models")
-        
-        return validation_report
-        
-    except Exception as e:
-        logger.error(f"Validation failed: {e}")
-        return {"error": str(e)}
 
+            for model_name in self.supported_models:
+                is_cached = self.is_model_cached(model_name)
+                cache_path = self.get_model_cache_path(model_name)
 
+                model_validation = {
+                    "model_name": model_name,
+                    "is_cached": is_cached,
+                    "cache_path": str(cache_path) if cache_path else None,
+                    "status": "valid" if is_cached else "missing"
+                }
 
-          ###---------------------------------------------------###
+                validation_report["models"][model_name] = model_validation
+                validation_report["summary"]["total_models"] += 1
+
+                if is_cached:
+                    validation_report["summary"]["valid_models"] += 1
+                    logger.info(f"✅ {model_name}: Valid")
+                else:
+                    validation_report["summary"]["missing_models"] += 1
+                    logger.warning(f"⚠️ {model_name}: Missing")
+
+            # FIXED: Safe dictionary access with proper f-string syntax
+            summary = validation_report.get('summary', {})
+            valid_count = summary.get('valid_models', 0)
+            missing_count = summary.get('missing_models', 0)
+            total_count = summary.get('total_models', 0)
+
+            logger.info(f"Validation Results: {valid_count} valid, {missing_count} missing out of {total_count} total models")
+
+            return validation_report
+
+        except Exception as e:
+            logger.error(f"Validation failed: {e}")
+            return {"error": str(e)}
+
+    ###---------------------------------------------------###
 
 
 #

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Model Cache Initialization Script
-Initializes and validates model cache for RAG application
-Ensures models are properly cached and accessible for container deployment
+Enhanced Model Cache Initialization Script
+With comprehensive error handling, logging, and validation
 """
 
 import os
@@ -10,345 +9,374 @@ import sys
 import json
 import logging
 import time
-import shutil
+import traceback
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, Optional
 
-# Add current directory to path for imports
-sys.path.insert(0, '/app/scripts')
+# Configure comprehensive logging
+def setup_logging():
+    """Setup comprehensive logging configuration"""
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    
+    # Create logs directory if it doesn't exist
+    log_dir = Path('/app/logs')
+    log_dir.mkdir(exist_ok=True)
+    
+    # Configure root logger
+    logging.basicConfig(
+        level=logging.INFO,
+        format=log_format,
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler(log_dir / 'cache_init.log', mode='w')
+        ]
+    )
+    
+    return logging.getLogger(__name__)
 
-try:
-    from model_cache_utils import ModelCacheManager, setup_cache_environment
-except ImportError:
-    # Fallback if running outside container
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from model_cache_utils import ModelCacheManager, setup_cache_environment
+# Initialize logger
+logger = setup_logging()
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+class CacheInitializationError(Exception):
+    """Custom exception for cache initialization errors"""
+    pass
 
-class ModelCacheInitializer:
+class EnhancedCacheInitializer:
     """
-    Model Cache Initialization and Validation System
-    Ensures all required models are properly cached and accessible
+    Enhanced cache initializer with comprehensive error handling
     """
     
     def __init__(self):
-        """Initialize the cache initializer"""
-        self.cache_manager = ModelCacheManager()
-        self.initialization_report = {
-            "timestamp": time.time(),
-            "initialization_type": "container_startup",
-            "models": {},
-            "summary": {
-                "total_models": 0,
-                "successfully_initialized": 0,
-                "failed_initialization": 0,
-                "already_cached": 0
-            }
+        """Initialize the enhanced cache initializer"""
+        self.start_time = time.time()
+        self.cache_dir = Path(os.environ.get('HF_HOME', '/app/models_cache'))
+        self.status = {
+            'initialization_started': True,
+            'environment_validated': False,
+            'python_validated': False,
+            'cache_directories_created': False,
+            'dependencies_validated': False,
+            'models_discovered': False,
+            'initialization_completed': False,
+            'errors': [],
+            'warnings': []
         }
         
-        logger.info("ModelCacheInitializer started")
-        logger.info(f"Backend cache: {self.cache_manager.backend_cache_dir}")
-        logger.info(f"HuggingFace cache: {self.cache_manager.hf_cache_dir}")
+        logger.info("Enhanced Cache Initializer started")
+        logger.info(f"Cache directory: {self.cache_dir}")
     
-    def initialize_all_models(self) -> Dict[str, Any]:
+    def validate_environment(self) -> bool:
         """
-        Initialize all supported models in cache
+        Comprehensive environment validation
         
         Returns:
-            Initialization report with status for each model
+            True if environment is valid, False otherwise
         """
         try:
-            logger.info("Starting model cache initialization...")
-            start_time = time.time()
+            logger.info("=== Environment Validation ===")
             
-            # Set up cache environment
-            setup_cache_environment()
+            # Check Python version and executable
+            python_version = sys.version
+            python_executable = sys.executable
+            logger.info(f"Python version: {python_version}")
+            logger.info(f"Python executable: {python_executable}")
             
-            # Initialize each supported model
-            for model_name in self.cache_manager.supported_models:
-                logger.info(f"Initializing model: {model_name}")
-                model_result = self._initialize_model(model_name)
-                self.initialization_report["models"][model_name] = model_result
-                self.initialization_report["summary"]["total_models"] += 1
-                
-                if model_result["status"] == "success":
-                    self.initialization_report["summary"]["successfully_initialized"] += 1
-                elif model_result["status"] == "already_cached":
-                    self.initialization_report["summary"]["already_cached"] += 1
+            # Verify python symlink works
+            import subprocess
+            try:
+                result = subprocess.run(['python', '--version'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    logger.info(f"Python symlink working: {result.stdout.strip()}")
+                    self.status['python_validated'] = True
                 else:
-                    self.initialization_report["summary"]["failed_initialization"] += 1
+                    logger.warning(f"Python symlink failed: {result.stderr}")
+                    self.status['warnings'].append("Python symlink not working")
+            except Exception as e:
+                logger.warning(f"Python symlink test failed: {e}")
+                self.status['warnings'].append(f"Python symlink test failed: {e}")
             
-            # Calculate total time
-            total_time = time.time() - start_time
-            self.initialization_report["total_time_seconds"] = total_time
+            # Check environment variables
+            required_env_vars = ['HF_HOME', 'MODELS_CACHE_DIR']
+            optional_env_vars = ['HUGGING_FACE_HUB_TOKEN', 'CUDA_VISIBLE_DEVICES']
             
-            # Log summary
-            summary = self.initialization_report["summary"]
-            logger.info(f"Cache initialization completed in {total_time:.2f} seconds")
-            logger.info(f"Results: {summary['successfully_initialized']} initialized, "
-                       f"{summary['already_cached']} already cached, "
-                       f"{summary['failed_initialization']} failed")
+            for var in required_env_vars:
+                value = os.environ.get(var)
+                if value:
+                    logger.info(f"{var}: {value}")
+                else:
+                    error_msg = f"Required environment variable {var} not set"
+                    logger.error(error_msg)
+                    self.status['errors'].append(error_msg)
+                    return False
             
-            return self.initialization_report
+            for var in optional_env_vars:
+                value = os.environ.get(var, 'Not set')
+                logger.info(f"{var}: {value}")
             
-        except Exception as e:
-            logger.error(f"Cache initialization failed: {e}")
-            self.initialization_report["error"] = str(e)
-            return self.initialization_report
-    
-    def _initialize_model(self, model_name: str) -> Dict[str, Any]:
-        """
-        Initialize a specific model in cache
-        
-        Args:
-            model_name: Model identifier
+            # Check cache directory
+            logger.info(f"Cache directory exists: {self.cache_dir.exists()}")
             
-        Returns:
-            Model initialization result
-        """
-        try:
-            model_result = {
-                "model_name": model_name,
-                "status": "unknown",
-                "cache_locations": {
-                    "backend": False,
-                    "hf": False
-                },
-                "actions_taken": [],
-                "errors": []
-            }
+            if not self.cache_dir.exists():
+                logger.info("Creating cache directory...")
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
             
-            # Check if model is already cached
-            backend_cached = self.cache_manager._is_model_in_backend_cache(model_name)
-            hf_cached = self.cache_manager._is_model_in_hf_cache(model_name)
+            # Test write permissions
+            test_file = self.cache_dir / 'test_write.tmp'
+            try:
+                test_file.write_text('test')
+                test_file.unlink()
+                logger.info("Cache directory is writable")
+                self.status['cache_directories_created'] = True
+            except Exception as e:
+                error_msg = f"Cache directory not writable: {e}"
+                logger.error(error_msg)
+                self.status['errors'].append(error_msg)
+                return False
             
-            model_result["cache_locations"]["backend"] = backend_cached
-            model_result["cache_locations"]["hf"] = hf_cached
+            # Check CUDA availability (optional)
+            try:
+                import torch
+                cuda_available = torch.cuda.is_available()
+                logger.info(f"CUDA available: {cuda_available}")
+                if cuda_available:
+                    gpu_count = torch.cuda.device_count()
+                    logger.info(f"GPU count: {gpu_count}")
+                    for i in range(gpu_count):
+                        gpu_name = torch.cuda.get_device_name(i)
+                        logger.info(f"GPU {i}: {gpu_name}")
+            except ImportError:
+                logger.warning("PyTorch not available for CUDA check")
+                self.status['warnings'].append("PyTorch not available")
+            except Exception as e:
+                logger.warning(f"CUDA check failed: {e}")
+                self.status['warnings'].append(f"CUDA check failed: {e}")
             
-            if backend_cached or hf_cached:
-                model_result["status"] = "already_cached"
-                model_result["actions_taken"].append("Model found in existing cache")
-                logger.info(f"✅ Model {model_name} already cached")
-                return model_result
-            
-            # Try to copy from alternative cache locations
-            copy_success = self._try_copy_from_alternative_locations(model_name, model_result)
-            
-            if copy_success:
-                model_result["status"] = "success"
-                logger.info(f"✅ Model {model_name} successfully initialized")
-            else:
-                # Model not available - this is expected for fresh deployments
-                model_result["status"] = "not_available"
-                model_result["actions_taken"].append("Model not found in any cache location")
-                logger.warning(f"⚠️ Model {model_name} not available in cache")
-                logger.info("This is normal for fresh deployments - models will be downloaded on first use")
-            
-            return model_result
+            self.status['environment_validated'] = True
+            logger.info("✅ Environment validation completed successfully")
+            return True
             
         except Exception as e:
-            logger.error(f"Failed to initialize model {model_name}: {e}")
-            return {
-                "model_name": model_name,
-                "status": "error",
-                "error": str(e),
-                "cache_locations": {"backend": False, "hf": False},
-                "actions_taken": [],
-                "errors": [str(e)]
-            }
+            error_msg = f"Environment validation failed: {e}"
+            logger.error(error_msg)
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            self.status['errors'].append(error_msg)
+            return False
     
-    def _try_copy_from_alternative_locations(self, model_name: str, model_result: Dict[str, Any]) -> bool:
+    def validate_dependencies(self) -> bool:
         """
-        Try to copy model from alternative cache locations
+        Validate required Python dependencies
         
-        Args:
-            model_name: Model identifier
-            model_result: Result dictionary to update
-            
         Returns:
-            True if copy was successful, False otherwise
+            True if dependencies are valid, False otherwise
         """
         try:
-            # Alternative cache locations to check
-            alternative_locations = [
-                "/home/vastdata/rag-app-07/backend/models_cache",
-                "/home/vastdata/rag-app-07/huggingface_cache",
-                "/app/host_cache",  # Potential host mount
-                "/cache",  # Alternative mount point
+            logger.info("=== Dependency Validation ===")
+            
+            required_packages = [
+                'torch',
+                'transformers',
+                'sentence_transformers',
+                'huggingface_hub'
             ]
             
-            cache_name = self.cache_manager.supported_models[model_name]["cache_name"]
+            for package in required_packages:
+                try:
+                    __import__(package)
+                    logger.info(f"✅ {package}: Available")
+                except ImportError as e:
+                    logger.warning(f"⚠️ {package}: Not available - {e}")
+                    self.status['warnings'].append(f"Package {package} not available")
             
-            for alt_location in alternative_locations:
-                alt_path = Path(alt_location)
-                if not alt_path.exists():
-                    continue
-                
-                # Check for model in this location
-                model_path = alt_path / cache_name
-                if model_path.exists():
-                    logger.info(f"Found model {model_name} in {alt_location}")
-                    
-                    # Try to copy to backend cache
-                    target_path = self.cache_manager.backend_cache_dir / cache_name
-                    
-                    try:
-                        if not target_path.exists():
-                            logger.info(f"Copying model from {model_path} to {target_path}")
-                            shutil.copytree(model_path, target_path)
-                            model_result["actions_taken"].append(f"Copied from {alt_location}")
-                            
-                            # Validate the copy
-                            if self.cache_manager._is_model_in_backend_cache(model_name):
-                                logger.info(f"✅ Successfully copied {model_name} to backend cache")
-                                return True
-                            else:
-                                logger.warning(f"Copy validation failed for {model_name}")
-                                model_result["errors"].append("Copy validation failed")
-                        else:
-                            logger.info(f"Target already exists: {target_path}")
-                            model_result["actions_taken"].append("Target already exists")
-                            return True
-                            
-                    except Exception as copy_error:
-                        logger.warning(f"Failed to copy from {alt_location}: {copy_error}")
-                        model_result["errors"].append(f"Copy failed: {copy_error}")
-                        continue
-            
-            return False
+            self.status['dependencies_validated'] = True
+            logger.info("✅ Dependency validation completed")
+            return True
             
         except Exception as e:
-            logger.error(f"Error in copy from alternative locations: {e}")
-            model_result["errors"].append(f"Alternative copy error: {e}")
+            error_msg = f"Dependency validation failed: {e}"
+            logger.error(error_msg)
+            self.status['errors'].append(error_msg)
             return False
     
-    def validate_initialization(self) -> Dict[str, Any]:
+    def discover_existing_models(self) -> Dict[str, Any]:
         """
-        Validate that initialization was successful
+        Discover existing models in cache
         
         Returns:
-            Validation report
+            Dictionary with model discovery results
         """
         try:
-            logger.info("Validating cache initialization...")
+            logger.info("=== Model Discovery ===")
             
-            validation_report = {
-                "timestamp": time.time(),
-                "validation_type": "post_initialization",
-                "models": {},
-                "summary": {
-                    "total_models": 0,
-                    "valid_models": 0,
-                    "invalid_models": 0,
-                    "missing_models": 0
-                }
+            discovery_results = {
+                'total_directories': 0,
+                'potential_models': [],
+                'cache_size_mb': 0
             }
             
-            for model_name in self.cache_manager.supported_models:
-                is_cached = self.cache_manager.is_model_cached(model_name)
-                cache_path = self.cache_manager.get_model_cache_path(model_name)
+            if self.cache_dir.exists():
+                # Count directories and estimate size
+                for item in self.cache_dir.iterdir():
+                    if item.is_dir():
+                        discovery_results['total_directories'] += 1
+                        discovery_results['potential_models'].append(item.name)
+                        
+                        # Estimate size
+                        try:
+                            size = sum(f.stat().st_size for f in item.rglob('*') if f.is_file())
+                            discovery_results['cache_size_mb'] += size / (1024 * 1024)
+                        except Exception:
+                            pass
                 
-                model_validation = {
-                    "model_name": model_name,
-                    "is_cached": is_cached,
-                    "cache_path": str(cache_path) if cache_path else None,
-                    "status": "valid" if is_cached else "missing"
-                }
+                logger.info(f"Found {discovery_results['total_directories']} directories in cache")
+                logger.info(f"Estimated cache size: {discovery_results['cache_size_mb']:.1f} MB")
                 
-                validation_report["models"][model_name] = model_validation
-                validation_report["summary"]["total_models"] += 1
-                
-                if is_cached:
-                    validation_report["summary"]["valid_models"] += 1
-                    logger.info(f"✅ {model_name}: Valid")
+                if discovery_results['potential_models']:
+                    logger.info("Potential models found:")
+                    for model in discovery_results['potential_models'][:10]:  # Show first 10
+                        logger.info(f"  - {model}")
+                    if len(discovery_results['potential_models']) > 10:
+                        logger.info(f"  ... and {len(discovery_results['potential_models']) - 10} more")
                 else:
-                    validation_report["summary"]["missing_models"] += 1
-                    logger.warning(f"⚠️ {model_name}: Missing")
+                    logger.info("No existing models found in cache")
+            else:
+                logger.info("Cache directory does not exist")
             
-            return validation_report
+            self.status['models_discovered'] = True
+            return discovery_results
             
         except Exception as e:
-            logger.error(f"Validation failed: {e}")
-            return {"error": str(e)}
+            error_msg = f"Model discovery failed: {e}"
+            logger.error(error_msg)
+            self.status['errors'].append(error_msg)
+            return {'error': error_msg}
     
-    def create_cache_status_file(self) -> str:
+    def create_status_report(self, discovery_results: Dict[str, Any]) -> str:
         """
-        Create a cache status file for monitoring
+        Create comprehensive status report
         
+        Args:
+            discovery_results: Results from model discovery
+            
         Returns:
             Path to created status file
         """
         try:
-            status_file = Path("/app/cache_status.json")
+            status_file = self.cache_dir / 'initialization_status.json'
             
-            status_data = {
-                "timestamp": time.time(),
-                "cache_info": self.cache_manager.get_cache_info(),
-                "initialization_report": self.initialization_report,
-                "validation_report": self.validate_initialization()
+            total_time = time.time() - self.start_time
+            
+            status_report = {
+                'timestamp': time.time(),
+                'initialization_time_seconds': total_time,
+                'status': self.status,
+                'discovery_results': discovery_results,
+                'environment': {
+                    'python_version': sys.version,
+                    'python_executable': sys.executable,
+                    'cache_directory': str(self.cache_dir),
+                    'environment_variables': {
+                        'HF_HOME': os.environ.get('HF_HOME'),
+                        'MODELS_CACHE_DIR': os.environ.get('MODELS_CACHE_DIR'),
+                        'CUDA_VISIBLE_DEVICES': os.environ.get('CUDA_VISIBLE_DEVICES'),
+                        'HUGGING_FACE_HUB_TOKEN': 'SET' if os.environ.get('HUGGING_FACE_HUB_TOKEN') else 'NOT_SET'
+                    }
+                }
             }
             
             with open(status_file, 'w') as f:
-                json.dump(status_data, f, indent=2)
+                json.dump(status_report, f, indent=2)
             
-            logger.info(f"Cache status file created: {status_file}")
+            logger.info(f"Status report created: {status_file}")
             return str(status_file)
             
         except Exception as e:
-            logger.error(f"Failed to create status file: {e}")
+            logger.error(f"Failed to create status report: {e}")
             return ""
+    
+    def run_initialization(self) -> int:
+        """
+        Run complete cache initialization process
+        
+        Returns:
+            Exit code (0 for success, 1 for failure)
+        """
+        try:
+            logger.info("=== Cache Initialization Started ===")
+            
+            # Step 1: Validate environment
+            if not self.validate_environment():
+                logger.error("❌ Environment validation failed")
+                return 1
+            
+            # Step 2: Validate dependencies
+            if not self.validate_dependencies():
+                logger.error("❌ Dependency validation failed")
+                return 1
+            
+            # Step 3: Discover existing models
+            discovery_results = self.discover_existing_models()
+            
+            # Step 4: Create status report
+            status_file = self.create_status_report(discovery_results)
+            
+            # Step 5: Final validation
+            total_time = time.time() - self.start_time
+            
+            self.status['initialization_completed'] = True
+            
+            # Print summary
+            print("\n" + "="*50)
+            print("CACHE INITIALIZATION SUMMARY")
+            print("="*50)
+            print(f"✅ Initialization completed in {total_time:.2f} seconds")
+            print(f"✅ Environment validated: {self.status['environment_validated']}")
+            print(f"✅ Dependencies validated: {self.status['dependencies_validated']}")
+            print(f"✅ Models discovered: {self.status['models_discovered']}")
+            print(f"✅ Cache directory: {self.cache_dir}")
+            
+            if discovery_results.get('total_directories', 0) > 0:
+                print(f"✅ Found {discovery_results['total_directories']} cached items")
+                print(f"✅ Cache size: {discovery_results.get('cache_size_mb', 0):.1f} MB")
+            else:
+                print("ℹ️ No existing models found (normal for fresh deployment)")
+            
+            if self.status['warnings']:
+                print(f"⚠️ Warnings: {len(self.status['warnings'])}")
+                for warning in self.status['warnings']:
+                    print(f"   - {warning}")
+            
+            if status_file:
+                print(f"📄 Status report: {status_file}")
+            
+            print("="*50)
+            
+            logger.info("✅ Cache initialization completed successfully")
+            return 0
+            
+        except Exception as e:
+            logger.error(f"❌ Cache initialization failed: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            self.status['errors'].append(str(e))
+            return 1
 
 def main():
-    """Main initialization function"""
+    """Main function with comprehensive error handling"""
     try:
-        logger.info("=== Model Cache Initialization Started ===")
+        # Create and run initializer
+        initializer = EnhancedCacheInitializer()
+        exit_code = initializer.run_initialization()
         
-        # Create initializer
-        initializer = ModelCacheInitializer()
+        logger.info(f"Cache initialization exiting with code: {exit_code}")
+        return exit_code
         
-        # Initialize all models
-        init_report = initializer.initialize_all_models()
+    except KeyboardInterrupt:
+        logger.info("Cache initialization interrupted by user")
+        return 130
         
-        # Validate initialization
-        validation_report = initializer.validate_initialization()
-        
-        # Create status file
-        status_file = initializer.create_cache_status_file()
-        
-        # Print summary
-        print("\n=== CACHE INITIALIZATION SUMMARY ===")
-        print(f"Total models: {init_report['summary']['total_models']}")
-        print(f"Successfully initialized: {init_report['summary']['successfully_initialized']}")
-        print(f"Already cached: {init_report['summary']['already_cached']}")
-        print(f"Failed: {init_report['summary']['failed_initialization']}")
-        print(f"Valid after initialization: {validation_report['summary']['valid_models']}")
-        print(f"Missing after initialization: {validation_report['summary']['missing_models']}")
-        
-        if status_file:
-            print(f"Status file: {status_file}")
-        
-        # Determine exit code
-        total_available = (init_report['summary']['successfully_initialized'] + 
-                          init_report['summary']['already_cached'])
-        
-        if total_available > 0:
-            print("\n✅ Cache initialization completed successfully")
-            logger.info("Cache initialization completed successfully")
-            return 0
-        else:
-            print("\n⚠️ No models available in cache - will download on first use")
-            logger.warning("No models available in cache - will download on first use")
-            return 0  # Not an error for fresh deployments
-            
     except Exception as e:
-        print(f"\n❌ Cache initialization failed: {e}")
-        logger.error(f"Cache initialization failed: {e}")
+        logger.error(f"Unexpected error in main: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return 1
 
 if __name__ == "__main__":

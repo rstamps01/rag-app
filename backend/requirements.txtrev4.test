@@ -1,0 +1,111 @@
+# Optimized Requirements for RAG Application - Balanced Configuration
+# Newer versions with memory corruption fixes applied
+# Maintains modern features while resolving build issues
+
+# =============================================================================
+# CORE WEB FRAMEWORK DEPENDENCIES (Install First)
+# =============================================================================
+fastapi==0.103.1                    #0.104.1
+uvicorn[standard]==0.23.2           #0.24.0
+python-multipart==0.0.6             #
+python-jose[cryptography]==3.3.0    #
+passlib[bcrypt]==1.7.4              #
+python-dotenv==1.0.0                #Missing
+
+# =============================================================================
+# DATABASE DEPENDENCIES (Install Second)
+# =============================================================================
+sqlalchemy==2.0.20                  #2.0.23
+psycopg2-binary==2.9.7              #2.9.9
+alembic==1.12.0                     #1.12.1
+qdrant-client==1.4.0                #1.7.0
+
+# =============================================================================
+# CORE DATA PROCESSING (Install Third)
+# =============================================================================
+numpy==1.25.2           #            #1.24.3
+pandas==2.1.0           #            #2.3.1
+scipy==1.3.0            #            #1.11.4
+
+# =============================================================================
+# MACHINE LEARNING STACK - BALANCED VERSIONS (Install Fourth)
+# =============================================================================
+# Core ML packages with memory fixes
+transformers                    #No ver            # UPDATED: Includes memory fixes from 4.45+ #last: 4.36.2
+tokenizers                     #Not there       # UPDATED: Compatible with transformers 4.44.2
+sentence-transformers>=2.6.0    #     # UPDATED: Includes memory management fixes
+huggingface-hub                 #Not there             # UPDATED: Improved caching with memory fixes
+
+# GPU acceleration packages - balanced versions
+accelerate                      #0.33.0            # UPDATED: Includes memory management improvements
+bitsandbytes==0.41.1            #0.43.3          # UPDATED: RTX 5090 optimized with memory fixes
+optimum==1.21.4                #not there             # UPDATED: Latest stable with hardware optimizations
+
+# Supporting ML packages
+safetensors==0.4.4             #not there        # UPDATED: Latest stable model loading
+datasets==2.20.0               #not there        # UPDATED: Improved memory management
+
+# =============================================================================
+# DOCUMENT PROCESSING (Install Fifth)
+# =============================================================================
+PyPDF2==3.0.1                   #not there
+python-docx==0.8.11             #1.1.0
+pytesseract                     #no version 0.3.10
+Pillow==10.4.0                # UPDATED: Security fixes, stable memory management
+pymupdf==1.23.8               # UPDATED: Latest stable with memory improvements
+email-validator         #no version 2.2.0
+
+# =============================================================================
+# TEXT PROCESSING - LANGCHAIN MODERN STABLE
+# =============================================================================
+langchain-core                  #no version ==0.2.43             # UPDATED: Modern stable core
+langchain                       #no version ==0.2.17                  # UPDATED: Modern stable main package
+langchain-community             #no version ==0.2.19        # UPDATED: Modern stable community features
+tiktoken==0.9.0                 #not there   # UPDATED: Improved tokenizer performance
+
+# =============================================================================
+# HTTP AND API CLIENTS
+# =============================================================================
+httpx<0.29,>=0.27               #==0.25.2
+requests==2.32.2                #not there
+aiofiles==23.2.1                #not there
+
+# =============================================================================
+# MONITORING AND LOGGING
+# =============================================================================
+prometheus-client==0.19.0       #not there
+structlog==23.2.0               #not there
+psutil==5.9.6                   #not there
+GPUtil==1.4.0                   #not there
+
+# =============================================================================
+# DEVELOPMENT AND TESTING
+# =============================================================================
+pytest==7.4.0                    #7.4.3
+pytest-asyncio==0.21.1           #not there
+black==23.11.0                   #not there
+isort==5.12.0                    #not there
+flake8==6.1.0                    #not there
+
+# =============================================================================
+# SYSTEM UTILITIES
+# =============================================================================
+pydantic<3.0.0,>=2.9.0            #>=2.0.0,<3.0.0
+pydantic-settings>=2.0.3          #2.0.0,<3.0.0#typing-extensions>=4.8.0          #not there
+click>=8.1.0                      #not there
+
+# =============================================================================
+# BACKGROUND PROCESSING (Install separately if needed)
+# =============================================================================
+celery==5.3.4                       #
+redis==5.0.0                        #5.0.1
+
+# =============================================================================
+# INSTALLATION NOTES:
+# =============================================================================
+# 1. Install in stages using separate pip install commands
+# 2. Use --no-cache-dir flag for all installations
+# 3. Set memory limit: docker build --memory=8g
+# 4. Use pip install --no-deps for problematic packages if needed
+# 5. PyTorch installed separately in Dockerfile with CUDA 12.8 support
+

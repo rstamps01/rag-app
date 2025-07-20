@@ -1,0 +1,40 @@
+{
+  "timestamp": 1752942783.96758,
+  "initialization_time_seconds": 3.3694679737091064,
+  "status": {
+    "initialization_started": true,
+    "environment_validated": true,
+    "python_validated": true,
+    "cache_directories_created": true,
+    "dependencies_validated": true,
+    "models_discovered": true,
+    "initialization_completed": false,
+    "errors": [],
+    "warnings": []
+  },
+  "discovery_results": {
+    "total_directories": 8,
+    "potential_models": [
+      "hub",
+      "models--mistralai--Mistral-7B-Instruct-v0.2-GPTQ",
+      "Mistral-7B-Instruct-v0.2-GPTQ",
+      "transformers",
+      "models--sentence-transformers--all-MiniLM-L6-v2",
+      "xet",
+      "models--mistralai--Mistral-7B-Instruct-v0.2",
+      "datasets"
+    ],
+    "cache_size_mb": 36001.94715881348
+  },
+  "environment": {
+    "python_version": "3.10.12 (main, May 27 2025, 17:12:29) [GCC 11.4.0]",
+    "python_executable": "/usr/bin/python",
+    "cache_directory": "/app/models_cache",
+    "environment_variables": {
+      "HF_HOME": "/app/models_cache",
+      "MODELS_CACHE_DIR": "/app/models_cache",
+      "CUDA_VISIBLE_DEVICES": "1",
+      "HUGGING_FACE_HUB_TOKEN": "SET"
+    }
+  }
+}

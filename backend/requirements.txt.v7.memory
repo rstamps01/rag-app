@@ -72,6 +72,8 @@ email-validator==2.2.0 # Deployment requirement for email validation
 
 # Text processing - LANGCHAIN VERSIONS KEPT FOR STABILITY
   # Previously working versions - KEEPING THESE AS THEY WORK
+
+###### Stopped Here
 langchain-core==0.2.43  # KEPT: Stable core functionality
 langchain==0.2.17  # KEPT: Working version with good RAG support
 langchain-community==0.2.19  # KEPT: Community integrations working
