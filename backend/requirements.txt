@@ -51,8 +51,8 @@ datasets==2.20.0              # UPDATED: Improved memory management
 PyPDF2==3.0.1
 python-docx==1.1.0
 pytesseract==0.3.10
-Pillow==10.4.0                # UPDATED: Security fixes, stable memory management
-pymupdf==1.23.8               # UPDATED: Latest stable with memory improvements
+#Pillow==10.4.0   #Added in Dockerfile    # UPDATED: Security fixes, stable memory management
+pymupdf==1.23.8                           # UPDATED: Latest stable with memory improvements
 email-validator==2.2.0
 
 # =============================================================================

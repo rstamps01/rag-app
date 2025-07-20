@@ -1,6 +1,6 @@
 {
-  "timestamp": 1753004426.4208226,
-  "initialization_time_seconds": 3.3818247318267822,
+  "timestamp": 1752942783.96758,
+  "initialization_time_seconds": 3.3694679737091064,
   "status": {
     "initialization_started": true,
     "environment_validated": true,
@@ -13,16 +13,18 @@
     "warnings": []
   },
   "discovery_results": {
-    "total_directories": 6,
+    "total_directories": 8,
     "potential_models": [
       "hub",
+      "models--mistralai--Mistral-7B-Instruct-v0.2-GPTQ",
+      "Mistral-7B-Instruct-v0.2-GPTQ",
       "transformers",
       "models--sentence-transformers--all-MiniLM-L6-v2",
       "xet",
       "models--mistralai--Mistral-7B-Instruct-v0.2",
       "datasets"
     ],
-    "cache_size_mb": 28065.507791519165
+    "cache_size_mb": 36001.94715881348
   },
   "environment": {
     "python_version": "3.10.12 (main, May 27 2025, 17:12:29) [GCC 11.4.0]",

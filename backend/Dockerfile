@@ -38,6 +38,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Upgrade pip and install wheel
 RUN python -m pip install --upgrade pip setuptools wheel
 
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 # Install NVIDIA CUDA libraries for RTX 5090
 RUN pip install --no-cache-dir \
     nvidia-cublas-cu12==12.8.4.1 \
@@ -55,6 +57,7 @@ RUN pip install --no-cache-dir \
     nvidia-nvjitlink-cu12==12.8.93 \
     nvidia-nvshmem-cu12==3.3.9 \
     nvidia-nvtx-cu12==12.8.90 \
+    pillow==11.2.1 \
     --index-url https://download.pytorch.org/whl/nightly/cu128
 
 # Install PyTorch with CUDA 12.8 support for RTX 5090
@@ -80,18 +83,16 @@ RUN mkdir -p /app/models_cache \
 COPY scripts/model_cache_utils.py /app/scripts/
 COPY scripts/initialize_model_cache.py /app/scripts/
 COPY config/cache_config.json /app/config/
+RUN chmod +x /app/scripts/*.py
 RUN if [ ! -f /app/config/cache_config.json ]; then echo "No config file found"; fi
 
-# Make scripts executable
-RUN chmod +x /app/scripts/*.py
-
 # Set up cache environment variables
-ENV HF_HOME=/app/models_cache \
-    #TRANSFORMERS_CACHE=/app/models_cache/transformers \
-    HF_DATASETS_CACHE=/app/models_cache/datasets \
+ENV MODELS_CACHE_DIR=/app/models_cache \
     HF_HUB_CACHE=/app/models_cache/hub \
-    MODELS_CACHE_DIR=/app/models_cache \
+    HF_HOME=/app/models_cache \
     TORCH_HOME=/app/models_cache/torch
+    #HF_DATASETS_CACHE=/app/models_cache/datasets \
+    #TRANSFORMERS_CACHE=/app/models_cache/transformers
 
 # Health check script
 COPY <<EOF /app/healthcheck.py
