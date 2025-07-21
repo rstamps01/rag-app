@@ -1,6 +1,6 @@
 {
-  "timestamp": 1753114672.0157294,
-  "initialization_time_seconds": 1.5814146995544434,
+  "timestamp": 1753082080.8118825,
+  "initialization_time_seconds": 1.4621038436889648,
   "status": {
     "initialization_started": true,
     "environment_validated": true,
@@ -22,7 +22,7 @@
       "models--mistralai--Mistral-7B-Instruct-v0.2",
       "datasets"
     ],
-    "cache_size_mb": 28563.392068862915
+    "cache_size_mb": 28065.507791519165
   },
   "environment": {
     "python_version": "3.10.12 (main, May 27 2025, 17:12:29) [GCC 11.4.0]",
@@ -31,7 +31,7 @@
     "environment_variables": {
       "HF_HOME": "/app/models_cache",
       "MODELS_CACHE_DIR": "/app/models_cache",
-      "CUDA_VISIBLE_DEVICES": "0",
+      "CUDA_VISIBLE_DEVICES": "1",
       "HUGGING_FACE_HUB_TOKEN": "SET"
     }
   }
