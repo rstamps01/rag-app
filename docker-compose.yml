@@ -9,9 +9,23 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
-    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    # GPU Support for RTX 5090
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
     volumes:
-      - "./backend/models_cache:/app/models_cache:rw"
+      - ./backend/models_cache:/app/models_cache:rw
       - "backend_logs-07:/app/data/logs:rw"
       - "uploaded_documents-07:/app/data/uploads:rw"
     
@@ -25,7 +39,7 @@ services:
       - PYTHONPATH=/app
 
       # GPU configuration (fixed conflicts)
-      - CUDA_VISIBLE_DEVICES=1
+      - CUDA_VISIBLE_DEVICES=0
       - NVIDIA_VISIBLE_DEVICES=0
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       
@@ -35,7 +49,8 @@ services:
       - QDRANT_COLLECTION_NAME=rag
       - EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
       - LLM_MODEL_NAME=mistralai/Mistral-7B-Instruct-v0.2
-      - JWT_SECRET=d7cab90ed8cbc61dcc3170aa5c3ccb5a9d689474af3d8163e9bc93fa722fbd4f
+      - JWT_SECRET=${JWT_SECRET}
+      #- JWT_SECRET=d7cab90ed8cbc61dcc3170aa5c3ccb5a9d689474af3d8163e9bc93fa722fbd4f
       - JWT_ALGORITHM=HS256
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - ENVIRONMENT=production
@@ -44,7 +59,8 @@ services:
       - POSTGRES_USER=rag
       - POSTGRES_PASSWORD=rag
       - POSTGRES_DB=rag
-    
+
+    # Commented out: 7/20/25
     # Wait for cache initialization before starting
     command: >
       sh -c "
@@ -150,8 +166,10 @@ services:
       - HF_HUB_CACHE=/app/models_cache/hub
       
       # GPU configuration (fixed)
-      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-1}
-      - NVIDIA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-1}
+      #- CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-1}
+      - CUDA_VISIBLE_DEVICES=0
+      #- NVIDIA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-1}
+      - NVIDIA_VISIBLE_DEVICES=0
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       
       # Python configuration
@@ -164,7 +182,7 @@ services:
     
     volumes:
       # Cache storage
-      - /home/vastdata/rag-app-07/backend/models_cache:/app/models_cache
+      - ./backend/models_cache:/app/models_cache
       
       # Logs
       - cache_init_logs:/app/logs

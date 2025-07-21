@@ -234,7 +234,8 @@ async def process_query(db, query_text, department, user_id=None, context_length
             answer: str
             sources: List[Any] = []
             processing_time: float = 0.0
-            model_used: str = "placeholder"
+            #model_used: str = "placeholder"
+            model_used: str = "mistralai/Mistral-7B-Instruct-v0.2"
             department: str = "General"
     
     import time
@@ -252,7 +253,8 @@ async def process_query(db, query_text, department, user_id=None, context_length
         answer=answer,
         sources=[],
         processing_time=round(time.time() - start_time, 3),
-        model_used="placeholder-llm",
+        #model_used="placeholder-llm"
+        model_used="mistralai/Mistral-7B-Instruct-v0.2",
         department=department
     )
 

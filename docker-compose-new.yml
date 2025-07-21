@@ -86,7 +86,7 @@ services:
       
       # GPU Configuration for RTX 5090
       - CUDA_VISIBLE_DEVICES=0
-      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_VISIBLE_DEVICES=0
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     
     volumes:

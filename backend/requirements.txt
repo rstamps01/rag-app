@@ -31,15 +31,15 @@ scipy==1.11.4
 # MACHINE LEARNING STACK - BALANCED VERSIONS (Install Fourth)
 # =============================================================================
 # Core ML packages with memory fixes
-transformers==4.36.2          # UPDATED: Includes memory fixes from 4.45+
-tokenizers                    # UPDATED: Compatible with transformers 4.44.2
-sentence-transformers         # UPDATED: Includes memory management fixes
+transformers==4.53.2          # UPDATED: Includes memory fixes from 4.45+
+tokenizers==0.21.2                    # UPDATED: Compatible with transformers 4.44.2
+sentence-transformers==5.0.0         # UPDATED: Includes memory management fixes
 huggingface-hub               # UPDATED: Improved caching with memory fixes
 
 # GPU acceleration packages - balanced versions
 accelerate==0.33.0            # UPDATED: Includes memory management improvements
 bitsandbytes==0.43.3          # UPDATED: RTX 5090 optimized with memory fixes
-optimum==1.21.4               # UPDATED: Latest stable with hardware optimizations
+optimum==1.26.1       #1.21.4 Working 7/21/25               # UPDATED: Latest stable with hardware optimizations
 
 # Supporting ML packages
 safetensors==0.4.4            # UPDATED: Latest stable model loading
