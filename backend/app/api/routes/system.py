@@ -20,9 +20,9 @@ async def get_system_info() -> Any:
     
     # Get available models
     models = [
-        {"id": "gpt-j-6b", "name": "GPT-J 6B", "description": "Open source 6B parameter model"},
-        {"id": "llama2-7b", "name": "Llama 2 7B", "description": "Meta's 7B parameter model"},
-        {"id": "falcon-7b", "name": "Falcon 7B", "description": "TII's 7B parameter model"},
+        #{"id": "gpt-j-6b", "name": "GPT-J 6B", "description": "Open source 6B parameter model"},
+        #{"id": "llama2-7b", "name": "Llama 2 7B", "description": "Meta's 7B parameter model"},
+        #{"id": "falcon-7b", "name": "Falcon 7B", "description": "TII's 7B parameter model"},
         {"id": "mistral-7b", "name": "Mistral 7B", "description": "Mistral AI's 7B parameter model"}
     ]
     
