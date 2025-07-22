@@ -1,7 +1,6 @@
 from typing import List, Tuple, Dict, Any, Optional
 import torch
-from transformers import AutoTokenizer, AutoModel
-from transformers import AutoModelForCausalLM, AutoTokenizer # Add AutoModelForCausalLM here
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig # Add AutoModelForCausalLM here
 import numpy as np
 from app.services.vector_db import VectorDBService
 from app.services.document_processor import DocumentProcessor
@@ -72,13 +71,25 @@ class RAGService:
             )
         else:
             # Standard loading for other GPUs
+        #    self.models[model_id] = AutoModelForCausalLM.from_pretrained(
+        #        hf_model_name,
+        #        torch_dtype=torch.float16 if self.use_gpu else torch.float32,
+        #        load_in_8bit=self.use_gpu,
+        #        device_map="auto" if self.use_gpu else None
+        #    )
+            quantization_config = BitsAndBytesConfig(
+                load_in_8bit=True,
+                llm_int8_threshold=6.0,
+                llm_int8_has_fp16_weight=False,
+            )
             self.models[model_id] = AutoModelForCausalLM.from_pretrained(
                 hf_model_name,
                 torch_dtype=torch.float16 if self.use_gpu else torch.float32,
-                load_in_8bit=self.use_gpu,
-                device_map="auto" if self.use_gpu else None
-            )
-    
+                device_map="auto" if self.use_gpu else None,
+                # Removed quantization parameters
+                quantization_config=quantization_config,
+                trust_remote_code=True
+        )
     def process_document(self, document_id: str, file_path: str):
         """
         Process a document and store its embeddings

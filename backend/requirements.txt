@@ -38,7 +38,7 @@ huggingface-hub               # UPDATED: Improved caching with memory fixes
 
 # GPU acceleration packages - balanced versions
 accelerate==0.33.0            # UPDATED: Includes memory management improvements
-bitsandbytes==0.43.3          # UPDATED: RTX 5090 optimized with memory fixes
+bitsandbytes==0.45.5  #0.43.3          # UPDATED: RTX 5090 optimized with memory fixes
 optimum==1.26.1       #1.21.4 Working 7/21/25               # UPDATED: Latest stable with hardware optimizations
 
 # Supporting ML packages
