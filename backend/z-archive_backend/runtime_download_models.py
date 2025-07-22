@@ -115,7 +115,7 @@ def download_embedding_model():
             logger.error("   Authentication issue - check HUGGINGFACE_TOKEN")
         return False
 
-def download_llm_model(use_gpu=True):
+def download_llm_model(use_gpu=False):
     """Download LLM model with authentication"""
     try:
         logger.info(f"Downloading LLM model: {LLM_MODEL_NAME}")
@@ -224,7 +224,7 @@ async def download_models_async():
         success_count += 1
     
     # Download LLM model
-    if download_llm_model(use_gpu=use_gpu):
+    if download_llm_model(use_gpu=False):
         success_count += 1
     
     if success_count == total_models:

@@ -39,10 +39,15 @@ logger = logging.getLogger(__name__)
 VALID_DEPARTMENTS = ["General", "IT", "HR", "Finance", "Legal"]
 
 class DocumentProcessor:
-    """FIXED: Enhanced document processor with OCR capabilities, GPU optimization, and department support"""
     
-    def __init__(self):
+    """FIXED: Enhanced document processor with OCR capabilities, GPU optimization, and department support"""
+
+    def __init__(self, use_gpu: bool = True):
+        self.use_gpu = use_gpu
+        self.device = torch.device("cuda" if use_gpu and torch.cuda.is_available() else "cpu")
         self.embedding_model = None
+    #def __init__(self):
+    #    self.embedding_model = None
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.CONTEXT_WINDOW_SIZE // 4,
             chunk_overlap=200,

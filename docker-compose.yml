@@ -107,11 +107,16 @@ services:
     image: qdrant/qdrant:latest
     container_name: qdrant-07
     restart: unless-stopped
+    environment:
+      - QDRANT_URL=http://qdrant-07:6333
+      - QDRANT_HOST=qdrant-07
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION_NAME=rag
+    volumes:
+      - "qdrant_data-07:/qdrant/storage"
     ports:
       - "6333:6333"
       - "6334:6334"
-    volumes:
-      - "qdrant_data-07:/qdrant/storage"
     healthcheck:
       test: ["CMD", "sh", "-c", "grep -q ':18BD ' /proc/net/tcp"]
       interval: 10s

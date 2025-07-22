@@ -56,7 +56,8 @@ class ModelManager:
             inputs = {k: v.cuda() for k, v in inputs.items()}
         
         # Generate with autocast for mixed precision
-        with torch.cuda.amp.autocast(enabled=self.use_gpu):
+        #with torch.cuda.amp.autocast(enabled=self.use_gpu):
+        with torch.amp.autocast("cuda",enabled=self.use_gpu):
             outputs = model.generate(
                 **inputs,
                 max_length=max_length,

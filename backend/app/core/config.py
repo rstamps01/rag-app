@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = os.getenv("QDRANT_HOST", "qdrant-07")
     QDRANT_PORT: int = int(os.getenv("QDRANT_PORT", "6333"))
     QDRANT_COLLECTION_NAME: str = os.getenv("QDRANT_COLLECTION_NAME", "rag")
+    QDRANT_URL: str = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
     
     # GPU Configuration
     ENABLE_GPU: bool = True

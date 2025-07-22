@@ -155,7 +155,7 @@ class GPUAccelerator:
         """
         if self.cuda_available and self.is_ada_lovelace:
             # Enable autocast for mixed precision
-            return torch.cuda.amp.GradScaler()
+            return torch.amp.GradScaler('cuda')
         return None
     
     def get_system_resources(self) -> Dict[str, Any]:

@@ -11,22 +11,42 @@ class VectorDBService:
         self.client = QdrantClient(url=settings.QDRANT_URL)
         self._ensure_collections()
     
+    #def _ensure_collections(self):
+    #    """Ensure required collections exist"""
+    #    # Check if documents collection exists, create if not
+    #    collections = self.client.get_collections().collections
+    #    collection_names = [c.name for c in collections]
+    #    
+    #    if "documents" not in collection_names:
+    #        self.client.create_collection(
+    #            collection_name="documents",
+    #            vectors_config=models.VectorParams(
+    #                size=768,  # Default embedding size
+    #                distance=models.Distance.COSINE
+    #            )
+    #        )
+
     def _ensure_collections(self):
         """Ensure required collections exist"""
-        # Check if documents collection exists, create if not
+        from app.core.config import settings
+    
         collections = self.client.get_collections().collections
         collection_names = [c.name for c in collections]
-        
-        if "documents" not in collection_names:
+    
+        # Use the configured collection name
+        collection_name = settings.QDRANT_COLLECTION_NAME
+    
+        if collection_name not in collection_names:
             self.client.create_collection(
-                collection_name="documents",
+                collection_name=collection_name,
                 vectors_config=models.VectorParams(
                     size=768,  # Default embedding size
                     distance=models.Distance.COSINE
-                )
             )
-    
+        )
+
     def add_document_embeddings(self, document_id: str, chunks: List[Dict[str, Any]], embeddings: List[List[float]]):
+        from app.core.config import settings
         """
         Add document chunk embeddings to vector database
         
@@ -51,11 +71,18 @@ class VectorDBService:
             )
         
         self.client.upsert(
-            collection_name="documents",
+            collection_name=settings.QDRANT_COLLECTION_NAME,  # Use configured name
             points=points
         )
-    
+
     def search_similar(self, query_embedding: List[float], limit: int = 5) -> List[Dict[str, Any]]:
+        from app.core.config import settings
+    
+        results = self.client.search(
+            collection_name=settings.QDRANT_COLLECTION_NAME,  # Use configured name
+            query_vector=query_embedding,
+            limit=limit
+    )
         """
         Search for similar document chunks
         
@@ -66,12 +93,6 @@ class VectorDBService:
         Returns:
             List of document chunks with similarity scores
         """
-        results = self.client.search(
-            collection_name="documents",
-            query_vector=query_embedding,
-            limit=limit
-        )
-        
         return [
             {
                 "document_id": hit.payload["document_id"],
@@ -82,16 +103,10 @@ class VectorDBService:
             }
             for hit in results
         ]
-    
     def delete_document(self, document_id: str):
-        """
-        Delete all chunks for a document
-        
-        Args:
-            document_id: ID of the document to delete
-        """
+        from app.core.config import settings
         self.client.delete(
-            collection_name="documents",
+            collection_name=settings.QDRANT_COLLECTION_NAME,  # Use configured name
             points_selector=models.FilterSelector(
                 filter=models.Filter(
                     must=[
@@ -103,3 +118,4 @@ class VectorDBService:
                 )
             )
         )
+        
