@@ -44,45 +44,83 @@ class VectorDBService:
                     distance=models.Distance.COSINE
             )
         )
+#######
+    #def add_document_embeddings(self, document_id: str, chunks: List[Dict[str, Any]], embeddings: List[List[float]]):
+    #    from app.core.config import settings
+    #    """
+    #    Add document chunk embeddings to vector database
+    #    
+    #    Args:
+    #        document_id: ID of the document
+    #        chunks: List of document chunks with text and metadata
+    #        embeddings: List of embedding vectors for each chunk
+    #    """
+    #    points = []
+    #    for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+    #        points.append(
+    #            models.PointStruct(
+    #                id=f"{document_id}_{i}",
+    #                vector=embedding,
+    #                payload={
+    #                    "document_id": document_id,
+    #                    "chunk_id": i,
+    #                    "text": chunk["text"],
+    #                    "metadata": chunk.get("metadata", {})
+    #                }
+    #            )
+    #        )
+    #    
+    #    self.client.upsert(
+    #        collection_name=settings.QDRANT_COLLECTION_NAME,  # Use configured name
+    #        points=points
+    #    )
+#######
 
     def add_document_embeddings(self, document_id: str, chunks: List[Dict[str, Any]], embeddings: List[List[float]]):
-        from app.core.config import settings
         """
         Add document chunk embeddings to vector database
         
         Args:
-            document_id: ID of the document
+            document_id: ID of the document (will be stored as filename)
             chunks: List of document chunks with text and metadata
             embeddings: List of embedding vectors for each chunk
         """
+        from app.core.config import settings
+        import uuid
+        
         points = []
         for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
             points.append(
                 models.PointStruct(
-                    id=f"{document_id}_{i}",
+                    id=str(uuid.uuid4()),  # Use UUID for point ID
                     vector=embedding,
                     payload={
-                        "document_id": document_id,
-                        "chunk_id": i,
-                        "text": chunk["text"],
-                        "metadata": chunk.get("metadata", {})
+                        "filename": document_id,        # Store as filename (matches document_processor)
+                        "chunk_index": i,
+                        "content": chunk["text"],       # Store as content (matches document_processor)
+                        "content_type": chunk.get("content_type", "text"),
+                        "department": chunk.get("department", "General")
                     }
                 )
             )
         
         self.client.upsert(
-            collection_name=settings.QDRANT_COLLECTION_NAME,  # Use configured name
+            collection_name=settings.QDRANT_COLLECTION_NAME,
             points=points
         )
 
-    def search_similar(self, query_embedding: List[float], limit: int = 5) -> List[Dict[str, Any]]:
-        from app.core.config import settings
-    
-        results = self.client.search(
-            collection_name=settings.QDRANT_COLLECTION_NAME,  # Use configured name
-            query_vector=query_embedding,
-            limit=limit
-    )
+####### Above Updated 7/22/25 #######
+
+########
+    #def search_similar(self, query_embedding: List[float], limit: int = 5) -> List[Dict[str, Any]]:
+    #    from app.core.config import settings
+    #
+    #    results = self.client.search(
+    #        collection_name=settings.QDRANT_COLLECTION_NAME,  # Use configured name
+    #        query_vector=query_embedding,
+    #        limit=limit
+    #)
+
         """
         Search for similar document chunks
         
@@ -93,16 +131,43 @@ class VectorDBService:
         Returns:
             List of document chunks with similarity scores
         """
-        return [
-            {
-                "document_id": hit.payload["document_id"],
-                "chunk_id": hit.payload["chunk_id"],
-                "text": hit.payload["text"],
-                "metadata": hit.payload.get("metadata", {}),
-                "score": hit.score
-            }
-            for hit in results
-        ]
+    #    return [
+    #        {
+    #            "document_id": hit.payload["document_id"],
+    #            "chunk_id": hit.payload["chunk_id"],
+    #            "text": hit.payload["text"],
+    #            "metadata": hit.payload.get("metadata", {}),
+    #            "score": hit.score
+    #        }
+    #        for hit in results
+    #    ]
+#######
+
+    def search_similar(self, query_embedding: List[float], limit: int = 5) -> List[Any]:
+        """
+        Search for similar document chunks - returns raw Qdrant ScoredPoint objects
+        
+        Args:
+            query_embedding: Embedding vector of the query
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of Qdrant ScoredPoint objects with .payload and .score attributes
+        """
+        from app.core.config import settings
+        
+        results = self.client.search(
+            collection_name=settings.QDRANT_COLLECTION_NAME,  # Uses "rag" collection
+            query_vector=query_embedding,
+            limit=limit,
+            with_payload=True  # Ensure payload is included
+        )
+        
+        # Return raw ScoredPoint objects for RAG service to process
+        return results
+
+####### Above Updated 7/22/25 #######
+
     def delete_document(self, document_id: str):
         from app.core.config import settings
         self.client.delete(

@@ -62,26 +62,59 @@ class QueryProcessor:
             logger.error(f"Failed to initialize query processor: {str(e)}")
             raise
 
+######
+    #def search_similar_documents(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    #    """Search for similar documents using vector similarity"""
+    #    try:
+    #        # Generate query embedding
+    #        query_embedding = self.embedding_model.encode([query])[0]
+    #        
+    #        # Search in vector database
+    #        search_results = self.vector_client.search(
+    #            collection_name="documents",
+    #            query_vector=query_embedding.tolist(),
+    #            limit=limit,
+    #            with_payload=True
+    #        )
+    #        
+    #        # Format results
+    #        results = []
+    #        for result in search_results:
+    #            results.append({
+    #                "content": result.payload.get("content", ""),
+    #                "filename": result.payload.get("filename", ""),
+    #                "chunk_index": result.payload.get("chunk_index", 0),
+    #                "score": result.score
+    #            })
+    #        
+    #        return results
+
+    #   except Exception as e:
+    #        logger.error(f"Document search failed: {str(e)}")
+    #        return []
+
+######
+
     def search_similar_documents(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """Search for similar documents using vector similarity"""
         try:
             # Generate query embedding
             query_embedding = self.embedding_model.encode([query])[0]
             
-            # Search in vector database
+            # Search in vector database using configured collection name
             search_results = self.vector_client.search(
-                collection_name="documents",
+                collection_name=settings.QDRANT_COLLECTION_NAME,  # Use "rag" collection
                 query_vector=query_embedding.tolist(),
                 limit=limit,
                 with_payload=True
             )
             
-            # Format results
+            # Format results to match expected structure
             results = []
             for result in search_results:
                 results.append({
-                    "content": result.payload.get("content", ""),
-                    "filename": result.payload.get("filename", ""),
+                    "content": result.payload.get("content", ""),      # Match storage format
+                    "filename": result.payload.get("filename", ""),   # Match storage format
                     "chunk_index": result.payload.get("chunk_index", 0),
                     "score": result.score
                 })
@@ -91,6 +124,8 @@ class QueryProcessor:
         except Exception as e:
             logger.error(f"Document search failed: {str(e)}")
             return []
+
+####### Above Updated 7/22/25 #######
 
     def generate_response(self, query: str, context_docs: List[Dict[str, Any]]) -> str:
         """Generate response using LLM with retrieved context"""

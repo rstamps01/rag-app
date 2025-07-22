@@ -135,21 +135,8 @@ class RAGService:
             results = self.vector_db.search_similar(query_embedding, limit=max_results)
             
             # Format context from retrieved documents
-            #context = "\n\n".join([f"Document: {r['document_id']}\n{r['text']}" for r in results])
-            # Handle Qdrant ScoredPoint objects for context generation
-            context_parts = []
-            for r in results:
-                if hasattr(r, 'payload'):
-                    filename = r.payload.get("filename", "unknown")
-                    content = r.payload.get("content", "")
-                    context_parts.append(f"Document: {filename}\n{content}")
-                else:
-                    # Fallback for dictionary format
-                    filename = r.get("filename", r.get("document_id", "unknown"))
-                    content = r.get("content", r.get("text", ""))
-                    context_parts.append(f"Document: {filename}\n{content}")
-
-            context = "\n\n".join(context_parts)
+            context = "\n\n".join([f"Document: {r['document_id']}\n{r['text']}" for r in results])
+            
             # Create prompt
             prompt = f"""Answer the following question based on the provided context. If the answer cannot be determined from the context, say "I don't have enough information to answer this question."
 
@@ -209,62 +196,54 @@ Answer:"""
             #]
             
             sources = []
-            for i, r in enumerate(results):
+            for r in results:
                 try:
-                    # Handle Qdrant ScoredPoint objects (which is what search_similar returns)
-                    if hasattr(r, 'payload') and hasattr(r, 'score'):
-                        # This is a Qdrant ScoredPoint object from the "rag" collection
-                        payload = r.payload if r.payload else {}
-                        
-                        # RAG collection stores "filename" not "document_id"
-                        doc_id = (payload.get("filename") or 
-                                str(r.id) if hasattr(r, 'id') else f"doc_{i}")
-                        
-                        # RAG collection stores "content" not "text"
-                        text_content = payload.get("content", "")
-                        
-                        # Get other fields specific to RAG collection
-                        source_name = payload.get("filename", "unknown")
-                        chunk_index = payload.get("chunk_index", 0)
-                        department = payload.get("department", "General")
-                        
-                        score = float(r.score) if hasattr(r, 'score') else 0.0
-                        
-                    # Fallback for dictionary format (shouldn't happen with Qdrant)
-                    elif isinstance(r, dict):
-                        doc_id = (r.get("filename") or 
-                                r.get("document_id") or 
-                                f"doc_{i}")
-                        text_content = (r.get("content") or 
-                                    r.get("text") or "")
-                        source_name = r.get("filename", "unknown")
-                        score = float(r.get("score", 0.0))
-                    
+                    # Try different possible field names for document_id
+                    doc_id = None
+                    if "document_id" in r:
+                        doc_id = r["document_id"]
+                    elif "id" in r:
+                        doc_id = r["id"]
+                    elif "payload" in r and "document_id" in r["payload"]:
+                        doc_id = r["payload"]["document_id"]
+                    elif "payload" in r and "id" in r["payload"]:
+                        doc_id = r["payload"]["id"]
                     else:
-                        # Unknown format fallback
-                        logger.warning(f"Unknown result format: {type(r)}")
-                        doc_id = f"doc_{i}"
-                        text_content = str(r)[:200] if r else ""
-                        source_name = "unknown"
-                        score = 0.0
+                        doc_id = "unknown"
                     
-                    # Clean up source name (remove path if present)
+                    # Try different possible field names for text content
+                    text_content = ""
+                    if "text" in r:
+                        text_content = r["text"]
+                    elif "payload" in r and "text" in r["payload"]:
+                        text_content = r["payload"]["text"]
+                    elif "payload" in r and "content" in r["payload"]:
+                        text_content = r["payload"]["content"]
+                    
+                    # Try different possible field names for metadata
+                    metadata = {}
+                    if "metadata" in r:
+                        metadata = r["metadata"]
+                    elif "payload" in r and "metadata" in r["payload"]:
+                        metadata = r["payload"]["metadata"]
+                    elif "payload" in r:
+                        metadata = r["payload"]
+                    
+                    source_name = metadata.get("source", metadata.get("filename", "unknown"))
                     if "/" in source_name:
                         source_name = source_name.split("/")[-1]
                     
                     sources.append({
                         "document_id": doc_id,
                         "document_name": source_name,
-                        "relevance_score": score,
+                        "relevance_score": float(r.get("score", 0.0)),
                         "content_snippet": text_content[:200] + "..." if text_content else "No content available"
                     })
-                    
                 except Exception as e:
-                    logger.error(f"Error processing search result {i}: {e}")
-                    logger.error(f"Result data: {r}")
+                    logger.error(f"Error processing search result: {e}")
                     # Add a fallback source entry
                     sources.append({
-                        "document_id": f"error_doc_{i}",
+                        "document_id": "error",
                         "document_name": "unknown",
                         "relevance_score": 0.0,
                         "content_snippet": "Error processing source"
