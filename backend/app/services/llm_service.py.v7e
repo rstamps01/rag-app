@@ -1,7 +1,6 @@
 """
-LLM Service with PyTorch SDPA Support and Automatic Model Loading
+LLM Service with PyTorch SDPA Support
 Singleton pattern for efficient model management and RTX 5090 Blackwell optimizations
-FIXED: Automatically loads Mistral-7B model on initialization
 """
 
 import logging
@@ -10,12 +9,13 @@ import time
 from typing import Dict, Any, Optional, List, Tuple
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
+from app.services.gpu_accelerator import GPUAccelerator
 
 logger = logging.getLogger(__name__)
 
 class LLMService:
     """
-    LLM Service with singleton pattern, PyTorch SDPA optimization, and automatic model loading
+    LLM Service with singleton pattern and PyTorch SDPA optimization
     """
     
     _instance = None
@@ -36,9 +36,9 @@ class LLMService:
         self.model = None
         self.tokenizer = None
         self.model_name = None
+        self.gpu_accelerator = GPUAccelerator()
         self.generation_config = None
         self._model_lock = threading.Lock()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # Model mapping for different model IDs
         self.model_map = {
@@ -51,21 +51,6 @@ class LLMService:
         }
         
         logger.info("LLM Service initialized with PyTorch SDPA support")
-        
-        # FIXED: Automatically load Mistral-7B model on initialization
-        try:
-            self._auto_load_model()
-        except Exception as e:
-            logger.error(f"Failed to auto-load model during initialization: {e}")
-    
-    def _auto_load_model(self):
-        """Automatically load the default Mistral-7B model"""
-        logger.info("Auto-loading Mistral-7B model...")
-        success = self.load_model("mistral-7b")
-        if success:
-            logger.info("Mistral-7B model auto-loaded successfully")
-        else:
-            logger.error("Failed to auto-load Mistral-7B model")
     
     def _supports_sdpa(self) -> bool:
         """Check if PyTorch SDPA is available"""
@@ -84,33 +69,17 @@ class LLMService:
     
     def _check_memory_availability(self, required_memory_gb: float = 7.0) -> bool:
         """Check if enough GPU memory is available"""
-        if not torch.cuda.is_available():
+        if not self.gpu_accelerator.cuda_available:
             return True  # CPU loading
         
-        try:
-            memory_info = torch.cuda.mem_get_info()
-            available_gb = memory_info[0] / (1024**3)
-            
-            if available_gb < required_memory_gb:
-                logger.warning(f"Insufficient GPU memory: {available_gb:.1f}GB available, {required_memory_gb:.1f}GB required")
-                return False
-            
-            return True
-        except Exception as e:
-            logger.warning(f"Could not check GPU memory: {e}")
-            return True
-    
-    def _is_blackwell_architecture(self) -> bool:
-        """Check if running on Blackwell architecture (RTX 5090)"""
-        if not torch.cuda.is_available():
+        memory_info = self.gpu_accelerator.get_memory_info()
+        available_gb = memory_info["available"] / (1024**3)
+        
+        if available_gb < required_memory_gb:
+            logger.warning(f"Insufficient GPU memory: {available_gb:.1f}GB available, {required_memory_gb:.1f}GB required")
             return False
         
-        try:
-            device_props = torch.cuda.get_device_properties(0)
-            # Blackwell has compute capability 12.x
-            return device_props.major >= 12
-        except Exception:
-            return False
+        return True
     
     def _load_model(self, model_name: str):
         """Load model with PyTorch SDPA optimization"""
@@ -120,25 +89,18 @@ class LLMService:
             # Check memory availability
             if not self._check_memory_availability():
                 # Try to free up memory
-                if torch.cuda.is_available():
+                if self.gpu_accelerator.cuda_available:
                     torch.cuda.empty_cache()
                     logger.info("Cleared GPU cache to free memory")
             
-            # Configure model loading parameters
             model_kwargs = {
                 "torch_dtype": torch.float16,
+                "device_map": "cuda" if self.gpu_accelerator.cuda_available else "cpu",
                 "trust_remote_code": True,
                 "attn_implementation": self._get_attention_implementation()
             }
             
-            # Set device mapping
-            if torch.cuda.is_available():
-                model_kwargs["device_map"] = "cuda"
-            else:
-                model_kwargs["device_map"] = "cpu"
-            
             logger.info(f"Using {model_kwargs['attn_implementation']} attention implementation")
-            logger.info(f"Loading model on device: {model_kwargs['device_map']}")
             
             # Load model
             model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
@@ -147,7 +109,6 @@ class LLMService:
             # Configure tokenizer
             if tokenizer.pad_token is None:
                 tokenizer.pad_token = tokenizer.eos_token
-                logger.info("Set pad_token to eos_token")
             
             # Set up generation config
             generation_config = GenerationConfig(
@@ -162,22 +123,10 @@ class LLMService:
                 use_cache=True
             )
             
-            # Apply RTX 5090 Blackwell optimizations
-            if torch.cuda.is_available():
-                if self._is_blackwell_architecture():
-                    logger.info("Applying RTX 5090 Blackwell optimizations")
-                    torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
-                    
-                    # Enable all SDPA backends for optimal performance
-                    torch.backends.cuda.enable_flash_sdp(True)
-                    torch.backends.cuda.enable_math_sdp(True)
-                    torch.backends.cuda.enable_mem_efficient_sdp(True)
-                    
-                    # Set memory fraction for RTX 5090 (32GB VRAM)
-                    torch.cuda.set_per_process_memory_fraction(0.95)
-                else:
-                    logger.info("Applying standard GPU optimizations")
-                    torch.cuda.set_per_process_memory_fraction(0.85)
+            # Apply GPU optimizations
+            if self.gpu_accelerator.cuda_available:
+                model = self.gpu_accelerator.optimize_model(model)
+                logger.info("Applied GPU optimizations to model")
             
             logger.info(f"Model {model_name} loaded successfully with {model_kwargs['attn_implementation']} attention")
             return model, tokenizer, generation_config
@@ -234,37 +183,20 @@ class LLMService:
                 self.generation_config = None
                 
                 # Clear GPU cache
-                if torch.cuda.is_available():
+                if self.gpu_accelerator.cuda_available:
                     torch.cuda.empty_cache()
                 
                 logger.info("Model unloaded and GPU cache cleared")
     
-    def generate_response(self, prompt: str, context: str = None, max_new_tokens: int = 512, temperature: float = 0.7) -> str:
-        """
-        Generate response using the loaded model
-        FIXED: Added context parameter and automatic model loading check
-        """
-        # FIXED: Automatically load model if not loaded
+    def generate_response(self, prompt: str, max_new_tokens: int = 512, temperature: float = 0.7) -> str:
+        """Generate response using the loaded model"""
         if self.model is None or self.tokenizer is None:
-            logger.warning("No model loaded, attempting to auto-load Mistral-7B...")
-            success = self.load_model("mistral-7b")
-            if not success:
-                raise RuntimeError("No model loaded and failed to auto-load. Call load_model() first.")
+            raise RuntimeError("No model loaded. Call load_model() first.")
         
         try:
-            # Create full prompt with context if provided
-            if context:
-                full_prompt = f"""Context: {context}
-
-Question: {prompt}
-
-Answer: """
-            else:
-                full_prompt = prompt
-            
             # Tokenize input with proper attention mask
             inputs = self.tokenizer(
-                full_prompt,
+                prompt,
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
@@ -273,7 +205,7 @@ Answer: """
             )
             
             # Move to GPU if available
-            if torch.cuda.is_available():
+            if self.gpu_accelerator.cuda_available:
                 inputs = {k: v.cuda() for k, v in inputs.items()}
             
             # Update generation config
@@ -291,7 +223,7 @@ Answer: """
             
             # Generate response
             with torch.no_grad():
-                if torch.cuda.is_available() and self._is_blackwell_architecture():
+                if self.gpu_accelerator.cuda_available and self.gpu_accelerator.is_blackwell():
                     # Use RTX 5090 Blackwell optimizations
                     with torch.cuda.amp.autocast(dtype=torch.float16):
                         outputs = self.model.generate(
@@ -316,7 +248,21 @@ Answer: """
             
         except Exception as e:
             logger.error(f"Response generation failed: {e}")
-            return "I apologize, but I encountered an error while generating a response."
+            raise
+    
+    def generate_response_with_context(self, context: str, query: str, max_new_tokens: int = 512) -> str:
+        """Generate response with context for RAG"""
+        if self.model is None or self.tokenizer is None:
+            raise RuntimeError("No model loaded. Call load_model() first.")
+        
+        # Create prompt with context
+        prompt = f"""Context: {context}
+
+Question: {query}
+
+Answer: """
+        
+        return self.generate_response(prompt, max_new_tokens)
     
     def is_model_loaded(self) -> bool:
         """Check if a model is currently loaded"""
@@ -327,45 +273,19 @@ Answer: """
         if not self.is_model_loaded():
             return {"status": "no_model_loaded"}
         
-        memory_info = {}
-        if torch.cuda.is_available():
-            try:
-                memory_info = {
-                    "allocated_gb": torch.cuda.memory_allocated(0) / (1024**3),
-                    "reserved_gb": torch.cuda.memory_reserved(0) / (1024**3),
-                    "total_gb": torch.cuda.get_device_properties(0).total_memory / (1024**3)
-                }
-            except Exception as e:
-                memory_info = {"error": str(e)}
+        memory_info = self.gpu_accelerator.get_memory_info() if self.gpu_accelerator.cuda_available else {}
         
         return {
             "status": "loaded",
             "model_name": self.model_name,
             "model_type": type(self.model).__name__,
-            "device": str(self.device),
+            "device": next(self.model.parameters()).device.type,
             "dtype": str(next(self.model.parameters()).dtype),
             "attention_implementation": self._get_attention_implementation(),
             "sdpa_available": self._supports_sdpa(),
-            "gpu_available": torch.cuda.is_available(),
-            "blackwell_architecture": self._is_blackwell_architecture(),
+            "gpu_available": self.gpu_accelerator.cuda_available,
             "memory_info": memory_info
         }
-    
-    def get_memory_usage(self) -> Dict[str, Any]:
-        """Get current memory usage information"""
-        if not torch.cuda.is_available():
-            return {"gpu_available": False}
-        
-        try:
-            return {
-                "gpu_available": True,
-                "allocated_gb": torch.cuda.memory_allocated(0) / (1024**3),
-                "reserved_gb": torch.cuda.memory_reserved(0) / (1024**3),
-                "total_gb": torch.cuda.get_device_properties(0).total_memory / (1024**3),
-                "utilization_percent": (torch.cuda.memory_allocated(0) / torch.cuda.get_device_properties(0).total_memory) * 100
-            }
-        except Exception as e:
-            return {"gpu_available": True, "error": str(e)}
     
     def health_check(self) -> Dict[str, Any]:
         """Perform health check on the LLM service"""
@@ -373,10 +293,9 @@ Answer: """
             "status": "healthy" if self.is_model_loaded() else "no_model",
             "model_loaded": self.is_model_loaded(),
             "model_name": self.model_name,
-            "gpu_available": torch.cuda.is_available(),
+            "gpu_available": self.gpu_accelerator.cuda_available,
             "sdpa_available": self._supports_sdpa(),
-            "attention_implementation": self._get_attention_implementation(),
-            "blackwell_architecture": self._is_blackwell_architecture()
+            "attention_implementation": self._get_attention_implementation()
         }
 
 # Global service instance

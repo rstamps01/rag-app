@@ -1,4 +1,4 @@
-"""Enhanced query processing wrapper with singleton pattern, memory management, and corrected schema integration"""
+"""Enhanced query processing wrapper with singleton pattern and memory management"""
 import logging
 import time
 import psutil
@@ -7,8 +7,8 @@ from typing import Optional, List, Any, Dict
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-# Import the correct schema with proper field names
-from app.schemas.query import QueryResponse, SourceDocument, QueryHistoryCreate
+# Import the correct schema
+from app.schemas.query import QueryResponse
 from app.services.llm_service import get_llm_service
 from app.services.gpu_accelerator import GPUAccelerator
 
@@ -80,7 +80,6 @@ async def process_query(
 ) -> QueryResponse:
     """
     Process a query through the RAG pipeline with memory management and error handling
-    FIXED: Corrected schema field names and method signatures
     """
     start_time = time.time()
     
@@ -101,8 +100,8 @@ async def process_query(
             if resources['system_memory_percent'] > 90:
                 return QueryResponse(
                     query=query_text,
-                    response="System memory critically low. Please try again in a moment.",  # FIXED: 'response' not 'answer'
-                    model="system-error",                                                    # FIXED: 'model' not 'model_used'
+                    response="System memory critically low. Please try again in a moment.",
+                    model="system-error",
                     sources=[],
                     processing_time=time.time() - start_time,
                     gpu_accelerated=False,
@@ -123,19 +122,19 @@ async def process_query(
             logger.error(f"Failed to initialize services: {e}")
             return QueryResponse(
                 query=query_text,
-                response=f"Service initialization failed: {str(e)}",                       # FIXED: 'response' not 'answer'
-                model="initialization-error",                                              # FIXED: 'model' not 'model_used'
+                response=f"Service initialization failed: {str(e)}",
+                model="initialization-error",
                 sources=[],
                 processing_time=time.time() - start_time,
                 gpu_accelerated=False,
                 query_history_id=None
             )
         
-        # FIXED: Process the query using correct parameter names
+        # Process the query using the singleton query processor
         try:
             response = query_processor.process_query(
-                query=query_text,                    # CORRECT: 'query' parameter
-                department_filter=department,        # CORRECT: 'department_filter' not 'department'
+                query=query_text,
+                department_filter=department,
                 user_id=user_id,
                 db=db
             )
@@ -160,8 +159,8 @@ async def process_query(
         logger.error(f"Unexpected error in process_query: {e}", exc_info=True)
         return QueryResponse(
             query=query_text,
-            response=f"Unexpected error: {str(e)}",                                       # FIXED: 'response' not 'answer'
-            model="unexpected-error",                                                     # FIXED: 'model' not 'model_used'
+            response=f"Unexpected error: {str(e)}",
+            model="unexpected-error",
             sources=[],
             processing_time=time.time() - start_time,
             gpu_accelerated=False,
@@ -178,20 +177,19 @@ async def process_query_direct(
 ) -> QueryResponse:
     """
     Direct query processing using LLM service as fallback
-    FIXED: Corrected method signature and schema field names
     """
     try:
         logger.info("Processing query using direct LLM service")
         
-        # FIXED: Generate response using correct method signature
+        # Generate response using LLM service
         response_text = llm_service.generate_response(
-            prompt=query_text,                       # FIXED: 'prompt' not 'query'
-            context="",                              # No RAG context in fallback mode
+            prompt=query_text,
+            context="",  # No RAG context in fallback mode
             max_new_tokens=512
         )
         
         # Check if GPU was used
-        gpu_accelerated = torch.cuda.is_available() and hasattr(llm_service, 'device') and llm_service.device.type == "cuda"
+        gpu_accelerated = torch.cuda.is_available() and llm_service.device.type == "cuda"
         
         processing_time = time.time() - start_time
         
@@ -199,8 +197,10 @@ async def process_query_direct(
         if db and user_id:
             try:
                 from app.crud.crud_query_history import create_query_history
+                from app.schemas.query import QueryHistoryCreate
                 
                 query_history = QueryHistoryCreate(
+                    user_id=user_id,
                     query_text=query_text,
                     response_text=response_text,
                     llm_model_used="mistralai/Mistral-7B-Instruct-v0.2",
@@ -213,11 +213,10 @@ async def process_query_direct(
             except Exception as e:
                 logger.warning(f"Failed to store query history: {str(e)}")
         
-        # FIXED: Return QueryResponse with correct field names
         return QueryResponse(
             query=query_text,
-            response=response_text,                                                       # FIXED: 'response' not 'answer'
-            model="mistralai/Mistral-7B-Instruct-v0.2",                                 # FIXED: 'model' not 'model_used'
+            response=response_text,
+            model="mistralai/Mistral-7B-Instruct-v0.2",
             sources=[],  # No sources in direct mode
             processing_time=processing_time,
             gpu_accelerated=gpu_accelerated,
@@ -228,28 +227,13 @@ async def process_query_direct(
         logger.error(f"Direct query processing failed: {e}")
         return QueryResponse(
             query=query_text,
-            response=f"Direct processing failed: {str(e)}",                             # FIXED: 'response' not 'answer'
-            model="direct-error",                                                        # FIXED: 'model' not 'model_used'
+            response=f"Direct processing failed: {str(e)}",
+            model="direct-error",
             sources=[],
             processing_time=time.time() - start_time,
             gpu_accelerated=False,
             query_history_id=None
         )
-
-def create_source_document_from_result(result: Dict[str, Any], index: int = 0) -> SourceDocument:
-    """
-    Create a SourceDocument from vector database search result
-    FIXED: Proper field mapping from vector DB to schema
-    """
-    filename = result.get("filename", f"doc_{index + 1}")
-    content = result.get("content", "")
-    
-    return SourceDocument(
-        document_id=filename,                           # Map filename to document_id
-        document_name=filename,                         # Map filename to document_name
-        relevance_score=result.get("score", 0.0),      # Map score to relevance_score
-        content_snippet=content[:200] + "..." if len(content) > 200 else content  # Truncate content
-    )
 
 def get_system_status() -> Dict[str, Any]:
     """Get current system status for monitoring"""
@@ -264,7 +248,7 @@ def get_system_status() -> Dict[str, Any]:
             "gpu_accelerator_initialized": _gpu_accelerator is not None
         }
         
-        if llm_service and hasattr(llm_service, 'get_memory_usage'):
+        if llm_service:
             status["llm_memory_usage"] = llm_service.get_memory_usage()
         
         return status
@@ -297,42 +281,3 @@ def health_check() -> Dict[str, Any]:
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
-
-# FIXED: Backward compatibility function with correct schema
-def create_query_response_from_legacy(
-    query: str,
-    answer: str,
-    model_used: str = "mistral-7b",
-    sources: List[Dict[str, Any]] = None,
-    processing_time: float = 0.0,
-    gpu_accelerated: bool = False
-) -> QueryResponse:
-    """
-    Create QueryResponse from legacy format (for backward compatibility)
-    FIXED: Maps legacy field names to correct schema field names
-    """
-    # Convert legacy sources to SourceDocument objects
-    source_docs = []
-    if sources:
-        for i, source in enumerate(sources):
-            source_doc = create_source_document_from_result(source, i)
-            source_docs.append(source_doc)
-    
-    return QueryResponse(
-        query=query,
-        response=answer,                                # Map 'answer' to 'response'
-        model=model_used,                              # Map 'model_used' to 'model'
-        sources=source_docs,
-        processing_time=processing_time,
-        gpu_accelerated=gpu_accelerated,
-        query_history_id=None
-    )
-
-# Export functions for module-level access
-__all__ = [
-    'process_query',
-    'get_system_status', 
-    'health_check',
-    'create_source_document_from_result',
-    'create_query_response_from_legacy'
-]
