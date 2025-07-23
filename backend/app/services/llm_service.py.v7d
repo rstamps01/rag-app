@@ -1,0 +1,282 @@
+import os
+import torch
+import logging
+import psutil
+from typing import Optional, Dict, Any
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from sentence_transformers import SentenceTransformer
+
+logger = logging.getLogger(__name__)
+
+class LLMService:
+    """Singleton LLM Service for handling model loading and text generation with GPU optimization"""
+    
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        """Implement singleton pattern to prevent multiple model loading"""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    def __init__(self):
+        """Initialize only once to prevent multiple model loading"""
+        if not self._initialized:
+            self.model = None
+            self.tokenizer = None
+            self.embedding_model = None
+            self.model_cache_dir = "/app/models_cache/hub"
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self._initialize_models()
+            LLMService._initialized = True
+
+    def _check_memory_before_loading(self):
+        """Check system and GPU memory before loading models"""
+        # Check system memory
+        memory = psutil.virtual_memory()
+        if memory.percent > 85:
+            logger.warning(f"High system memory usage: {memory.percent}%")
+            # Force garbage collection
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        
+        # Check GPU memory if available
+        if torch.cuda.is_available():
+            gpu_memory = torch.cuda.get_device_properties(0).total_memory
+            allocated_memory = torch.cuda.memory_allocated(0)
+            available_gpu_memory = gpu_memory - allocated_memory
+            
+            # Require at least 7GB for FP16 Mistral-7B model
+            required_memory = 7 * 1024**3  # 7GB
+            
+            if available_gpu_memory < required_memory:
+                logger.warning(f"Insufficient GPU memory: {available_gpu_memory/1024**3:.1f}GB available, {required_memory/1024**3:.1f}GB required")
+                # Clear GPU cache
+                torch.cuda.empty_cache()
+                
+                # Check again
+                available_gpu_memory = gpu_memory - torch.cuda.memory_allocated(0)
+                if available_gpu_memory < required_memory:
+                    raise RuntimeError(f"Insufficient GPU memory after cleanup: {available_gpu_memory/1024**3:.1f}GB available, {required_memory/1024**3:.1f}GB required")
+
+    def _initialize_models(self):
+        """Initialize the Mistral model and tokenizer with GPU optimization"""
+        try:
+            # Check memory before loading
+            self._check_memory_before_loading()
+            
+            model_path = "mistralai/Mistral-7B-Instruct-v0.2"
+            logger.info(f"Loading Mistral-7B model on device: {self.device}")
+
+            # Load tokenizer first (lightweight)
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_path,
+                cache_dir=self.model_cache_dir,
+                trust_remote_code=True
+            )
+            
+            # Configure tokenizer properly to prevent attention mask warnings
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            if self.tokenizer.pad_token_id is None:
+                self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+
+            # Load model with GPU optimization
+            if torch.cuda.is_available():
+                # RTX 5090 optimizations
+                torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
+                
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_path,
+                    cache_dir=self.model_cache_dir,
+                    device_map="cuda",                    # Force GPU loading
+                    torch_dtype=torch.float16,           # Use FP16 to save memory
+                    low_cpu_mem_usage=True,             # Minimize CPU memory usage
+                    trust_remote_code=True,
+                    use_cache=True,                      # Enable KV cache for faster inference
+                    attn_implementation="flash_attention_2" if self._supports_flash_attention() else "eager"
+                )
+                
+                # Additional RTX 5090 optimizations
+                if self._is_rtx_5090():
+                    logger.info("Applying RTX 5090 specific optimizations")
+                    self.model.eval()  # Set to evaluation mode
+                    
+                    # Disable gradients for inference
+                    for param in self.model.parameters():
+                        param.requires_grad_(False)
+                        
+                logger.info(f"Model loaded on GPU with {torch.cuda.memory_allocated(0)/1024**3:.1f}GB allocated")
+                
+            else:
+                # CPU fallback
+                logger.warning("CUDA not available, loading on CPU")
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_path,
+                    cache_dir=self.model_cache_dir,
+                    torch_dtype=torch.float32,
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True
+                )
+
+            logger.info("Mistral-7B model loaded successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to load Mistral model: {str(e)}")
+            raise
+
+    def _supports_flash_attention(self) -> bool:
+        """Check if Flash Attention 2 is available"""
+        try:
+            import flash_attn
+            return True
+        except ImportError:
+            return False
+
+    def _is_rtx_5090(self) -> bool:
+        """Check if running on RTX 5090"""
+        if not torch.cuda.is_available():
+            return False
+        try:
+            device_name = torch.cuda.get_device_name(0)
+            return "RTX 5090" in device_name or "5090" in device_name
+        except:
+            return False
+    
+    def generate_response(self, query: str, context: str = "", max_new_tokens: int = 512) -> str:
+        """Generate response using the loaded model with optimized generation"""
+        try:
+            if not self.model or not self.tokenizer:
+                return "Model not properly initialized"
+            
+            # Prepare prompt with context
+            if context:
+                prompt = f"Context: {context}\n\nQuestion: {query}\n\nAnswer:"
+            else:
+                prompt = f"Question: {query}\n\nAnswer:"
+
+            # Tokenize input with proper attention mask and padding
+            inputs = self.tokenizer(
+                prompt, 
+                return_tensors="pt", 
+                padding=True, 
+                truncation=True,
+                max_length=1024,  # Allow longer input context
+                return_attention_mask=True
+            )
+
+            # Move to GPU if available
+            if torch.cuda.is_available() and self.device.type == "cuda":
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            # Generate response with optimized parameters
+            with torch.no_grad():
+                # Use autocast for mixed precision on RTX 5090
+                if self._is_rtx_5090():
+                    with torch.cuda.amp.autocast():
+                        outputs = self._generate_optimized(inputs, max_new_tokens)
+                else:
+                    outputs = self._generate_optimized(inputs, max_new_tokens)
+            
+            # Decode response
+            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            
+            # Extract only the answer part
+            if "Answer:" in response:
+                response = response.split("Answer:")[-1].strip()
+            
+            # Clean up GPU memory after generation
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Response generation failed: {str(e)}")
+            return f"Error generating response: {str(e)}"
+
+    def _generate_optimized(self, inputs: Dict[str, torch.Tensor], max_new_tokens: int) -> torch.Tensor:
+        """Optimized generation with proper parameters"""
+        return self.model.generate(
+            input_ids=inputs['input_ids'],
+            attention_mask=inputs['attention_mask'],     # Prevents attention mask warnings
+            max_new_tokens=max_new_tokens,              # Use max_new_tokens instead of max_length
+            num_return_sequences=1,
+            temperature=0.7,
+            do_sample=True,
+            pad_token_id=self.tokenizer.pad_token_id,
+            eos_token_id=self.tokenizer.eos_token_id,
+            repetition_penalty=1.1,                     # Prevent repetition
+            length_penalty=1.0,                         # Control length preference
+            use_cache=True,                             # Enable KV cache
+            early_stopping=True                         # Stop at EOS token
+        )
+    
+    def load_embedding_model(self) -> SentenceTransformer:
+        """Load and return the embedding model with GPU optimization"""
+        try:
+            if not self.embedding_model:
+                model_path = f"{self.model_cache_dir}/models--sentence-transformers--all-MiniLM-L6-v2"
+                
+                # Load on GPU if available
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                self.embedding_model = SentenceTransformer(model_path, device=device)
+                
+                # Optimize for inference
+                if torch.cuda.is_available():
+                    self.embedding_model.eval()
+                    for param in self.embedding_model.parameters():
+                        param.requires_grad_(False)
+                
+                logger.info(f"Embedding model loaded on {device}")
+                
+            return self.embedding_model
+        except Exception as e:
+            logger.error(f"Failed to load embedding model: {str(e)}")
+            raise
+
+    def get_memory_usage(self) -> Dict[str, Any]:
+        """Get current memory usage statistics"""
+        stats = {
+            "system_memory_percent": psutil.virtual_memory().percent,
+            "gpu_available": torch.cuda.is_available()
+        }
+        
+        if torch.cuda.is_available():
+            stats.update({
+                "gpu_memory_allocated_gb": torch.cuda.memory_allocated(0) / 1024**3,
+                "gpu_memory_reserved_gb": torch.cuda.memory_reserved(0) / 1024**3,
+                "gpu_memory_total_gb": torch.cuda.get_device_properties(0).total_memory / 1024**3
+            })
+        
+        return stats
+
+    def clear_cache(self):
+        """Clear GPU memory cache"""
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            logger.info("GPU cache cleared")
+
+# Global instance for backward compatibility
+_llm_service_instance = None
+
+def get_llm_service() -> LLMService:
+    """Get the singleton LLM service instance"""
+    global _llm_service_instance
+    if _llm_service_instance is None:
+        _llm_service_instance = LLMService()
+    return _llm_service_instance
+
+# Legacy function support (for backward compatibility)
+def load_mistral_model():
+    """Legacy function - use get_llm_service() instead"""
+    service = get_llm_service()
+    return service.model, service.tokenizer
+
+def load_embedding_model():
+    """Legacy function - use get_llm_service() instead"""
+    service = get_llm_service()
+    return service.load_embedding_model()

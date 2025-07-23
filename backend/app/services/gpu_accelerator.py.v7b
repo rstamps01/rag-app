@@ -1,0 +1,325 @@
+import torch
+import psutil
+import os
+import logging
+from typing import Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
+
+class GPUAccelerator:
+    """Blackwell-aware GPU acceleration service for RTX 5090"""
+    
+    _instance = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    def __init__(self):
+        if hasattr(self, '_initialized'):
+            return
+            
+        self.cuda_available = torch.cuda.is_available()
+        self._initialized = True
+        
+        if self.cuda_available:
+            self.device = torch.device("cuda")
+            self.device_properties = torch.cuda.get_device_properties(0)
+            
+            # Detect actual architecture
+            self.architecture = self._detect_gpu_architecture()
+            self.is_blackwell = self.architecture == "blackwell"
+            self.is_rtx_5090 = self._check_if_rtx_5090()
+            
+            # Initialize architecture-specific optimizations
+            if self.is_blackwell:
+                self._initialize_blackwell_optimizations()
+            elif self.architecture == "ada_lovelace":
+                self._initialize_ada_lovelace_optimizations()
+            
+            logger.info(f"GPU Accelerator initialized: {self.get_device_name()} ({self.architecture})")
+        else:
+            self.device = torch.device("cpu")
+            self.architecture = "cpu"
+            self.is_blackwell = False
+            self.is_rtx_5090 = False
+    
+    def _detect_gpu_architecture(self) -> str:
+        """Detect the actual GPU architecture based on compute capability"""
+        if not self.cuda_available:
+            return "cpu"
+        
+        try:
+            compute_major = self.device_properties.major
+            compute_minor = self.device_properties.minor
+            device_name = torch.cuda.get_device_name(0)
+            
+            logger.info(f"Detected GPU: {device_name}, Compute Capability: {compute_major}.{compute_minor}")
+            
+            # Blackwell architecture (RTX 50-series) - Compute Capability 12.x
+            if compute_major == 12:
+                logger.info("Blackwell architecture detected")
+                return "blackwell"
+            
+            # Ada Lovelace architecture (RTX 40-series) - Compute Capability 8.9
+            elif compute_major == 8 and compute_minor == 9:
+                logger.info("Ada Lovelace architecture detected")
+                return "ada_lovelace"
+            
+            # Ampere architecture (RTX 30-series) - Compute Capability 8.6
+            elif compute_major == 8 and compute_minor == 6:
+                logger.info("Ampere architecture detected")
+                return "ampere"
+            
+            # Turing architecture (RTX 20-series) - Compute Capability 7.5
+            elif compute_major == 7 and compute_minor == 5:
+                logger.info("Turing architecture detected")
+                return "turing"
+            
+            # Future architectures or unknown
+            elif compute_major >= 13:
+                logger.info(f"Future architecture detected (compute {compute_major}.{compute_minor})")
+                return "future"
+            
+            else:
+                logger.warning(f"Unknown architecture: compute capability {compute_major}.{compute_minor}")
+                return "unknown"
+                
+        except Exception as e:
+            logger.error(f"Architecture detection failed: {e}")
+            return "unknown"
+    
+    def _check_if_rtx_5090(self) -> bool:
+        """Check if specifically running on RTX 5090"""
+        try:
+            device_name = torch.cuda.get_device_name(0)
+            is_5090_name = "RTX 5090" in device_name or "5090" in device_name
+            is_blackwell_arch = self.architecture == "blackwell"
+            
+            result = is_5090_name and is_blackwell_arch
+            if result:
+                logger.info("RTX 5090 with Blackwell architecture confirmed")
+            
+            return result
+        except:
+            return False
+    
+    def _initialize_blackwell_optimizations(self):
+        """Initialize Blackwell (RTX 5090) specific optimizations"""
+        try:
+            # Blackwell can handle more aggressive memory usage
+            torch.cuda.set_per_process_memory_fraction(0.95)  # Use 95% of 32GB GDDR7
+            
+            # Blackwell-optimized memory allocation
+            os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:1024,roundup_power2_divisions:16'
+            
+            # Enable highest precision for Blackwell's advanced Tensor cores
+            torch.set_float32_matmul_precision('highest')
+            
+            # Blackwell-specific CUDA optimizations
+            if hasattr(torch.cuda, 'set_sync_debug_mode'):
+                torch.cuda.set_sync_debug_mode(0)  # Disable for performance
+            
+            logger.info("Blackwell (RTX 5090) optimizations initialized")
+            
+        except Exception as e:
+            logger.warning(f"Failed to initialize Blackwell optimizations: {e}")
+    
+    def _initialize_ada_lovelace_optimizations(self):
+        """Initialize Ada Lovelace optimizations (fallback for RTX 40-series)"""
+        try:
+            torch.cuda.set_per_process_memory_fraction(0.9)  # 90% for Ada Lovelace
+            os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
+            torch.set_float32_matmul_precision('high')
+            
+            logger.info("Ada Lovelace optimizations initialized")
+            
+        except Exception as e:
+            logger.warning(f"Failed to initialize Ada Lovelace optimizations: {e}")
+    
+    def optimize_model(self, model, force_gpu: bool = True):
+        """Optimize model with architecture-specific optimizations"""
+        if not self.cuda_available:
+            logger.warning("CUDA not available, returning model as-is")
+            return model
+        
+        try:
+            # Move to GPU
+            if hasattr(model, 'to'):
+                model = model.to(self.device)
+            
+            # Apply architecture-specific optimizations
+            if self.is_blackwell:
+                model = self._apply_blackwell_model_optimizations(model)
+            elif self.architecture == "ada_lovelace":
+                model = self._apply_ada_lovelace_model_optimizations(model)
+            else:
+                model = self._apply_generic_optimizations(model)
+            
+            # Common optimizations
+            if hasattr(model, 'eval'):
+                model.eval()
+            
+            if hasattr(model, 'parameters'):
+                for param in model.parameters():
+                    param.requires_grad_(False)
+            
+            logger.info(f"Model optimization completed for {self.architecture}")
+            return model
+            
+        except Exception as e:
+            logger.error(f"Model optimization failed: {e}")
+            return model
+    
+    def _apply_blackwell_model_optimizations(self, model):
+        """Apply Blackwell-specific model optimizations"""
+        try:
+            # Blackwell supports advanced precision
+            if hasattr(model, 'half'):
+                model = model.half()  # FP16 for Blackwell Tensor cores
+                logger.info("FP16 precision enabled for Blackwell")
+            
+            # Try Blackwell-optimized Flash Attention
+            if hasattr(model, 'config') and hasattr(model.config, 'attn_implementation'):
+                try:
+                    # Try Flash Attention 3 for Blackwell first
+                    model.config.attn_implementation = 'flash_attention_3'
+                    logger.info("Flash Attention 3 (Blackwell-optimized) enabled")
+                except:
+                    try:
+                        # Fallback to Flash Attention 2
+                        model.config.attn_implementation = 'flash_attention_2'
+                        logger.info("Flash Attention 2 enabled (fallback)")
+                    except:
+                        logger.info("Flash Attention not available")
+            
+            # Blackwell-specific torch compile
+            if hasattr(torch, 'compile') and self._supports_torch_compile():
+                try:
+                    model = torch.compile(model, mode='max-autotune')
+                    logger.info("Torch compile enabled for Blackwell")
+                except Exception as e:
+                    logger.info(f"Torch compile not available: {e}")
+            
+            return model
+            
+        except Exception as e:
+            logger.warning(f"Blackwell model optimizations failed: {e}")
+            return model
+    
+    def _apply_ada_lovelace_model_optimizations(self, model):
+        """Apply Ada Lovelace model optimizations"""
+        try:
+            if hasattr(model, 'half'):
+                model = model.half()
+                logger.info("FP16 precision enabled for Ada Lovelace")
+            
+            if hasattr(model, 'config') and hasattr(model.config, 'attn_implementation'):
+                try:
+                    model.config.attn_implementation = 'flash_attention_2'
+                    logger.info("Flash Attention 2 enabled for Ada Lovelace")
+                except:
+                    logger.info("Flash Attention 2 not available")
+            
+            return model
+            
+        except Exception as e:
+            logger.warning(f"Ada Lovelace optimizations failed: {e}")
+            return model
+    
+    def _apply_generic_optimizations(self, model):
+        """Apply generic GPU optimizations"""
+        try:
+            logger.info(f"Applying generic optimizations for {self.architecture}")
+            # Basic optimizations for unknown/older architectures
+            return model
+        except Exception as e:
+            logger.warning(f"Generic optimizations failed: {e}")
+            return model
+    
+    def _supports_torch_compile(self) -> bool:
+        """Check if torch.compile is available and supported"""
+        try:
+            return hasattr(torch, 'compile') and torch.__version__ >= '2.0.0'
+        except:
+            return False
+    
+    def get_gpu_info(self) -> Dict[str, Any]:
+        """Get comprehensive GPU information with correct architecture"""
+        if not self.cuda_available:
+            return {
+                "available": False,
+                "message": "CUDA is not available. Using CPU instead."
+            }
+        
+        try:
+            memory_info = self.get_memory_usage()
+            
+            return {
+                "available": True,
+                "name": self.get_device_name(),
+                "architecture": self.architecture,
+                "count": torch.cuda.device_count(),
+                "memory": memory_info,
+                "compute_capability": f"{self.device_properties.major}.{self.device_properties.minor}",
+                "is_blackwell": self.is_blackwell,
+                "is_rtx_5090": self.is_rtx_5090,
+                "tensor_cores_enabled": True,
+                "blackwell_optimizations": {
+                    "enabled": self.is_blackwell,
+                    "tensor_cores_enabled": self.is_blackwell,
+                    "mixed_precision_enabled": self.is_blackwell,
+                    "flash_attention_3_enabled": self.is_blackwell and self._check_flash_attention_3(),
+                    "torch_compile_enabled": self.is_blackwell and self._supports_torch_compile(),
+                    "memory_optimization_enabled": self.is_blackwell
+                } if self.is_blackwell else {
+                    "enabled": False,
+                    "reason": f"Not Blackwell architecture (detected: {self.architecture})"
+                }
+            }
+        except Exception as e:
+            return {
+                "available": False,
+                "error": str(e),
+                "message": "Error getting GPU information. Using CPU instead."
+            }
+    
+    def _check_flash_attention_3(self) -> bool:
+        """Check if Flash Attention 3 is available"""
+        try:
+            # Flash Attention 3 is newer and may not be widely available yet
+            import flash_attn
+            return hasattr(flash_attn, 'flash_attn_v3')
+        except ImportError:
+            return False
+    
+    def get_device_name(self) -> str:
+        """Get GPU device name"""
+        if self.cuda_available:
+            return torch.cuda.get_device_name(0)
+        return "CPU"
+    
+    def get_memory_usage(self) -> Dict[str, int]:
+        """Get current GPU memory usage"""
+        if not self.cuda_available:
+            return {"allocated": 0, "reserved": 0, "total": 0}
+        
+        return {
+            "allocated": torch.cuda.memory_allocated(0),
+            "reserved": torch.cuda.memory_reserved(0),
+            "total": self.device_properties.total_memory if self.device_properties else 0,
+            "free": (self.device_properties.total_memory - torch.cuda.memory_allocated(0)) if self.device_properties else 0
+        }
+    
+    def clear_cache(self):
+        """Clear GPU memory cache with logging"""
+        if self.cuda_available:
+            before = torch.cuda.memory_allocated(0) / 1024**3
+            torch.cuda.empty_cache()
+            after = torch.cuda.memory_allocated(0) / 1024**3
+            logger.info(f"GPU cache cleared: {before:.1f}GB -> {after:.1f}GB")
+
+# Global instance
+def get_gpu_accelerator():
+    return GPUAccelerator()

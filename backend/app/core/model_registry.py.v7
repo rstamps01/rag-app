@@ -1,0 +1,622 @@
+"""
+Centralized Model Registry for RAG Application
+
+This module provides a singleton-based model registry that manages all AI models
+(LLM, embedding, etc.) to prevent memory spikes and optimize GPU utilization.
+
+Key Features:
+- Singleton pattern to prevent multiple model loading
+- RTX 5090 specific optimizations
+- Memory management and monitoring
+- Centralized model lifecycle management
+- GPU acceleration with fallback to CPU
+"""
+
+import os
+import gc
+import time
+import torch
+import psutil
+import logging
+import threading
+from typing import Dict, Any, Optional, Union, List
+from datetime import datetime
+from dataclasses import dataclass
+from enum import Enum
+
+# Model imports
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from sentence_transformers import SentenceTransformer
+
+logger = logging.getLogger(__name__)
+
+class ModelType(Enum):
+    """Enumeration of supported model types"""
+    LLM = "llm"
+    EMBEDDING = "embedding"
+    TOKENIZER = "tokenizer"
+
+class ModelStatus(Enum):
+    """Model loading status"""
+    NOT_LOADED = "not_loaded"
+    LOADING = "loading"
+    LOADED = "loaded"
+    ERROR = "error"
+    UNLOADING = "unloading"
+
+@dataclass
+class ModelInfo:
+    """Information about a registered model"""
+    model_id: str
+    model_type: ModelType
+    model_path: str
+    status: ModelStatus
+    device: str
+    memory_usage_gb: float
+    load_time: Optional[float] = None
+    last_used: Optional[datetime] = None
+    error_message: Optional[str] = None
+    rtx5090_optimized: bool = False
+
+class ModelRegistry:
+    """
+    Singleton Model Registry for centralized model management
+    
+    Prevents memory spikes by ensuring only one instance of each model
+    and provides optimized loading for RTX 5090 GPU.
+    """
+    
+    _instance = None
+    _lock = threading.Lock()
+    _initialized = False
+    
+    def __new__(cls):
+        """Thread-safe singleton implementation"""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    def __init__(self):
+        """Initialize the model registry (only once)"""
+        if self._initialized:
+            return
+            
+        with self._lock:
+            if self._initialized:
+                return
+                
+            # Registry state
+            self._models: Dict[str, Any] = {}
+            self._model_info: Dict[str, ModelInfo] = {}
+            self._loading_locks: Dict[str, threading.Lock] = {}
+            
+            # Configuration
+            self.cache_dir = "/app/models_cache/hub"
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            
+            # GPU information
+            self.cuda_available = torch.cuda.is_available()
+            self.is_rtx_5090 = self._detect_rtx_5090()
+            
+            # Initialize GPU optimizations
+            if self.cuda_available:
+                self._initialize_gpu_optimizations()
+            
+            # Model configurations
+            self._model_configs = self._initialize_model_configs()
+            
+            # Statistics
+            self._stats = {
+                "models_loaded": 0,
+                "total_memory_saved_gb": 0.0,
+                "cache_hits": 0,
+                "load_requests": 0,
+                "startup_time": datetime.now()
+            }
+            
+            ModelRegistry._initialized = True
+            logger.info(f"Model Registry initialized - GPU: {self.cuda_available}, RTX 5090: {self.is_rtx_5090}")
+    
+    def _detect_rtx_5090(self) -> bool:
+        """Detect if running on RTX 5090"""
+        if not self.cuda_available:
+            return False
+        try:
+            device_name = torch.cuda.get_device_name(0)
+            return "RTX 5090" in device_name or "5090" in device_name
+        except:
+            return False
+    
+    def _initialize_gpu_optimizations(self):
+        """Initialize GPU-specific optimizations"""
+        try:
+            # Enable TensorFloat-32 for RTX 5090
+            torch.set_float32_matmul_precision('high')
+            
+            if self.is_rtx_5090:
+                # RTX 5090 specific optimizations
+                torch.cuda.set_per_process_memory_fraction(0.9)
+                os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
+                logger.info("RTX 5090 optimizations enabled")
+            
+        except Exception as e:
+            logger.warning(f"GPU optimization setup failed: {e}")
+    
+    def _initialize_model_configs(self) -> Dict[str, Dict[str, Any]]:
+        """Initialize model configurations"""
+        return {
+            "mistral-7b": {
+                "model_path": "mistralai/Mistral-7B-Instruct-v0.2",
+                "model_type": ModelType.LLM,
+                "gpu_memory_gb": 13.0,  # FP32 estimate
+                "gpu_memory_fp16_gb": 6.5,  # FP16 estimate
+                "supports_flash_attention": True,
+                "supports_fp16": True,
+                "rtx5090_optimized": True
+            },
+            "embedding-model": {
+                "model_path": "sentence-transformers/all-MiniLM-L6-v2",
+                "model_type": ModelType.EMBEDDING,
+                "gpu_memory_gb": 0.5,
+                "supports_fp16": True,
+                "rtx5090_optimized": True
+            }
+        }
+    
+    def _check_memory_availability(self, required_gb: float) -> Dict[str, Any]:
+        """Check if sufficient memory is available"""
+        system_memory = psutil.virtual_memory()
+        
+        result = {
+            "sufficient_system_memory": system_memory.available / 1024**3 >= required_gb * 2,
+            "system_memory_available_gb": system_memory.available / 1024**3,
+            "system_memory_percent": system_memory.percent
+        }
+        
+        if self.cuda_available:
+            gpu_props = torch.cuda.get_device_properties(0)
+            gpu_allocated = torch.cuda.memory_allocated(0)
+            gpu_available = (gpu_props.total_memory - gpu_allocated) / 1024**3
+            
+            result.update({
+                "sufficient_gpu_memory": gpu_available >= required_gb,
+                "gpu_memory_available_gb": gpu_available,
+                "gpu_memory_total_gb": gpu_props.total_memory / 1024**3,
+                "gpu_memory_allocated_gb": gpu_allocated / 1024**3
+            })
+        
+        return result
+    
+    def _cleanup_memory(self):
+        """Perform memory cleanup"""
+        try:
+            # Python garbage collection
+            gc.collect()
+            
+            # GPU cache cleanup
+            if self.cuda_available:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            
+            logger.info("Memory cleanup completed")
+        except Exception as e:
+            logger.warning(f"Memory cleanup failed: {e}")
+
+    def _load_llm_model(self, model_id: str, config: Dict[str, Any]) -> Any:
+        """Load LLM model with PyTorch SDPA"""
+        try:
+            model_path = config.get("model_path", model_id)
+            
+            model_kwargs = {
+                "torch_dtype": torch.float16,
+                "device_map": "cuda" if self.gpu_accelerator.cuda_available else "cpu",
+                "trust_remote_code": True,
+                "attn_implementation": "sdpa"  # Use PyTorch SDPA
+            }
+            
+            logger.info(f"Loading {model_id} with PyTorch SDPA (optimized attention)")
+            
+            model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
+            
+            if self.gpu_accelerator.cuda_available:
+                model = self.gpu_accelerator.optimize_model(model)
+            
+            logger.info(f"LLM model {model_id} loaded successfully with SDPA")
+            return model
+            
+        except Exception as e:
+            logger.error(f"Failed to load LLM model {model_id}: {e}")
+            raise
+
+
+        # Configure tokenizer to prevent attention mask warnings
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+        
+        # Load model with GPU optimization
+        model_kwargs = {
+            "cache_dir": self.cache_dir,
+            "trust_remote_code": True,
+            "low_cpu_mem_usage": True,
+            "use_cache": True
+        }
+        
+        if self.cuda_available:
+            model_kwargs.update({
+                "device_map": "cuda",
+                "torch_dtype": torch.float16 if config.get("supports_fp16") else torch.float32
+            })
+            
+            # RTX 5090 specific optimizations
+            if self.is_rtx_5090 and config.get("rtx5090_optimized"):
+                if config.get("supports_flash_attention") and self._supports_flash_attention():
+                    model_kwargs["attn_implementation"] = "sdpa"
+        
+        model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
+        
+        # Post-loading optimizations
+        if self.cuda_available:
+            model.eval()
+            for param in model.parameters():
+                param.requires_grad_(False)
+        
+        return model, tokenizer
+    
+    def _load_embedding_model(self, model_id: str, config: Dict[str, Any]) -> SentenceTransformer:
+        """Load embedding model with optimizations"""
+        model_path = config["model_path"]
+        
+        # Construct full cache path
+        cache_path = f"{self.cache_dir}/models--{model_path.replace('/', '--')}"
+        
+        # Load model
+        device = "cuda" if self.cuda_available else "cpu"
+        model = SentenceTransformer(cache_path, device=device)
+        
+        # Optimize for inference
+        if self.cuda_available:
+            model.eval()
+            for param in model.parameters():
+                param.requires_grad_(False)
+        
+        return model
+    
+    def _supports_flash_attention(self) -> bool:
+        """Check if optimized attention is available"""
+        # Skip Flash Attention, use PyTorch SDPA
+        if hasattr(torch.nn.functional, 'scaled_dot_product_attention'):
+            logger.info("PyTorch SDPA available - using optimized attention")
+            return True
+        
+        logger.info("Using eager attention (no optimized attention available)")
+        return False
+
+    def _get_attention_implementation(self) -> str:
+        """Get the best available attention implementation"""
+        # Use PyTorch SDPA instead of Flash Attention
+        if hasattr(torch.nn.functional, 'scaled_dot_product_attention'):
+            return "sdpa"
+        
+        # Final fallback
+        return "eager"
+
+    def register_model(self, model_id: str, model_path: str, model_type: ModelType, **kwargs):
+        """Register a new model configuration"""
+        self._model_configs[model_id] = {
+            "model_path": model_path,
+            "model_type": model_type,
+            **kwargs
+        }
+        logger.info(f"Model {model_id} registered")
+    
+    def load_model(self, model_id: str, force_reload: bool = False) -> Any:
+        """
+        Load a model by ID with singleton pattern
+        
+        Args:
+            model_id: Unique identifier for the model
+            force_reload: Force reload even if already loaded
+            
+        Returns:
+            Loaded model instance
+        """
+        # Check if already loaded and not forcing reload
+        if not force_reload and model_id in self._models:
+            self._stats["cache_hits"] += 1
+            
+            # Update last used time
+            if model_id in self._model_info:
+                self._model_info[model_id].last_used = datetime.now()
+            
+            logger.info(f"Model {model_id} retrieved from cache")
+            return self._models[model_id]
+        
+        # Ensure thread-safe loading
+        if model_id not in self._loading_locks:
+            self._loading_locks[model_id] = threading.Lock()
+        
+        with self._loading_locks[model_id]:
+            # Double-check after acquiring lock
+            if not force_reload and model_id in self._models:
+                return self._models[model_id]
+            
+            self._stats["load_requests"] += 1
+            
+            # Get model configuration
+            if model_id not in self._model_configs:
+                raise ValueError(f"Model {model_id} not registered")
+            
+            config = self._model_configs[model_id]
+            model_type = config["model_type"]
+            
+            # Create model info
+            model_info = ModelInfo(
+                model_id=model_id,
+                model_type=model_type,
+                model_path=config["model_path"],
+                status=ModelStatus.LOADING,
+                device=str(self.device),
+                memory_usage_gb=0.0,
+                rtx5090_optimized=config.get("rtx5090_optimized", False)
+            )
+            self._model_info[model_id] = model_info
+            
+            try:
+                logger.info(f"Loading model {model_id} ({model_type.value})")
+                start_time = time.time()
+                
+                # Check memory availability
+                required_memory = config.get("gpu_memory_fp16_gb" if self.cuda_available else "gpu_memory_gb", 1.0)
+                memory_check = self._check_memory_availability(required_memory)
+                
+                if not memory_check.get("sufficient_gpu_memory" if self.cuda_available else "sufficient_system_memory"):
+                    logger.warning("Insufficient memory, performing cleanup")
+                    self._cleanup_memory()
+                    
+                    # Check again after cleanup
+                    memory_check = self._check_memory_availability(required_memory)
+                    if not memory_check.get("sufficient_gpu_memory" if self.cuda_available else "sufficient_system_memory"):
+                        raise RuntimeError(f"Insufficient memory for model {model_id}")
+                
+                # Load model based on type
+                if model_type == ModelType.LLM:
+                    model, tokenizer = self._load_llm_model(model_id, config)
+                    # Store both model and tokenizer
+                    self._models[model_id] = model
+                    self._models[f"{model_id}_tokenizer"] = tokenizer
+                    
+                elif model_type == ModelType.EMBEDDING:
+                    model = self._load_embedding_model(model_id, config)
+                    self._models[model_id] = model
+                    
+                else:
+                    raise ValueError(f"Unsupported model type: {model_type}")
+                
+                # Update model info
+                load_time = time.time() - start_time
+                model_info.status = ModelStatus.LOADED
+                model_info.load_time = load_time
+                model_info.last_used = datetime.now()
+                model_info.memory_usage_gb = self._estimate_model_memory(model_id)
+                
+                self._stats["models_loaded"] += 1
+                
+                logger.info(f"Model {model_id} loaded successfully in {load_time:.2f}s")
+                return self._models[model_id]
+                
+            except Exception as e:
+                model_info.status = ModelStatus.ERROR
+                model_info.error_message = str(e)
+                logger.error(f"Failed to load model {model_id}: {e}")
+                raise
+    
+    def _estimate_model_memory(self, model_id: str) -> float:
+        """Estimate model memory usage"""
+        if not self.cuda_available:
+            return 0.0
+        
+        try:
+            # Get current GPU memory after loading
+            current_memory = torch.cuda.memory_allocated(0) / 1024**3
+            return current_memory
+        except:
+            return 0.0
+    
+    def get_model(self, model_id: str) -> Optional[Any]:
+        """Get a loaded model without loading it"""
+        return self._models.get(model_id)
+    
+    def get_tokenizer(self, model_id: str) -> Optional[Any]:
+        """Get tokenizer for an LLM model"""
+        return self._models.get(f"{model_id}_tokenizer")
+    
+    def unload_model(self, model_id: str):
+        """Unload a model to free memory"""
+        if model_id not in self._models:
+            logger.warning(f"Model {model_id} not loaded")
+            return
+        
+        try:
+            # Update status
+            if model_id in self._model_info:
+                self._model_info[model_id].status = ModelStatus.UNLOADING
+            
+            # Remove from registry
+            del self._models[model_id]
+            
+            # Remove tokenizer if exists
+            tokenizer_key = f"{model_id}_tokenizer"
+            if tokenizer_key in self._models:
+                del self._models[tokenizer_key]
+            
+            # Cleanup memory
+            self._cleanup_memory()
+            
+            # Update status
+            if model_id in self._model_info:
+                self._model_info[model_id].status = ModelStatus.NOT_LOADED
+                self._model_info[model_id].memory_usage_gb = 0.0
+            
+            logger.info(f"Model {model_id} unloaded")
+            
+        except Exception as e:
+            logger.error(f"Failed to unload model {model_id}: {e}")
+    
+    def get_model_info(self, model_id: str) -> Optional[ModelInfo]:
+        """Get information about a model"""
+        return self._model_info.get(model_id)
+    
+    def list_models(self) -> Dict[str, ModelInfo]:
+        """List all registered models and their status"""
+        return self._model_info.copy()
+    
+    def get_memory_usage(self) -> Dict[str, Any]:
+        """Get current memory usage statistics"""
+        system_memory = psutil.virtual_memory()
+        
+        result = {
+            "system_memory_percent": system_memory.percent,
+            "system_memory_available_gb": system_memory.available / 1024**3,
+            "models_loaded": len(self._models),
+            "total_models_registered": len(self._model_configs)
+        }
+        
+        if self.cuda_available:
+            gpu_props = torch.cuda.get_device_properties(0)
+            gpu_allocated = torch.cuda.memory_allocated(0)
+            
+            result.update({
+                "gpu_memory_allocated_gb": gpu_allocated / 1024**3,
+                "gpu_memory_total_gb": gpu_props.total_memory / 1024**3,
+                "gpu_memory_percent": (gpu_allocated / gpu_props.total_memory) * 100
+            })
+        
+        return result
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get registry statistics"""
+        uptime = datetime.now() - self._stats["startup_time"]
+        
+        return {
+            **self._stats,
+            "uptime_seconds": uptime.total_seconds(),
+            "memory_usage": self.get_memory_usage(),
+            "gpu_available": self.cuda_available,
+            "rtx5090_detected": self.is_rtx_5090,
+            "active_models": list(self._models.keys())
+        }
+    
+    def health_check(self) -> Dict[str, Any]:
+        """Perform health check on the registry"""
+        try:
+            memory_usage = self.get_memory_usage()
+            
+            # Check for critical issues
+            issues = []
+            if memory_usage["system_memory_percent"] > 90:
+                issues.append("System memory critically high")
+            
+            if self.cuda_available and memory_usage.get("gpu_memory_percent", 0) > 95:
+                issues.append("GPU memory critically high")
+            
+            # Check model status
+            error_models = [
+                model_id for model_id, info in self._model_info.items()
+                if info.status == ModelStatus.ERROR
+            ]
+            
+            if error_models:
+                issues.append(f"Models in error state: {error_models}")
+            
+            return {
+                "healthy": len(issues) == 0,
+                "issues": issues,
+                "memory_usage": memory_usage,
+                "models_status": {
+                    model_id: info.status.value
+                    for model_id, info in self._model_info.items()
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            return {
+                "healthy": False,
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    def cleanup_unused_models(self, max_idle_hours: int = 24):
+        """Cleanup models that haven't been used recently"""
+        current_time = datetime.now()
+        models_to_unload = []
+        
+        for model_id, info in self._model_info.items():
+            if (info.status == ModelStatus.LOADED and 
+                info.last_used and 
+                (current_time - info.last_used).total_seconds() > max_idle_hours * 3600):
+                models_to_unload.append(model_id)
+        
+        for model_id in models_to_unload:
+            logger.info(f"Unloading unused model: {model_id}")
+            self.unload_model(model_id)
+        
+        return len(models_to_unload)
+
+# Global registry instance
+_model_registry = None
+
+def get_model_registry() -> ModelRegistry:
+    """Get the singleton model registry instance"""
+    global _model_registry
+    if _model_registry is None:
+        _model_registry = ModelRegistry()
+    return _model_registry
+
+# Convenience functions for backward compatibility
+def load_mistral_model():
+    """Load Mistral model using the registry"""
+    registry = get_model_registry()
+    model = registry.load_model("mistral-7b")
+    tokenizer = registry.get_tokenizer("mistral-7b")
+    return model, tokenizer
+
+def load_embedding_model():
+    """Load embedding model using the registry"""
+    registry = get_model_registry()
+    return registry.load_model("embedding-model")
+
+def get_model_memory_usage():
+    """Get current model memory usage"""
+    registry = get_model_registry()
+    return registry.get_memory_usage()
+
+def cleanup_model_cache():
+    """Cleanup model cache"""
+    registry = get_model_registry()
+    registry._cleanup_memory()
+
+# Initialize default models
+def initialize_default_models():
+    """Initialize default model configurations"""
+    registry = get_model_registry()
+    
+    # Models are already configured in _initialize_model_configs
+    logger.info("Default models initialized in registry")
+
+if __name__ == "__main__":
+    # Example usage and testing
+    registry = get_model_registry()
+    
+    print("Model Registry Status:")
+    print(f"GPU Available: {registry.cuda_available}")
+    print(f"RTX 5090 Detected: {registry.is_rtx_5090}")
+    print(f"Registered Models: {list(registry._model_configs.keys())}")
+    
+    # Health check
+    health = registry.health_check()
+    print(f"Health Status: {health}")

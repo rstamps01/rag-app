@@ -1,287 +1,336 @@
+"""
+GPU Accelerator with PyTorch SDPA Support
+Enhanced memory management and RTX 5090 Blackwell optimizations
+"""
+
+import logging
+import threading
+import time
+from typing import Dict, Any, Optional, Tuple
 import torch
-import psutil
-import os
-import numpy as np
-from typing import Dict, Any, Optional
+import gc
+
+logger = logging.getLogger(__name__)
 
 class GPUAccelerator:
-    """Service for GPU acceleration and monitoring with RTX 5090 optimizations"""
+    """
+    GPU Accelerator with singleton pattern and PyTorch SDPA optimization
+    """
+    
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(GPUAccelerator, cls).__new__(cls)
+        return cls._instance
     
     def __init__(self):
+        if hasattr(self, '_initialized'):
+            return
+        
+        self._initialized = True
         self.cuda_available = torch.cuda.is_available()
+        self.device_count = torch.cuda.device_count() if self.cuda_available else 0
+        self.device_properties = None
+        self.architecture = None
+        
         if self.cuda_available:
-            self.device = torch.device("cuda")
             self.device_properties = torch.cuda.get_device_properties(0)
-            
-            # Enable TensorFloat-32 for RTX 5090
-            torch.set_float32_matmul_precision('high')
-            
-            # Check if we're running on Ada Lovelace architecture (RTX 5090)
-            self.is_ada_lovelace = self._check_if_ada_lovelace()
-        else:
-            self.device = torch.device("cpu")
-            self.device_properties = None
-            self.is_ada_lovelace = False
-    
-    def _check_if_ada_lovelace(self) -> bool:
-        """Check if GPU is Ada Lovelace architecture (RTX 5090)"""
-        try:
-            # RTX 5090 should have compute capability 9.x
-            major = self.device_properties.major
-            return major >= 9
-        except:
-            return False
-    
-    def optimize_model(self, model):
-        """
-        Optimize a model for GPU acceleration
+            self.architecture = self._detect_gpu_architecture()
+            self._configure_gpu_settings()
         
-        Args:
-            model: PyTorch model or SentenceTransformer model to optimize
-            
-        Returns:
-            Optimized model
-        """
+        logger.info(f"GPU Accelerator initialized - CUDA: {self.cuda_available}, Architecture: {self.architecture}")
+    
+    def _detect_gpu_architecture(self) -> str:
+        """Detect GPU architecture"""
         if not self.cuda_available:
-            return model
+            return "cpu"
         
+        compute_major = self.device_properties.major
+        compute_minor = self.device_properties.minor
+        device_name = self.device_properties.name.lower()
+        
+        # RTX 5090 uses Blackwell architecture (compute capability 12.0)
+        if compute_major == 12:
+            return "blackwell"
+        # RTX 4090 uses Ada Lovelace architecture (compute capability 8.9)
+        elif compute_major == 8 and compute_minor == 9:
+            return "ada_lovelace"
+        # RTX 3090 uses Ampere architecture (compute capability 8.6)
+        elif compute_major == 8 and compute_minor == 6:
+            return "ampere"
+        # RTX 2080 uses Turing architecture (compute capability 7.5)
+        elif compute_major == 7 and compute_minor == 5:
+            return "turing"
+        else:
+            return f"unknown_sm_{compute_major}{compute_minor}"
+    
+    def _configure_gpu_settings(self):
+        """Configure GPU settings based on architecture"""
         try:
-            # Move model to GPU if not already there
-            if hasattr(model, 'to'):
-                model = model.to(self.device)
-            
-            # Apply RTX 5090 specific optimizations
-            if self.is_ada_lovelace:
-                # Enable Flash Attention if available
-                if hasattr(model, 'config') and hasattr(model.config, 'attn_implementation'):
-                    try:
-                        model.config.attn_implementation = 'flash_attention_2'
-                    except:
-                        pass  # Flash attention not available
+            if self.is_blackwell():
+                # RTX 5090 Blackwell optimizations
+                torch.cuda.set_per_process_memory_fraction(0.95)  # Use 95% of 32GB VRAM
+                torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
+                logger.info("Configured RTX 5090 Blackwell optimizations")
                 
-                # Enable mixed precision for inference
-                if hasattr(model, 'half'):
-                    try:
-                        model = model.half()  # Use FP16 for faster inference
-                    except:
-                        pass  # Model doesn't support half precision
+            elif self.is_ada_lovelace():
+                # RTX 4090 Ada Lovelace optimizations
+                torch.cuda.set_per_process_memory_fraction(0.90)  # Use 90% of 24GB VRAM
+                torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
+                logger.info("Configured RTX 4090 Ada Lovelace optimizations")
+                
+            else:
+                # Generic GPU optimizations
+                torch.cuda.set_per_process_memory_fraction(0.85)
+                torch.set_float32_matmul_precision('medium')
+                logger.info(f"Configured generic GPU optimizations for {self.architecture}")
             
-            # Set model to evaluation mode for inference
-            if hasattr(model, 'eval'):
-                model.eval()
+            # Enable optimized attention backends
+            torch.backends.cuda.enable_flash_sdp(True)  # Enable PyTorch SDPA
+            torch.backends.cuda.enable_math_sdp(True)   # Enable math fallback
+            torch.backends.cuda.enable_mem_efficient_sdp(True)  # Enable memory efficient attention
             
-            # Disable gradient computation for inference
-            if hasattr(model, 'requires_grad_'):
-                for param in model.parameters():
-                    param.requires_grad_(False)
-            
-            return model
+            logger.info("Enabled PyTorch SDPA backends")
             
         except Exception as e:
-            print(f"Warning: Could not optimize model: {e}")
-            return model
+            logger.warning(f"Failed to configure GPU settings: {e}")
     
-    def get_gpu_info(self) -> Dict[str, Any]:
-        """
-        Get GPU information
+    def _supports_sdpa(self) -> bool:
+        """Check if PyTorch SDPA is available"""
+        if hasattr(torch.nn.functional, 'scaled_dot_product_attention'):
+            logger.info("PyTorch SDPA available for GPU acceleration")
+            return True
         
-        Returns:
-            Dictionary with GPU information
-        """
+        logger.info("PyTorch SDPA not available")
+        return False
+    
+    def _supports_torch_compile(self) -> bool:
+        """Check if torch.compile is available"""
+        return hasattr(torch, 'compile') and torch.__version__ >= "2.0.0"
+    
+    def is_blackwell(self) -> bool:
+        """Check if GPU is Blackwell architecture (RTX 5090)"""
+        return self.architecture == "blackwell"
+    
+    def is_ada_lovelace(self) -> bool:
+        """Check if GPU is Ada Lovelace architecture (RTX 4090)"""
+        return self.architecture == "ada_lovelace"
+    
+    def get_memory_info(self) -> Dict[str, int]:
+        """Get GPU memory information"""
         if not self.cuda_available:
-            return {
-                "available": False,
-                "message": "CUDA is not available. Using CPU instead."
-            }
+            return {"total": 0, "allocated": 0, "reserved": 0, "available": 0}
         
-        try:
-            return {
-                "available": True,
-                "name": torch.cuda.get_device_name(0),
-                "count": torch.cuda.device_count(),
-                "memory": {
-                    "allocated": torch.cuda.memory_allocated(0),
-                    "reserved": torch.cuda.memory_reserved(0),
-                    "total": self.device_properties.total_memory
-                },
-                "compute_capability": f"{self.device_properties.major}.{self.device_properties.minor}",
-                "is_ada_lovelace": self.is_ada_lovelace,
-                "tensor_cores_enabled": torch.get_float32_matmul_precision() != 'highest'
-            }
-        except Exception as e:
-            return {
-                "available": False,
-                "error": str(e),
-                "message": "Error getting GPU information. Using CPU instead."
-            }
-    
-    def optimize_batch_size(self, input_size: int, max_batch_size: int = 32) -> int:
-        """
-        Optimize batch size based on available GPU memory
-        
-        Args:
-            input_size: Size of each input item
-            max_batch_size: Maximum batch size to consider
-            
-        Returns:
-            Optimal batch size
-        """
-        if not self.cuda_available:
-            return 1
-        
-        # Get available memory
-        available_memory = self.device_properties.total_memory - torch.cuda.memory_allocated(0)
-        
-        # RTX 5090 has more memory, adjust calculations
-        if self.is_ada_lovelace:
-            # Estimate memory per item with less overhead for RTX 5090
-            memory_per_item = input_size * 4 * 1.5  # Reduced overhead factor
-        else:
-            # Estimate memory per item (with safety factor)
-            memory_per_item = input_size * 4 * 2  # Assuming float32 and 2x overhead
-        
-        # Calculate max possible batch size
-        max_possible = available_memory // memory_per_item
-        
-        # Return the smaller of max_possible and max_batch_size
-        return min(int(max_possible), max_batch_size)
-    
-    def setup_mixed_precision(self):
-        """
-        Set up mixed precision training/inference for RTX 5090
-        
-        Returns:
-            GradScaler for mixed precision if available
-        """
-        if self.cuda_available and self.is_ada_lovelace:
-            # Enable autocast for mixed precision
-            return torch.amp.GradScaler('cuda')
-        return None
-    
-    def get_system_resources(self) -> Dict[str, Any]:
-        """
-        Get system resource information
-        
-        Returns:
-            Dictionary with system resource information
-        """
-        # Get CPU info
-        cpu_info = {
-            "cores": psutil.cpu_count(logical=False),
-            "threads": psutil.cpu_count(logical=True),
-            "usage": psutil.cpu_percent(interval=0.1)
-        }
-        
-        # Get memory info
-        memory = psutil.virtual_memory()
-        memory_info = {
-            "total": memory.total,
-            "available": memory.available,
-            "used": memory.used,
-            "percent": memory.percent
-        }
-        
-        # Get disk info
-        disk = psutil.disk_usage('/')
-        disk_info = {
-            "total": disk.total,
-            "used": disk.used,
-            "free": disk.free,
-            "percent": disk.percent
-        }
+        total = torch.cuda.get_device_properties(0).total_memory
+        allocated = torch.cuda.memory_allocated(0)
+        reserved = torch.cuda.memory_reserved(0)
+        available = total - reserved
         
         return {
-            "cpu": cpu_info,
-            "memory": memory_info,
-            "disk": disk_info,
-            "gpu": self.get_gpu_info()
+            "total": total,
+            "allocated": allocated,
+            "reserved": reserved,
+            "available": available
         }
-        
-    def create_cuda_graph(self, model, sample_input):
-        """
-        Create CUDA graph for repeated operations (RTX 5090 optimization)
-        
-        Args:
-            model: PyTorch model
-            sample_input: Sample input for the model
-            
-        Returns:
-            CUDA graph if available, None otherwise
-        """
-        if not (self.cuda_available and self.is_ada_lovelace):
-            return None
-            
-        try:
-            # Warmup
-            s = torch.cuda.Stream()
-            s.wait_stream(torch.cuda.current_stream())
-            with torch.cuda.stream(s):
-                for _ in range(3):  # warmup
-                    output = model(sample_input)
-            torch.cuda.current_stream().wait_stream(s)
-            
-            # Create graph
-            g = torch.cuda.CUDAGraph()
-            with torch.cuda.graph(g):
-                output = model(sample_input)
-                
-            return g
-        except Exception as e:
-            print(f"Error creating CUDA graph: {e}")
-            return None
     
-    def clear_cache(self):
+    def clear_memory(self):
         """Clear GPU memory cache"""
         if self.cuda_available:
             torch.cuda.empty_cache()
+            gc.collect()
+            logger.info("GPU memory cache cleared")
     
-    def get_memory_usage(self) -> Dict[str, int]:
-        """Get current GPU memory usage"""
+    def get_memory_usage_mb(self) -> float:
+        """Get current GPU memory usage in MB"""
         if not self.cuda_available:
-            return {"allocated": 0, "reserved": 0, "total": 0}
+            return 0.0
         
-        return {
-            "allocated": torch.cuda.memory_allocated(0),
-            "reserved": torch.cuda.memory_reserved(0),
-            "total": self.device_properties.total_memory if self.device_properties else 0
-        }
+        return torch.cuda.memory_allocated(0) / 1024 / 1024
     
-    def optimize_for_inference(self, model):
-        """
-        Optimize model specifically for inference
+    def check_memory_availability(self, required_mb: float) -> bool:
+        """Check if enough GPU memory is available"""
+        if not self.cuda_available:
+            return True
         
-        Args:
-            model: Model to optimize
-            
-        Returns:
-            Optimized model
-        """
+        memory_info = self.get_memory_info()
+        available_mb = memory_info["available"] / 1024 / 1024
+        
+        return available_mb >= required_mb
+    
+    def optimize_model(self, model):
+        """Apply GPU optimizations to a model"""
         if not self.cuda_available:
             return model
         
         try:
             # Move to GPU
-            if hasattr(model, 'to'):
-                model = model.to(self.device)
+            model = model.cuda()
             
-            # Set to eval mode
-            if hasattr(model, 'eval'):
-                model.eval()
-            
-            # Disable gradients
-            if hasattr(model, 'parameters'):
-                for param in model.parameters():
-                    param.requires_grad_(False)
-            
-            # Apply torch.jit.script if possible for additional optimization
-            try:
-                if hasattr(torch.jit, 'script'):
-                    model = torch.jit.script(model)
-            except:
-                pass  # JIT compilation not supported for this model
+            # Apply architecture-specific optimizations
+            if self.is_blackwell():
+                model = self._apply_blackwell_model_optimizations(model)
+            elif self.is_ada_lovelace():
+                model = self._apply_ada_lovelace_model_optimizations(model)
+            else:
+                model = self._apply_generic_model_optimizations(model)
             
             return model
             
         except Exception as e:
-            print(f"Warning: Could not optimize model for inference: {e}")
+            logger.warning(f"Model optimization failed: {e}")
             return model
+    
+    def _apply_blackwell_model_optimizations(self, model):
+        """Apply Blackwell-specific model optimizations with PyTorch SDPA"""
+        try:
+            # Blackwell supports advanced precision
+            if hasattr(model, 'half'):
+                model = model.half()  # FP16 for Blackwell Tensor cores
+                logger.info("FP16 precision enabled for Blackwell")
+            
+            # Configure PyTorch SDPA attention
+            if hasattr(model, 'config') and hasattr(model.config, 'attn_implementation'):
+                model.config.attn_implementation = 'sdpa'
+                logger.info("PyTorch SDPA attention enabled for Blackwell")
+            
+            # Blackwell-specific torch compile
+            if self._supports_torch_compile():
+                try:
+                    model = torch.compile(model, mode='max-autotune')
+                    logger.info("Torch compile enabled for Blackwell")
+                except Exception as e:
+                    logger.info(f"Torch compile not available: {e}")
+            
+            return model
+            
+        except Exception as e:
+            logger.warning(f"Blackwell model optimizations failed: {e}")
+            return model
+    
+    def _apply_ada_lovelace_model_optimizations(self, model):
+        """Apply Ada Lovelace-specific model optimizations with PyTorch SDPA"""
+        try:
+            # Ada Lovelace supports FP16
+            if hasattr(model, 'half'):
+                model = model.half()
+                logger.info("FP16 precision enabled for Ada Lovelace")
+            
+            # Configure PyTorch SDPA attention
+            if hasattr(model, 'config') and hasattr(model.config, 'attn_implementation'):
+                model.config.attn_implementation = 'sdpa'
+                logger.info("PyTorch SDPA attention enabled for Ada Lovelace")
+            
+            # Ada Lovelace torch compile
+            if self._supports_torch_compile():
+                try:
+                    model = torch.compile(model, mode='reduce-overhead')
+                    logger.info("Torch compile enabled for Ada Lovelace")
+                except Exception as e:
+                    logger.info(f"Torch compile not available: {e}")
+            
+            return model
+            
+        except Exception as e:
+            logger.warning(f"Ada Lovelace model optimizations failed: {e}")
+            return model
+    
+    def _apply_generic_model_optimizations(self, model):
+        """Apply generic model optimizations with PyTorch SDPA"""
+        try:
+            # Generic FP16 optimization
+            if hasattr(model, 'half'):
+                model = model.half()
+                logger.info("FP16 precision enabled")
+            
+            # Configure PyTorch SDPA attention if available
+            if hasattr(model, 'config') and hasattr(model.config, 'attn_implementation'):
+                if self._supports_sdpa():
+                    model.config.attn_implementation = 'sdpa'
+                    logger.info("PyTorch SDPA attention enabled")
+                else:
+                    model.config.attn_implementation = 'eager'
+                    logger.info("Using eager attention")
+            
+            return model
+            
+        except Exception as e:
+            logger.warning(f"Generic model optimizations failed: {e}")
+            return model
+    
+    def get_device_info(self) -> Dict[str, Any]:
+        """Get detailed device information"""
+        if not self.cuda_available:
+            return {
+                "cuda_available": False,
+                "device_count": 0,
+                "architecture": "cpu"
+            }
+        
+        memory_info = self.get_memory_info()
+        
+        return {
+            "cuda_available": True,
+            "device_count": self.device_count,
+            "device_name": self.device_properties.name,
+            "architecture": self.architecture,
+            "compute_capability": f"{self.device_properties.major}.{self.device_properties.minor}",
+            "total_memory_gb": memory_info["total"] / 1024**3,
+            "allocated_memory_mb": memory_info["allocated"] / 1024**2,
+            "available_memory_gb": memory_info["available"] / 1024**3,
+            "sdpa_available": self._supports_sdpa(),
+            "torch_compile_available": self._supports_torch_compile(),
+            "is_blackwell": self.is_blackwell(),
+            "is_ada_lovelace": self.is_ada_lovelace()
+        }
+    
+    def monitor_memory_usage(self, threshold_mb: float = 1000.0) -> Dict[str, Any]:
+        """Monitor GPU memory usage and provide warnings"""
+        if not self.cuda_available:
+            return {"status": "no_gpu", "warning": False}
+        
+        memory_info = self.get_memory_info()
+        available_mb = memory_info["available"] / 1024 / 1024
+        allocated_mb = memory_info["allocated"] / 1024 / 1024
+        total_mb = memory_info["total"] / 1024 / 1024
+        usage_percent = (allocated_mb / total_mb) * 100
+        
+        warning = available_mb < threshold_mb
+        
+        return {
+            "status": "monitoring",
+            "total_mb": total_mb,
+            "allocated_mb": allocated_mb,
+            "available_mb": available_mb,
+            "usage_percent": usage_percent,
+            "warning": warning,
+            "threshold_mb": threshold_mb
+        }
+    
+    def health_check(self) -> Dict[str, Any]:
+        """Perform health check on GPU accelerator"""
+        device_info = self.get_device_info()
+        memory_monitor = self.monitor_memory_usage()
+        
+        return {
+            "status": "healthy" if self.cuda_available else "no_gpu",
+            "cuda_available": self.cuda_available,
+            "architecture": self.architecture,
+            "sdpa_available": self._supports_sdpa(),
+            "memory_status": "ok" if not memory_monitor["warning"] else "low_memory",
+            "device_info": device_info,
+            "memory_info": memory_monitor
+        }
+
+# Global accelerator instance
+_gpu_accelerator = None
+
+def get_gpu_accelerator() -> GPUAccelerator:
+    """Get the global GPU accelerator instance"""
+    global _gpu_accelerator
+    if _gpu_accelerator is None:
+        _gpu_accelerator = GPUAccelerator()
+    return _gpu_accelerator
