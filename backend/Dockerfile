@@ -1,5 +1,5 @@
 # Production Cache Initialization Dockerfile
-FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04 AS base
 
 # Metadata
 LABEL maintainer="RAG Application Team"
