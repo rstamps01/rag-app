@@ -1,0 +1,349 @@
+import React, { useState, useEffect } from 'react';
+import { MessageSquare, Send, Clock, FileText, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
+import { api, apiHelpers } from '../../lib/api';
+
+const QueriesPage = () => {
+  const [query, setQuery] = useState('');
+  const [department, setDepartment] = useState('General');
+  const [response, setResponse] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [queryHistory, setQueryHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // ✅ CORRECTED: Submit query using proper API helper
+  const handleSubmitQuery = async () => {
+    if (!query.trim()) {
+      setError('Please enter a query.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setResponse(null);
+
+    try {
+      // ✅ CORRECTED: Use API helper with correct parameters
+      const queryResponse = await apiHelpers.submitQuery(query, department);
+      
+      setResponse({
+        query: queryResponse.query,
+        response: queryResponse.response,
+        model: queryResponse.model,
+        sources: queryResponse.sources || [],
+        processing_time: queryResponse.processing_time,
+        gpu_accelerated: queryResponse.gpu_accelerated,
+        query_history_id: queryResponse.query_history_id
+      });
+
+      console.log('✅ Query processed successfully:', queryResponse);
+      
+      // Refresh query history after successful query
+      await fetchQueryHistory();
+      
+      // Clear the query input
+      setQuery('');
+      
+    } catch (err) {
+      console.error('Query error:', err);
+      
+      // ✅ IMPROVED: Enhanced error handling based on backend error responses
+      if (err.response?.status === 422) {
+        setError('Invalid query format. Please check your input and try again.');
+      } else if (err.response?.status === 500) {
+        setError('Server error during query processing. Please check the backend logs.');
+      } else if (err.code === 'ERR_NETWORK') {
+        setError('Network error. Please check if the backend server is accessible.');
+      } else if (err.response?.status === 413) {
+        setError('Query too large. Please shorten your query and try again.');
+      } else {
+        setError(err.response?.data?.detail || err.message || 'Failed to process query.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ CORRECTED: Fetch query history using API helper with cache busting
+  const fetchQueryHistory = async () => {
+    setHistoryLoading(true);
+    
+    try {
+      // ✅ CORRECTED: Use API helper to get query history
+      const history = await apiHelpers.getQueryHistory(10);
+      
+      // ✅ CORRECTED: Handle different response formats
+      const historyArray = Array.isArray(history) ? history : (history.queries || []);
+      setQueryHistory(historyArray);
+      
+      console.log(`✅ Fetched ${historyArray.length} query history entries`);
+      
+    } catch (err) {
+      console.error('Error fetching query history:', err);
+      // Don't show error for history fetch failure, just log it
+      setQueryHistory([]); // Set empty array on error
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  // ✅ IMPROVED: Format processing time helper
+  const formatProcessingTime = (timeMs) => {
+    if (!timeMs) return 'N/A';
+    if (timeMs < 1000) return `${Math.round(timeMs)}ms`;
+    return `${(timeMs / 1000).toFixed(2)}s`;
+  };
+
+  // ✅ IMPROVED: Format timestamp helper
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString();
+    } catch {
+      return 'Invalid Date';
+    }
+  };
+
+  // ✅ IMPROVED: Get relevance score color
+  const getRelevanceColor = (score) => {
+    if (score >= 0.8) return 'bg-green-100 text-green-800 border-green-200';
+    if (score >= 0.6) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    return 'bg-red-100 text-red-800 border-red-200';
+  };
+
+  // ✅ IMPROVED: Handle Enter key press in textarea
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmitQuery();
+    }
+  };
+
+  useEffect(() => {
+    fetchQueryHistory();
+  }, []);
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Query Interface</h1>
+        <button 
+          onClick={fetchQueryHistory} 
+          disabled={historyLoading}
+          className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+        >
+          <RefreshCw size={16} className={historyLoading ? 'animate-spin' : ''} />
+          {historyLoading ? 'Refreshing...' : 'Refresh History'}
+        </button>
+      </div>
+
+      {/* Query Input Section */}
+      <div className="bg-white rounded-lg border shadow-sm">
+        <div className="p-6 border-b">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <MessageSquare size={20} />
+            Ask a Question
+          </h2>
+          <p className="text-gray-600 mt-1">
+            Enter your question and select a department to get AI-powered answers from your documents.
+          </p>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Department</label>
+            <select 
+              value={department} 
+              onChange={(e) => setDepartment(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="General">General</option>
+              <option value="IT">IT</option>
+              <option value="HR">HR</option>
+              <option value="Finance">Finance</option>
+              <option value="Legal">Legal</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Your Question</label>
+            <textarea
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Enter your question here... (Press Enter to submit, Shift+Enter for new line)"
+              rows={4}
+              className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            />
+          </div>
+
+          <button 
+            onClick={handleSubmitQuery} 
+            disabled={loading || !query.trim()}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Processing...
+              </>
+            ) : (
+              <>
+                <Send size={16} />
+                Submit Query
+              </>
+            )}
+          </button>
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Query Response Section */}
+      {response && (
+        <div className="bg-white rounded-lg border shadow-sm">
+          <div className="p-6 border-b">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <CheckCircle size={20} className="text-green-600" />
+              Response
+            </h2>
+            <div className="flex flex-wrap gap-2 text-sm text-gray-600 mt-2">
+              {response.model && (
+                <span className="px-2 py-1 border rounded text-xs">Model: {response.model}</span>
+              )}
+              {response.processing_time && (
+                <span className="px-2 py-1 border rounded text-xs flex items-center gap-1">
+                  <Clock size={12} />
+                  {formatProcessingTime(response.processing_time)}
+                </span>
+              )}
+              {response.gpu_accelerated && (
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 border border-blue-200 rounded text-xs flex items-center gap-1">
+                  <Zap size={12} />
+                  GPU Accelerated
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="p-6 space-y-4">
+            <div>
+              <h4 className="font-medium mb-2">Question:</h4>
+              <p className="text-gray-700 bg-gray-50 p-3 rounded">{response.query}</p>
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">Answer:</h4>
+              <div className="bg-white p-4 border rounded">
+                {response.response.split('\n').map((paragraph, index) => (
+                  <p key={index} className="mb-2 last:mb-0">{paragraph}</p>
+                ))}
+              </div>
+            </div>
+
+            {response.sources && response.sources.length > 0 && (
+              <div>
+                <h4 className="font-medium mb-2">Sources ({response.sources.length}):</h4>
+                <div className="space-y-2">
+                  {response.sources.map((source, index) => (
+                    <div key={index} className="border rounded p-3 bg-gray-50">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                          <FileText size={16} className="text-gray-500" />
+                          <span className="font-medium">{source.document_name}</span>
+                        </div>
+                        <span className={`px-2 py-1 rounded text-xs font-medium border ${getRelevanceColor(source.relevance_score)}`}>
+                          {Math.round(source.relevance_score * 100)}% relevant
+                        </span>
+                      </div>
+                      {source.content_snippet && (
+                        <p className="text-sm text-gray-600 italic">
+                          "{source.content_snippet}"
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Query History Section */}
+      <div className="bg-white rounded-lg border shadow-sm">
+        <div className="p-6 border-b">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Clock size={20} />
+            Recent Queries
+          </h2>
+          <p className="text-gray-600 mt-1">
+            View your recent query history and responses.
+          </p>
+        </div>
+        <div className="p-6">
+          {historyLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Loading query history...</p>
+            </div>
+          ) : queryHistory.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
+              <p>No queries yet.</p>
+              <p className="text-sm">Submit your first query to see it here!</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {queryHistory.map((item, index) => (
+                <div key={item.id || index} className="border rounded p-4 hover:bg-gray-50">
+                  <div className="flex justify-between items-start mb-2">
+                    <h5 className="font-medium text-gray-900">
+                      {item.query_text || item.query}
+                    </h5>
+                    <div className="flex gap-2 text-xs">
+                      {item.llm_model_used && (
+                        <span className="px-2 py-1 border rounded">{item.llm_model_used}</span>
+                      )}
+                      {item.processing_time_ms && (
+                        <span className="px-2 py-1 border rounded">
+                          {formatProcessingTime(item.processing_time_ms)}
+                        </span>
+                      )}
+                      {item.gpu_accelerated && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 border border-blue-200 rounded flex items-center">
+                          <Zap size={10} />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {item.response_text && (
+                    <p className="text-sm text-gray-600 mb-2 line-clamp-3">
+                      {item.response_text}
+                    </p>
+                  )}
+                  
+                  <div className="flex justify-between items-center text-xs text-gray-500">
+                    <span>
+                      {item.department_filter && `Department: ${item.department_filter}`}
+                    </span>
+                    <span>
+                      {formatTimestamp(item.query_timestamp || item.timestamp)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default QueriesPage;

@@ -1,347 +1,468 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Send, Clock, FileText, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
-import { api, apiHelpers } from '../../lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Badge } from '../ui/badge';
+import { Loader2, Search, Download, RefreshCw, Calendar, Filter } from 'lucide-react';
 
 const QueriesPage = () => {
-  const [query, setQuery] = useState('');
-  const [department, setDepartment] = useState('General');
-  const [response, setResponse] = useState(null);
+  // State management
+  const [queries, setQueries] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [queryHistory, setQueryHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalQueries, setTotalQueries] = useState(0);
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [dateRange, setDateRange] = useState('all');
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  
+  // Pagination settings
+  const queriesPerPage = 10;
 
-  // ✅ CORRECTED: Submit query using proper API helper
-  const handleSubmitQuery = async () => {
-    if (!query.trim()) {
-      setError('Please enter a query.');
-      return;
-    }
-
+  // Fetch queries from API
+  const fetchQueries = async (page = 1, filters = {}) => {
     setLoading(true);
-    setError('');
-    setResponse(null);
-
+    setError(null);
+    
     try {
-      // ✅ CORRECTED: Use API helper with correct parameters
-      const queryResponse = await apiHelpers.submitQuery(query, department);
-      
-      setResponse({
-        query: queryResponse.query,
-        response: queryResponse.response,
-        model: queryResponse.model,
-        sources: queryResponse.sources || [],
-        processing_time: queryResponse.processing_time,
-        gpu_accelerated: queryResponse.gpu_accelerated,
-        query_history_id: queryResponse.query_history_id
+      const params = new URLSearchParams({
+        limit: queriesPerPage.toString(),
+        skip: ((page - 1) * queriesPerPage).toString(),
+        ...filters
       });
 
-      console.log('✅ Query processed successfully:', queryResponse);
+      const response = await fetch(`/api/v1/queries/history?${params}`);
       
-      // Refresh query history after successful query
-      await fetchQueryHistory();
-      
-      // Clear the query input
-      setQuery('');
-      
-    } catch (err) {
-      console.error('Query error:', err);
-      
-      // ✅ IMPROVED: Enhanced error handling based on backend error responses
-      if (err.response?.status === 422) {
-        setError('Invalid query format. Please check your input and try again.');
-      } else if (err.response?.status === 500) {
-        setError('Server error during query processing. Please check the backend logs.');
-      } else if (err.code === 'ERR_NETWORK') {
-        setError('Network error. Please check if the backend server is accessible.');
-      } else if (err.response?.status === 413) {
-        setError('Query too large. Please shorten your query and try again.');
-      } else {
-        setError(err.response?.data?.detail || err.message || 'Failed to process query.');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
+      const data = await response.json();
+      
+      // Handle both array and object responses
+      if (Array.isArray(data)) {
+        setQueries(data);
+        setTotalQueries(data.length);
+        setTotalPages(Math.ceil(data.length / queriesPerPage));
+      } else if (data.queries) {
+        setQueries(data.queries);
+        setTotalQueries(data.total || data.queries.length);
+        setTotalPages(Math.ceil((data.total || data.queries.length) / queriesPerPage));
+      } else {
+        setQueries([]);
+        setTotalQueries(0);
+        setTotalPages(1);
+      }
+    } catch (err) {
+      console.error('Error fetching queries:', err);
+      setError(`Failed to load query history: ${err.message}`);
+      setQueries([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ CORRECTED: Fetch query history using API helper with cache busting
-  const fetchQueryHistory = async () => {
-    setHistoryLoading(true);
-    
-    try {
-      // ✅ CORRECTED: Use API helper to get query history
-      const history = await apiHelpers.getQueryHistory(10);
-      
-      // ✅ CORRECTED: Handle different response formats
-      const historyArray = Array.isArray(history) ? history : (history.queries || []);
-      setQueryHistory(historyArray);
-      
-      console.log(`✅ Fetched ${historyArray.length} query history entries`);
-      
-    } catch (err) {
-      console.error('Error fetching query history:', err);
-      // Don't show error for history fetch failure, just log it
-      setQueryHistory([]); // Set empty array on error
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
-
-  // ✅ IMPROVED: Format processing time helper
-  const formatProcessingTime = (timeMs) => {
-    if (!timeMs) return 'N/A';
-    if (timeMs < 1000) return `${Math.round(timeMs)}ms`;
-    return `${(timeMs / 1000).toFixed(2)}s`;
-  };
-
-  // ✅ IMPROVED: Format timestamp helper
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    try {
-      const date = new Date(timestamp);
-      return date.toLocaleString();
-    } catch {
-      return 'Invalid Date';
-    }
-  };
-
-  // ✅ IMPROVED: Get relevance score color
-  const getRelevanceColor = (score) => {
-    if (score >= 0.8) return 'bg-green-100 text-green-800 border-green-200';
-    if (score >= 0.6) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    return 'bg-red-100 text-red-800 border-red-200';
-  };
-
-  // ✅ IMPROVED: Handle Enter key press in textarea
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmitQuery();
-    }
-  };
-
+  // Initial load
   useEffect(() => {
-    fetchQueryHistory();
-  }, []);
+    fetchQueries(currentPage, getFilters());
+  }, [currentPage]);
+
+  // Auto-refresh functionality
+  useEffect(() => {
+    if (!autoRefresh) return;
+    
+    const interval = setInterval(() => {
+      fetchQueries(currentPage, getFilters());
+    }, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [autoRefresh, currentPage]);
+
+  // Get current filters
+  const getFilters = () => {
+    const filters = {};
+    
+    if (searchTerm.trim()) {
+      filters.search = searchTerm.trim();
+    }
+    
+    if (departmentFilter !== 'all') {
+      filters.department = departmentFilter;
+    }
+    
+    if (dateRange !== 'all') {
+      const now = new Date();
+      let startDate;
+      
+      switch (dateRange) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        default:
+          startDate = null;
+      }
+      
+      if (startDate) {
+        filters.start_date = startDate.toISOString();
+      }
+    }
+    
+    return filters;
+  };
+
+  // Handle filter changes
+  const handleFilterChange = () => {
+    setCurrentPage(1);
+    fetchQueries(1, getFilters());
+  };
+
+  // Handle search
+  const handleSearch = (e) => {
+    e.preventDefault();
+    handleFilterChange();
+  };
+
+  // Export queries
+  const handleExport = async () => {
+    try {
+      const response = await fetch('/api/v1/queries/export');
+      if (!response.ok) throw new Error('Export failed');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `query_history_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Export failed:', err);
+      setError('Failed to export query history');
+    }
+  };
+
+  // Format timestamp
+  const formatTimestamp = (timestamp) => {
+    try {
+      return new Date(timestamp).toLocaleString();
+    } catch {
+      return 'Invalid date';
+    }
+  };
+
+  // Format processing time
+  const formatProcessingTime = (time) => {
+    if (typeof time === 'number') {
+      return `${time.toFixed(2)}s`;
+    }
+    return 'N/A';
+  };
+
+  // Get status badge color
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'success':
+        return 'bg-green-100 text-green-800';
+      case 'error':
+        return 'bg-red-100 text-red-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Query Interface</h1>
-        <button 
-          onClick={fetchQueryHistory} 
-          disabled={historyLoading}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
-        >
-          <RefreshCw size={16} className={historyLoading ? 'animate-spin' : ''} />
-          {historyLoading ? 'Refreshing...' : 'Refresh History'}
-        </button>
-      </div>
-
-      {/* Query Input Section */}
-      <div className="bg-white rounded-lg border shadow-sm">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <MessageSquare size={20} />
-            Ask a Question
-          </h2>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Query History</h1>
           <p className="text-gray-600 mt-1">
-            Enter your question and select a department to get AI-powered answers from your documents.
+            {totalQueries} total queries • Page {currentPage} of {totalPages}
           </p>
         </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">Department</label>
-            <select 
-              value={department} 
-              onChange={(e) => setDepartment(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="General">General</option>
-              <option value="IT">IT</option>
-              <option value="HR">HR</option>
-              <option value="Finance">Finance</option>
-              <option value="Legal">Legal</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-2">Your Question</label>
-            <textarea
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Enter your question here... (Press Enter to submit, Shift+Enter for new line)"
-              rows={4}
-              className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-            />
-          </div>
-
-          <button 
-            onClick={handleSubmitQuery} 
-            disabled={loading || !query.trim()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => fetchQueries(currentPage, getFilters())}
+            disabled={loading}
           >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Processing...
-              </>
-            ) : (
-              <>
-                <Send size={16} />
-                Submit Query
-              </>
-            )}
-          </button>
-
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          
+          <Button
+            variant="outline"
+            onClick={handleExport}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
         </div>
       </div>
 
-      {/* Query Response Section */}
-      {response && (
-        <div className="bg-white rounded-lg border shadow-sm">
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <CheckCircle size={20} className="text-green-600" />
-              Response
-            </h2>
-            <div className="flex flex-wrap gap-2 text-sm text-gray-600 mt-2">
-              {response.model && (
-                <span className="px-2 py-1 border rounded text-xs">Model: {response.model}</span>
-              )}
-              {response.processing_time && (
-                <span className="px-2 py-1 border rounded text-xs flex items-center gap-1">
-                  <Clock size={12} />
-                  {formatProcessingTime(response.processing_time)}
-                </span>
-              )}
-              {response.gpu_accelerated && (
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 border border-blue-200 rounded text-xs flex items-center gap-1">
-                  <Zap size={12} />
-                  GPU Accelerated
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="p-6 space-y-4">
-            <div>
-              <h4 className="font-medium mb-2">Question:</h4>
-              <p className="text-gray-700 bg-gray-50 p-3 rounded">{response.query}</p>
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filters
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search queries..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
             </div>
 
-            <div>
-              <h4 className="font-medium mb-2">Answer:</h4>
-              <div className="bg-white p-4 border rounded">
-                {response.response.split('\n').map((paragraph, index) => (
-                  <p key={index} className="mb-2 last:mb-0">{paragraph}</p>
-                ))}
-              </div>
-            </div>
+            {/* Department Filter */}
+            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Departments" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Departments</SelectItem>
+                <SelectItem value="General">General</SelectItem>
+                <SelectItem value="IT">IT</SelectItem>
+                <SelectItem value="Sales">Sales</SelectItem>
+                <SelectItem value="Support">Support</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
 
-            {response.sources && response.sources.length > 0 && (
-              <div>
-                <h4 className="font-medium mb-2">Sources ({response.sources.length}):</h4>
-                <div className="space-y-2">
-                  {response.sources.map((source, index) => (
-                    <div key={index} className="border rounded p-3 bg-gray-50">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <FileText size={16} className="text-gray-500" />
-                          <span className="font-medium">{source.document_name}</span>
-                        </div>
-                        <span className={`px-2 py-1 rounded text-xs font-medium border ${getRelevanceColor(source.relevance_score)}`}>
-                          {Math.round(source.relevance_score * 100)}% relevant
-                        </span>
-                      </div>
-                      {source.content_snippet && (
-                        <p className="text-sm text-gray-600 italic">
-                          "{source.content_snippet}"
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Date Range Filter */}
+            <Select value={dateRange} onValueChange={setDateRange}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Time" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">Last Week</SelectItem>
+                <SelectItem value="month">Last Month</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Apply Filters Button */}
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4 mr-2" />
+              )}
+              Apply Filters
+            </Button>
+          </form>
+
+          {/* Auto-refresh toggle */}
+          <div className="mt-4 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="autoRefresh"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="rounded"
+            />
+            <label htmlFor="autoRefresh" className="text-sm text-gray-600">
+              Auto-refresh every 30 seconds
+            </label>
           </div>
-        </div>
+        </CardContent>
+      </Card>
+
+      {/* Error Display */}
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-red-800">
+              <span className="font-medium">Error:</span>
+              <span>{error}</span>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Query History Section */}
-      <div className="bg-white rounded-lg border shadow-sm">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Clock size={20} />
-            Recent Queries
-          </h2>
-          <p className="text-gray-600 mt-1">
-            View your recent query history and responses.
-          </p>
-        </div>
-        <div className="p-6">
-          {historyLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Loading query history...</p>
-            </div>
-          ) : queryHistory.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
-              <p>No queries yet.</p>
-              <p className="text-sm">Submit your first query to see it here!</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {queryHistory.map((item, index) => (
-                <div key={item.id || index} className="border rounded p-4 hover:bg-gray-50">
-                  <div className="flex justify-between items-start mb-2">
-                    <h5 className="font-medium text-gray-900">
-                      {item.query_text || item.query}
-                    </h5>
-                    <div className="flex gap-2 text-xs">
-                      {item.llm_model_used && (
-                        <span className="px-2 py-1 border rounded">{item.llm_model_used}</span>
-                      )}
-                      {item.processing_time_ms && (
-                        <span className="px-2 py-1 border rounded">
-                          {formatProcessingTime(item.processing_time_ms)}
-                        </span>
-                      )}
-                      {item.gpu_accelerated && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 border border-blue-200 rounded flex items-center">
-                          <Zap size={10} />
-                        </span>
-                      )}
+      {/* Queries List */}
+      <div className="space-y-4">
+        {loading && queries.length === 0 ? (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                <span className="ml-2 text-gray-600">Loading query history...</span>
+              </div>
+            </CardContent>
+          </Card>
+        ) : queries.length === 0 ? (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center py-8 text-gray-500">
+                <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p className="text-lg font-medium">No queries found</p>
+                <p className="text-sm">Try adjusting your filters or submit a new query</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          queries.map((query) => (
+            <Card key={query.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  {/* Query Header */}
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg text-gray-900 mb-2">
+                        {query.query_text || query.query || 'No query text'}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                        <Badge variant="outline">
+                          {query.department || 'General'}
+                        </Badge>
+                        <span>•</span>
+                        <span>{formatTimestamp(query.query_timestamp || query.timestamp)}</span>
+                        <span>•</span>
+                        <span>Processing: {formatProcessingTime(query.processing_time)}</span>
+                        {query.gpu_accelerated && (
+                          <>
+                            <span>•</span>
+                            <Badge className="bg-green-100 text-green-800">GPU</Badge>
+                          </>
+                        )}
+                      </div>
                     </div>
+                    <Badge className={getStatusColor(query.status)}>
+                      {query.status || 'completed'}
+                    </Badge>
                   </div>
-                  
-                  {item.response_text && (
-                    <p className="text-sm text-gray-600 mb-2 line-clamp-3">
-                      {item.response_text}
-                    </p>
+
+                  {/* Response */}
+                  {query.response_text && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="font-medium text-gray-900 mb-2">Response:</h4>
+                      <p className="text-gray-700 text-sm leading-relaxed">
+                        {query.response_text.length > 300 
+                          ? `${query.response_text.substring(0, 300)}...` 
+                          : query.response_text
+                        }
+                      </p>
+                    </div>
                   )}
-                  
-                  <div className="flex justify-between items-center text-xs text-gray-500">
-                    <span>
-                      {item.department_filter && `Department: ${item.department_filter}`}
-                    </span>
-                    <span>
-                      {formatTimestamp(item.query_timestamp || item.timestamp)}
-                    </span>
-                  </div>
+
+                  {/* Sources */}
+                  {query.sources && query.sources.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2">
+                        Sources ({query.sources.length}):
+                      </h4>
+                      <div className="space-y-2">
+                        {query.sources.slice(0, 3).map((source, index) => (
+                          <div key={index} className="bg-blue-50 rounded-lg p-3">
+                            <div className="flex justify-between items-start">
+                              <span className="font-medium text-blue-900 text-sm">
+                                {source.document_name || source.filename || `Document ${index + 1}`}
+                              </span>
+                              {source.relevance_score && (
+                                <Badge variant="outline" className="text-xs">
+                                  {Math.round(source.relevance_score * 100)}% relevant
+                                </Badge>
+                              )}
+                            </div>
+                            {source.content_snippet && (
+                              <p className="text-blue-800 text-xs mt-1 leading-relaxed">
+                                {source.content_snippet.length > 150 
+                                  ? `${source.content_snippet.substring(0, 150)}...` 
+                                  : source.content_snippet
+                                }
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                        {query.sources.length > 3 && (
+                          <p className="text-gray-500 text-sm">
+                            ... and {query.sources.length - 3} more sources
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-gray-600">
+                Showing {((currentPage - 1) * queriesPerPage) + 1} to {Math.min(currentPage * queriesPerPage, totalQueries)} of {totalQueries} queries
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1 || loading}
+                >
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                    const pageNum = Math.max(1, currentPage - 2) + i;
+                    if (pageNum > totalPages) return null;
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={pageNum === currentPage ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        disabled={loading}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages || loading}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

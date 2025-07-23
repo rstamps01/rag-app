@@ -1,338 +1,431 @@
-"""Enhanced query processing wrapper with singleton pattern, memory management, and corrected schema integration"""
+#!/usr/bin/env python3
+"""
+Enhanced Query Wrapper with Guaranteed History Logging
+Ensures every query is saved to PostgreSQL database for persistent history
+"""
+
+import asyncio
 import logging
 import time
-import psutil
-import torch
-from typing import Optional, List, Any, Dict
-from sqlalchemy.orm import Session
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-# Import the correct schema with proper field names
-from app.schemas.query import QueryResponse, SourceDocument, QueryHistoryCreate
-from app.services.llm_service import get_llm_service
-from app.services.gpu_accelerator import GPUAccelerator
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
+# Import schemas
+from app.schemas.query import (
+    QueryRequest, 
+    QueryResponse, 
+    SourceDocument,
+    QueryHistoryCreate,
+    QueryHistoryResponse
+)
+
+# Import CRUD operations
+from app.crud import crud_query_history
+
+# Import services
+from app.services.query_processor import QueryProcessor
+from app.services.llm_service import LLMService
+from app.services.vector_db import VectorDBService
+from app.core.pipeline_monitor import PipelineMonitor
+
+# Set up logging
 logger = logging.getLogger(__name__)
 
-# Global instances (singleton pattern)
-_gpu_accelerator = None
-_query_processor = None
-
-def get_gpu_accelerator() -> GPUAccelerator:
-    """Get or create GPU accelerator instance"""
-    global _gpu_accelerator
-    if _gpu_accelerator is None:
-        _gpu_accelerator = GPUAccelerator()
-        logger.info("GPU accelerator initialized")
-    return _gpu_accelerator
-
-def get_query_processor():
-    """Get or create query processor instance"""
-    global _query_processor
-    if _query_processor is None:
+class EnhancedQueryWrapper:
+    """
+    Enhanced Query Wrapper that guarantees query history persistence
+    """
+    
+    def __init__(self):
+        self.query_processor = None
+        self.llm_service = None
+        self.vector_db = None
+        self.pipeline_monitor = None
+        self._initialized = False
+    
+    async def initialize(self):
+        """Initialize all services"""
+        if self._initialized:
+            return
+            
         try:
-            from app.services.query_processor import QueryProcessor
-            _query_processor = QueryProcessor()
-            logger.info("Query processor initialized successfully")
+            logger.info("🔧 Initializing Enhanced Query Wrapper...")
+            
+            # Initialize services
+            self.query_processor = QueryProcessor()
+            self.llm_service = LLMService()
+            self.vector_db = VectorDBService()
+            self.pipeline_monitor = PipelineMonitor()
+            
+            # Initialize each service
+            await self.query_processor.initialize()
+            await self.llm_service.initialize()
+            await self.vector_db.initialize()
+            
+            self._initialized = True
+            logger.info("✅ Enhanced Query Wrapper initialized successfully")
+            
         except Exception as e:
-            logger.error(f"Failed to initialize query processor: {e}")
-            _query_processor = None
-    return _query_processor
+            logger.error(f"❌ Failed to initialize Enhanced Query Wrapper: {e}")
+            raise
 
-def check_system_resources() -> Dict[str, Any]:
-    """Check system resources before processing query"""
-    memory = psutil.virtual_memory()
-    gpu_info = {"available": False}
-    
-    if torch.cuda.is_available():
-        gpu_info = {
-            "available": True,
-            "memory_allocated_gb": torch.cuda.memory_allocated(0) / 1024**3,
-            "memory_total_gb": torch.cuda.get_device_properties(0).total_memory / 1024**3
-        }
-    
-    return {
-        "system_memory_percent": memory.percent,
-        "system_memory_available_gb": memory.available / 1024**3,
-        "gpu": gpu_info
-    }
-
-def cleanup_memory():
-    """Cleanup memory before processing query"""
-    try:
-        # Clear GPU cache
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+    async def process_query(
+        self, 
+        db: Session, 
+        query_text: str, 
+        department: str = "General",
+        user_id: Optional[int] = None
+    ) -> QueryResponse:
+        """
+        Process a query with guaranteed history logging
         
-        # Force garbage collection
-        import gc
-        gc.collect()
+        Args:
+            db: Database session
+            query_text: The user's query
+            department: Department filter for document search
+            user_id: Optional user ID for tracking
+            
+        Returns:
+            QueryResponse with all fields populated
+        """
+        start_time = time.time()
+        history_entry_id = None
         
-        logger.info("Memory cleanup completed")
-    except Exception as e:
-        logger.warning(f"Memory cleanup failed: {e}")
+        # Ensure services are initialized
+        if not self._initialized:
+            await self.initialize()
+        
+        logger.info(f"🔍 Processing query: {query_text[:50]}...")
+        logger.info(f"📊 Department: {department}, User ID: {user_id}")
+        
+        try:
+            # Step 1: Create initial history entry (for tracking)
+            initial_history = await self._create_initial_history_entry(
+                db, query_text, department, user_id
+            )
+            history_entry_id = initial_history.id if initial_history else None
+            
+            # Step 2: Process the query through RAG pipeline
+            rag_response = await self._process_rag_query(
+                query_text, department, user_id
+            )
+            
+            # Step 3: Update history with successful response
+            final_history = await self._update_history_with_response(
+                db, history_entry_id, rag_response, start_time
+            )
+            
+            # Step 4: Create final response
+            response = QueryResponse(
+                query=query_text,
+                response=rag_response.get('response', 'No response generated'),
+                model=rag_response.get('model', 'mistral-7b'),
+                sources=rag_response.get('sources', []),
+                processing_time=time.time() - start_time,
+                gpu_accelerated=rag_response.get('gpu_accelerated', False),
+                query_history_id=final_history.id if final_history else None
+            )
+            
+            logger.info(f"✅ Query processed successfully in {response.processing_time:.2f}s")
+            return response
+            
+        except Exception as e:
+            logger.error(f"❌ Query processing failed: {e}")
+            
+            # Step 4: Save error to history for debugging
+            await self._save_error_to_history(
+                db, history_entry_id, query_text, department, user_id, str(e), start_time
+            )
+            
+            # Return error response
+            return QueryResponse(
+                query=query_text,
+                response=f"I apologize, but I encountered an error while generating a response: {str(e)}",
+                model="error",
+                sources=[],
+                processing_time=time.time() - start_time,
+                gpu_accelerated=False,
+                query_history_id=history_entry_id
+            )
 
+    async def _create_initial_history_entry(
+        self, 
+        db: Session, 
+        query_text: str, 
+        department: str, 
+        user_id: Optional[int]
+    ) -> Optional[Any]:
+        """Create initial history entry for tracking"""
+        try:
+            history_data = QueryHistoryCreate(
+                query_text=query_text,
+                response_text=None,  # Will be updated later
+                llm_model_used=None,  # Will be updated later
+                sources_retrieved=None,  # Will be updated later
+                processing_time_ms=None,  # Will be updated later
+                department_filter=department,
+                gpu_accelerated=False  # Will be updated later
+            )
+            
+            history_entry = crud_query_history.create_query_history(
+                db=db, 
+                obj_in=history_data, 
+                user_id=user_id
+            )
+            
+            logger.info(f"📝 Created initial history entry: ID {history_entry.id}")
+            return history_entry
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to create initial history entry: {e}")
+            return None
+
+    async def _process_rag_query(
+        self, 
+        query_text: str, 
+        department: str, 
+        user_id: Optional[int]
+    ) -> Dict[str, Any]:
+        """Process the actual RAG query"""
+        try:
+            # Step 1: Search for relevant documents
+            logger.info("🔍 Searching for relevant documents...")
+            search_results = await self.vector_db.search_documents(
+                query_text=query_text,
+                department_filter=department,
+                limit=5
+            )
+            
+            # Step 2: Format sources
+            sources = []
+            context_text = ""
+            
+            for i, result in enumerate(search_results):
+                source = SourceDocument(
+                    document_id=result.get('filename', f"doc_{i}"),
+                    document_name=result.get('filename', 'Unknown Document'),
+                    relevance_score=float(result.get('score', 0.0)),
+                    content_snippet=result.get('content', '')[:200] + "..." if result.get('content') else None
+                )
+                sources.append(source)
+                
+                # Add to context for LLM
+                if result.get('content'):
+                    context_text += f"\n\nDocument: {source.document_name}\nContent: {result.get('content')}"
+            
+            logger.info(f"📚 Found {len(sources)} relevant documents")
+            
+            # Step 3: Generate response using LLM
+            logger.info("🤖 Generating AI response...")
+            
+            # Create context-aware prompt
+            prompt = f"""Based on the following context documents, please answer the user's question.
+
+Context Documents:
+{context_text}
+
+User Question: {query_text}
+
+Please provide a comprehensive answer based on the context provided. If the context doesn't contain enough information to fully answer the question, please indicate what information is available and what might be missing."""
+
+            llm_response = await self.llm_service.generate_response(prompt=prompt)
+            
+            logger.info("✅ AI response generated successfully")
+            
+            return {
+                'response': llm_response,
+                'model': 'mistral-7b-instruct-v0.2',
+                'sources': sources,
+                'gpu_accelerated': True,
+                'context_used': len(context_text) > 0
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ RAG processing failed: {e}")
+            raise
+
+    async def _update_history_with_response(
+        self, 
+        db: Session, 
+        history_entry_id: Optional[int], 
+        rag_response: Dict[str, Any], 
+        start_time: float
+    ) -> Optional[Any]:
+        """Update history entry with successful response"""
+        if not history_entry_id:
+            return None
+            
+        try:
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            
+            # Prepare sources for JSON storage
+            sources_json = []
+            for source in rag_response.get('sources', []):
+                if isinstance(source, SourceDocument):
+                    sources_json.append({
+                        'document_id': source.document_id,
+                        'document_name': source.document_name,
+                        'relevance_score': source.relevance_score,
+                        'content_snippet': source.content_snippet
+                    })
+                else:
+                    sources_json.append(source)
+            
+            # Update the history entry
+            updated_entry = crud_query_history.update_query_history(
+                db=db,
+                entry_id=history_entry_id,
+                response_text=rag_response.get('response'),
+                llm_model_used=rag_response.get('model'),
+                sources_retrieved=sources_json,
+                processing_time_ms=processing_time_ms,
+                gpu_accelerated=rag_response.get('gpu_accelerated', False)
+            )
+            
+            logger.info(f"📝 Updated history entry: ID {history_entry_id}")
+            return updated_entry
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to update history entry: {e}")
+            return None
+
+    async def _save_error_to_history(
+        self, 
+        db: Session, 
+        history_entry_id: Optional[int], 
+        query_text: str, 
+        department: str, 
+        user_id: Optional[int], 
+        error_message: str, 
+        start_time: float
+    ) -> Optional[Any]:
+        """Save error information to history for debugging"""
+        try:
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            
+            if history_entry_id:
+                # Update existing entry
+                error_entry = crud_query_history.update_query_history(
+                    db=db,
+                    entry_id=history_entry_id,
+                    response_text=f"Error: {error_message}",
+                    llm_model_used="error",
+                    sources_retrieved=[],
+                    processing_time_ms=processing_time_ms,
+                    gpu_accelerated=False
+                )
+            else:
+                # Create new error entry
+                error_history = QueryHistoryCreate(
+                    query_text=query_text,
+                    response_text=f"Error: {error_message}",
+                    llm_model_used="error",
+                    sources_retrieved=[],
+                    processing_time_ms=processing_time_ms,
+                    department_filter=department,
+                    gpu_accelerated=False
+                )
+                
+                error_entry = crud_query_history.create_query_history(
+                    db=db, 
+                    obj_in=error_history, 
+                    user_id=user_id
+                )
+            
+            logger.info(f"📝 Saved error to history: {error_message}")
+            return error_entry
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save error to history: {e}")
+            return None
+
+    async def get_query_history(
+        self, 
+        db: Session, 
+        user_id: Optional[int] = None, 
+        skip: int = 0, 
+        limit: int = 10,
+        department_filter: Optional[str] = None
+    ) -> List[QueryHistoryResponse]:
+        """Get query history with optional filtering"""
+        try:
+            if user_id:
+                history_entries = crud_query_history.get_query_history_for_user(
+                    db=db, 
+                    user_id=user_id, 
+                    skip=skip, 
+                    limit=limit,
+                    department_filter=department_filter
+                )
+            else:
+                history_entries = crud_query_history.get_all_query_history(
+                    db=db, 
+                    skip=skip, 
+                    limit=limit,
+                    department_filter=department_filter
+                )
+            
+            # Convert to response format
+            response_entries = []
+            for entry in history_entries:
+                response_entries.append(QueryHistoryResponse(
+                    id=entry.id,
+                    user_id=entry.user_id,
+                    query_text=entry.query_text,
+                    response_text=entry.response_text,
+                    query_timestamp=entry.query_timestamp,
+                    llm_model_used=entry.llm_model_used,
+                    sources_retrieved=entry.sources_retrieved or [],
+                    processing_time_ms=entry.processing_time_ms,
+                    department_filter=entry.department_filter,
+                    gpu_accelerated=entry.gpu_accelerated
+                ))
+            
+            logger.info(f"📚 Retrieved {len(response_entries)} history entries")
+            return response_entries
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to get query history: {e}")
+            return []
+
+# Create singleton instance
+enhanced_query_wrapper = EnhancedQueryWrapper()
+
+# Export the main function for backward compatibility
 async def process_query(
-    db: Session,
-    query_text: str,
+    db: Session, 
+    query_text: str, 
     department: str = "General",
     user_id: Optional[int] = None
 ) -> QueryResponse:
     """
-    Process a query through the RAG pipeline with memory management and error handling
-    FIXED: Corrected schema field names and method signatures
+    Main entry point for query processing with guaranteed history logging
     """
-    start_time = time.time()
-    
-    try:
-        logger.info(f"Processing query: {query_text[:100]}...")
-        
-        # Check system resources before processing
-        resources = check_system_resources()
-        logger.info(f"System memory: {resources['system_memory_percent']:.1f}%, GPU available: {resources['gpu']['available']}")
-        
-        # If memory usage is high, perform cleanup
-        if resources['system_memory_percent'] > 85:
-            logger.warning("High memory usage detected, performing cleanup")
-            cleanup_memory()
-            
-            # Check again after cleanup
-            resources = check_system_resources()
-            if resources['system_memory_percent'] > 90:
-                return QueryResponse(
-                    query=query_text,
-                    response="System memory critically low. Please try again in a moment.",  # FIXED: 'response' not 'answer'
-                    model="system-error",                                                    # FIXED: 'model' not 'model_used'
-                    sources=[],
-                    processing_time=time.time() - start_time,
-                    gpu_accelerated=False,
-                    query_history_id=None
-                )
-        
-        # Get or initialize services (singleton pattern prevents multiple loading)
-        try:
-            llm_service = get_llm_service()  # This will reuse existing instance
-            query_processor = get_query_processor()
-            
-            if query_processor is None:
-                # Fallback to direct LLM service if query processor fails
-                logger.warning("Query processor unavailable, using direct LLM service")
-                return await process_query_direct(db, query_text, department, user_id, llm_service, start_time)
-                
-        except Exception as e:
-            logger.error(f"Failed to initialize services: {e}")
-            return QueryResponse(
-                query=query_text,
-                response=f"Service initialization failed: {str(e)}",                       # FIXED: 'response' not 'answer'
-                model="initialization-error",                                              # FIXED: 'model' not 'model_used'
-                sources=[],
-                processing_time=time.time() - start_time,
-                gpu_accelerated=False,
-                query_history_id=None
-            )
-        
-        # FIXED: Process the query using correct parameter names
-        try:
-            response = query_processor.process_query(
-                query=query_text,                    # CORRECT: 'query' parameter
-                department_filter=department,        # CORRECT: 'department_filter' not 'department'
-                user_id=user_id,
-                db=db
-            )
-            
-            # Log successful processing
-            processing_time = time.time() - start_time
-            logger.info(f"Query processed successfully in {processing_time:.2f}s")
-            
-            # Update response with actual processing time
-            response.processing_time = processing_time
-            
-            return response
-            
-        except Exception as e:
-            logger.error(f"Query processing failed: {e}")
-            
-            # Fallback to direct LLM service
-            logger.info("Attempting fallback to direct LLM service")
-            return await process_query_direct(db, query_text, department, user_id, llm_service, start_time)
-            
-    except Exception as e:
-        logger.error(f"Unexpected error in process_query: {e}", exc_info=True)
-        return QueryResponse(
-            query=query_text,
-            response=f"Unexpected error: {str(e)}",                                       # FIXED: 'response' not 'answer'
-            model="unexpected-error",                                                     # FIXED: 'model' not 'model_used'
-            sources=[],
-            processing_time=time.time() - start_time,
-            gpu_accelerated=False,
-            query_history_id=None
-        )
-
-async def process_query_direct(
-    db: Session,
-    query_text: str,
-    department: str,
-    user_id: Optional[int],
-    llm_service,
-    start_time: float
-) -> QueryResponse:
-    """
-    Direct query processing using LLM service as fallback
-    FIXED: Corrected method signature and schema field names
-    """
-    try:
-        logger.info("Processing query using direct LLM service")
-        
-        # FIXED: Generate response using correct method signature
-        response_text = llm_service.generate_response(
-            prompt=query_text,                       # FIXED: 'prompt' not 'query'
-            context="",                              # No RAG context in fallback mode
-            max_new_tokens=512
-        )
-        
-        # Check if GPU was used
-        gpu_accelerated = torch.cuda.is_available() and hasattr(llm_service, 'device') and llm_service.device.type == "cuda"
-        
-        processing_time = time.time() - start_time
-        
-        # Store query history if database session provided
-        if db and user_id:
-            try:
-                from app.crud.crud_query_history import create_query_history
-                
-                query_history = QueryHistoryCreate(
-                    query_text=query_text,
-                    response_text=response_text,
-                    llm_model_used="mistralai/Mistral-7B-Instruct-v0.2",
-                    sources_retrieved=[],
-                    processing_time_ms=int(processing_time * 1000),
-                    department_filter=department,
-                    gpu_accelerated=gpu_accelerated
-                )
-                create_query_history(db, query_history)
-            except Exception as e:
-                logger.warning(f"Failed to store query history: {str(e)}")
-        
-        # FIXED: Return QueryResponse with correct field names
-        return QueryResponse(
-            query=query_text,
-            response=response_text,                                                       # FIXED: 'response' not 'answer'
-            model="mistralai/Mistral-7B-Instruct-v0.2",                                 # FIXED: 'model' not 'model_used'
-            sources=[],  # No sources in direct mode
-            processing_time=processing_time,
-            gpu_accelerated=gpu_accelerated,
-            query_history_id=None
-        )
-        
-    except Exception as e:
-        logger.error(f"Direct query processing failed: {e}")
-        return QueryResponse(
-            query=query_text,
-            response=f"Direct processing failed: {str(e)}",                             # FIXED: 'response' not 'answer'
-            model="direct-error",                                                        # FIXED: 'model' not 'model_used'
-            sources=[],
-            processing_time=time.time() - start_time,
-            gpu_accelerated=False,
-            query_history_id=None
-        )
-
-def create_source_document_from_result(result: Dict[str, Any], index: int = 0) -> SourceDocument:
-    """
-    Create a SourceDocument from vector database search result
-    FIXED: Proper field mapping from vector DB to schema
-    """
-    filename = result.get("filename", f"doc_{index + 1}")
-    content = result.get("content", "")
-    
-    return SourceDocument(
-        document_id=filename,                           # Map filename to document_id
-        document_name=filename,                         # Map filename to document_name
-        relevance_score=result.get("score", 0.0),      # Map score to relevance_score
-        content_snippet=content[:200] + "..." if len(content) > 200 else content  # Truncate content
+    return await enhanced_query_wrapper.process_query(
+        db=db,
+        query_text=query_text,
+        department=department,
+        user_id=user_id
     )
 
-def get_system_status() -> Dict[str, Any]:
-    """Get current system status for monitoring"""
-    try:
-        resources = check_system_resources()
-        llm_service = get_llm_service()
-        
-        status = {
-            "system_resources": resources,
-            "llm_service_initialized": llm_service is not None,
-            "query_processor_initialized": get_query_processor() is not None,
-            "gpu_accelerator_initialized": _gpu_accelerator is not None
-        }
-        
-        if llm_service and hasattr(llm_service, 'get_memory_usage'):
-            status["llm_memory_usage"] = llm_service.get_memory_usage()
-        
-        return status
-        
-    except Exception as e:
-        logger.error(f"Failed to get system status: {e}")
-        return {"error": str(e)}
-
-# Health check function
-def health_check() -> Dict[str, Any]:
-    """Perform health check on all components"""
-    try:
-        status = get_system_status()
-        
-        # Check if critical components are healthy
-        healthy = (
-            status.get("system_resources", {}).get("system_memory_percent", 100) < 90 and
-            status.get("llm_service_initialized", False)
-        )
-        
-        return {
-            "healthy": healthy,
-            "status": status,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        return {
-            "healthy": False,
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
-
-# FIXED: Backward compatibility function with correct schema
-def create_query_response_from_legacy(
-    query: str,
-    answer: str,
-    model_used: str = "mistral-7b",
-    sources: List[Dict[str, Any]] = None,
-    processing_time: float = 0.0,
-    gpu_accelerated: bool = False
-) -> QueryResponse:
+# Export history function
+async def get_query_history(
+    db: Session, 
+    user_id: Optional[int] = None, 
+    skip: int = 0, 
+    limit: int = 10,
+    department_filter: Optional[str] = None
+) -> List[QueryHistoryResponse]:
     """
-    Create QueryResponse from legacy format (for backward compatibility)
-    FIXED: Maps legacy field names to correct schema field names
+    Get query history with optional filtering
     """
-    # Convert legacy sources to SourceDocument objects
-    source_docs = []
-    if sources:
-        for i, source in enumerate(sources):
-            source_doc = create_source_document_from_result(source, i)
-            source_docs.append(source_doc)
-    
-    return QueryResponse(
-        query=query,
-        response=answer,                                # Map 'answer' to 'response'
-        model=model_used,                              # Map 'model_used' to 'model'
-        sources=source_docs,
-        processing_time=processing_time,
-        gpu_accelerated=gpu_accelerated,
-        query_history_id=None
+    return await enhanced_query_wrapper.get_query_history(
+        db=db,
+        user_id=user_id,
+        skip=skip,
+        limit=limit,
+        department_filter=department_filter
     )
-
-# Export functions for module-level access
-__all__ = [
-    'process_query',
-    'get_system_status', 
-    'health_check',
-    'create_source_document_from_result',
-    'create_query_response_from_legacy'
-]
