@@ -207,9 +207,7 @@ Answer:"""
             #    }
             #    for r in results
             #]
-######
 
-            # Replace the existing sources formatting section with this:
             sources = []
             for i, r in enumerate(results):
                 try:
@@ -218,54 +216,59 @@ Answer:"""
                         # This is a Qdrant ScoredPoint object from the "rag" collection
                         payload = r.payload if r.payload else {}
                         
-                        # RAG collection stores "filename" not "document_id" - FIXED MAPPING
+                        # RAG collection stores "filename" not "document_id"
                         doc_id = (payload.get("filename") or 
-                                payload.get("document_id") or  # Fallback
                                 str(r.id) if hasattr(r, 'id') else f"doc_{i}")
                         
-                        # RAG collection stores "content" not "text" - FIXED MAPPING  
-                        content = (payload.get("content") or 
-                                payload.get("text") or  # Fallback
-                                "No content available")
+                        # RAG collection stores "content" not "text"
+                        text_content = payload.get("content", "")
                         
-                        source = {
-                            "document_id": doc_id,
-                            "document_name": doc_id.split("/")[-1] if "/" in str(doc_id) else str(doc_id),
-                            "relevance_score": float(r.score),
-                            "content_snippet": content[:200] + "..." if len(content) > 200 else content,
-                            "metadata": {
-                                "chunk_index": payload.get("chunk_index", i),
-                                "department": payload.get("department", "General"),
-                                "filename": payload.get("filename", "unknown")
-                            }
-                        }
-                        sources.append(source)
+                        # Get other fields specific to RAG collection
+                        source_name = payload.get("filename", "unknown")
+                        chunk_index = payload.get("chunk_index", 0)
+                        department = payload.get("department", "General")
                         
+                        score = float(r.score) if hasattr(r, 'score') else 0.0
+                        
+                    # Fallback for dictionary format (shouldn't happen with Qdrant)
+                    elif isinstance(r, dict):
+                        doc_id = (r.get("filename") or 
+                                r.get("document_id") or 
+                                f"doc_{i}")
+                        text_content = (r.get("content") or 
+                                    r.get("text") or "")
+                        source_name = r.get("filename", "unknown")
+                        score = float(r.get("score", 0.0))
+                    
                     else:
-                        # Handle dictionary format (fallback)
-                        doc_id = r.get("document_id", r.get("filename", f"doc_{i}"))
-                        content = r.get("text", r.get("content", "No content available"))
-                        
-                        source = {
-                            "document_id": doc_id,
-                            "document_name": str(doc_id).split("/")[-1] if "/" in str(doc_id) else str(doc_id),
-                            "relevance_score": float(r.get("score", 0.0)),
-                            "content_snippet": content[:200] + "..." if len(content) > 200 else content,
-                            "metadata": r.get("metadata", {})
-                        }
-                        sources.append(source)
-                        
-                except Exception as e:
-                    logger.warning(f"Failed to format source {i}: {e}")
-                    # Add a fallback source to prevent complete failure
+                        # Unknown format fallback
+                        logger.warning(f"Unknown result format: {type(r)}")
+                        doc_id = f"doc_{i}"
+                        text_content = str(r)[:200] if r else ""
+                        source_name = "unknown"
+                        score = 0.0
+                    
+                    # Clean up source name (remove path if present)
+                    if "/" in source_name:
+                        source_name = source_name.split("/")[-1]
+                    
                     sources.append({
-                        "document_id": f"doc_{i}",
-                        "document_name": f"document_{i}",
-                        "relevance_score": 0.0,
-                        "content_snippet": "Content unavailable",
-                        "metadata": {}
+                        "document_id": doc_id,
+                        "document_name": source_name,
+                        "relevance_score": score,
+                        "content_snippet": text_content[:200] + "..." if text_content else "No content available"
                     })
-                    continue
+                    
+                except Exception as e:
+                    logger.error(f"Error processing search result {i}: {e}")
+                    logger.error(f"Result data: {r}")
+                    # Add a fallback source entry
+                    sources.append({
+                        "document_id": f"error_doc_{i}",
+                        "document_name": "unknown",
+                        "relevance_score": 0.0,
+                        "content_snippet": "Error processing source"
+                    })
 
 ########Revised section above to line 198############
 

@@ -10,9 +10,6 @@ from app.schemas.query import QueryResponse
 from app.services.model_manager import ModelManager
 from app.services.rag_service import RAGService
 
-# ADD THIS IMPORT:
-#from app.crud.crud_query_history import create_query_history
-
 logger = logging.getLogger(__name__)
 
 # Initialize services (singleton pattern)
@@ -75,6 +72,27 @@ async def process_query(
                 department=department,
                 use_rag=True
             )
+            
+            # Save to database if successful
+            if db and response:
+                try:
+                    history_entry = crud_query_history.create_query_history(
+                        db=db,
+                        query_data={
+                            "user_id": user_id,
+                            "query_text": query_text,
+                            "response_text": response.response,
+                            "llm_model_used": response.model,
+                            "sources_retrieved": [source.dict() for source in response.sources],
+                            "processing_time_ms": int(response.processing_time * 1000),
+                            "department_filter": department,
+                            "gpu_accelerated": response.gpu_accelerated
+                        }
+                    )
+                    response.query_history_id = history_entry.id
+                except Exception as db_error:
+                    logger.warning(f"Failed to save query history: {db_error}")
+                    # Don't fail the request for database issues
             
             return response
             

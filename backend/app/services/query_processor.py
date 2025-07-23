@@ -29,23 +29,58 @@ class QueryProcessor:
         self.llm_service = None
         self.gpu_accelerator = None
         self._initialize_components()
-    
+
+######     
+    #def _initialize_components(self):
+    #    """Initialize all components with GPU optimization"""
+    #    try:
+    #        # Initialize GPU accelerator
+    #        self.gpu_accelerator = GPUAccelerator()
+    #        
+    #        # Initialize embedding model with GPU optimization
+    #        device = "cuda" if torch.cuda.is_available() and settings.ENABLE_GPU else "cpu"
+    #        self.embedding_model = SentenceTransformer(
+    #            'all-MiniLM-L6-v2',
+    #            device=device
+    #        )
+    #        
+    #        # Apply GPU optimizations
+    #        if device == "cuda":
+    #            self.gpu_accelerator.optimize_model(self.embedding_model)
+    #        
+    #        # Initialize vector database client
+    #        self.vector_client = QdrantClient(
+    #            host=settings.QDRANT_HOST,
+    #            port=settings.QDRANT_PORT
+    #        )
+    #        
+    #        # Initialize LLM service
+    #        self.llm_service = LLMService()
+    #        
+    #        logger.info(f"Query processor initialized with device: {device}")
+    #        
+    #    except Exception as e:
+    #        logger.error(f"Failed to initialize query processor: {str(e)}")
+    #        raise
+######
     def _initialize_components(self):
-        """Initialize all components with GPU optimization"""
+        """Initialize all components with proper error handling"""
         try:
-            # Initialize GPU accelerator
+            # Initialize GPU accelerator first
             self.gpu_accelerator = GPUAccelerator()
             
-            # Initialize embedding model with GPU optimization
+            # Initialize embedding model with fallback
             device = "cuda" if torch.cuda.is_available() and settings.ENABLE_GPU else "cpu"
-            self.embedding_model = SentenceTransformer(
-                'all-MiniLM-L6-v2',
-                device=device
-            )
-            
-            # Apply GPU optimizations
-            if device == "cuda":
-                self.gpu_accelerator.optimize_model(self.embedding_model)
+            try:
+                self.embedding_model = SentenceTransformer(
+                    settings.EMBEDDING_MODEL_NAME,  # Use from config
+                    device=device
+                )
+                logger.info(f"Embedding model loaded on {device}")
+            except Exception as e:
+                logger.warning(f"Failed to load embedding model: {e}")
+                # Use fallback model
+                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
             
             # Initialize vector database client
             self.vector_client = QdrantClient(
@@ -53,14 +88,22 @@ class QueryProcessor:
                 port=settings.QDRANT_PORT
             )
             
-            # Initialize LLM service
-            self.llm_service = LLMService()
+            # Initialize LLM service with error handling
+            try:
+                self.llm_service = LLMService()
+                logger.info("LLM service initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize LLM service: {e}")
+                self.llm_service = None
             
-            logger.info(f"Query processor initialized with device: {device}")
+            logger.info("Query processor initialized successfully")
             
         except Exception as e:
             logger.error(f"Failed to initialize query processor: {str(e)}")
             raise
+
+
+####### Above Updated 7/22/25 #######
 
 ######
     #def search_similar_documents(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
