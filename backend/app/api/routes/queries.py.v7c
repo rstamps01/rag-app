@@ -1,10 +1,5 @@
-"""
-Query History Schema Fix
-Fixes the mismatch between database storage format and API response schema
-"""
-
-# Fixed API Routes for Query History
-# File: /backend/app/api/routes/queries.py
+# File Path: /backend/app/api/routes/queries.py
+# Fixed version - removed db parameter from query_wrapper.process_query call
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Any, List, Optional, Dict
@@ -13,9 +8,11 @@ import logging
 from app.db.session import get_db 
 from sqlalchemy.orm import Session
 
+# Import the module instead of trying to import the function directly
 from app.services import query_wrapper
+
 from app.schemas.query import QueryRequest, QueryResponse, QueryHistoryResponse
-from app.crud import crud_query_history
+from app.crud import crud_query_history # Import CRUD for query history
 
 logger = logging.getLogger(__name__)
 
@@ -25,21 +22,26 @@ router = APIRouter()
 async def process_query_endpoint(
     request: QueryRequest,
     db: Session = Depends(get_db),
+    # current_user: UserModel = Depends(get_current_active_user) # Example: Get current user
 ) -> Any:
     """
     Receives a query request, executes the RAG pipeline, saves to history, and returns the response.
     """
     logger.info(f"--- LOGGER: queries.py: process_query_endpoint ENTRY --- Received query: {request.query}, Department: {request.department}")
     
+    # Placeholder for getting user_id if authentication is implemented
     user_id_to_pass: Optional[int] = None
+    # if current_user:
+    #     user_id_to_pass = current_user.id
 
     try:
         department_to_use = request.department if request.department is not None else "General"
         logger.info(f"Calling query_wrapper.process_query with query: {request.query}, department: {department_to_use}, user_id: {user_id_to_pass}")
         
         # Call the async function from the imported module
+        # FIXED: Removed db parameter and updated parameter names to match query wrapper interface
         response = await query_wrapper.process_query(
-            query=request.query,
+            query=request.query,  # Changed from query_text to query
             department=department_to_use,
             user_id=user_id_to_pass
         )
@@ -62,42 +64,22 @@ async def get_query_history(
 ) -> Any:
     """
     Get query history for a specific user or all users (admin).
-    FIXED: Properly handle sources_retrieved format conversion
     """
     try:
         if user_id:
+            # Get history for specific user
             history_entries = crud_query_history.get_query_history_for_user(
                 db=db, user_id=user_id, skip=skip, limit=limit
             )
         else:
+            # Get all history (admin view)
             history_entries = crud_query_history.get_all_query_history(
                 db=db, skip=skip, limit=limit
             )
         
-        # Convert to response format with proper sources_retrieved handling
+        # Convert to response format
         response_entries = []
         for entry in history_entries:
-            # FIXED: Convert sources_retrieved from strings to proper dict format
-            sources_retrieved = []
-            if entry.sources_retrieved:
-                if isinstance(entry.sources_retrieved, list):
-                    for source in entry.sources_retrieved:
-                        if isinstance(source, str):
-                            # Convert string to dict format expected by schema
-                            sources_retrieved.append({
-                                "document_name": source,
-                                "relevance_score": 0.0
-                            })
-                        elif isinstance(source, dict):
-                            # Already in correct format
-                            sources_retrieved.append(source)
-                        else:
-                            # Fallback for other types
-                            sources_retrieved.append({
-                                "document_name": str(source),
-                                "relevance_score": 0.0
-                            })
-            
             response_entries.append(QueryHistoryResponse(
                 id=entry.id,
                 user_id=entry.user_id,
@@ -105,7 +87,7 @@ async def get_query_history(
                 response_text=entry.response_text,
                 query_timestamp=entry.query_timestamp,
                 llm_model_used=entry.llm_model_used,
-                sources_retrieved=sources_retrieved,  # FIXED: Proper format
+                sources_retrieved=entry.sources_retrieved or [],
                 processing_time_ms=entry.processing_time_ms,
                 department_filter=entry.department_filter,
                 gpu_accelerated=entry.gpu_accelerated
@@ -159,35 +141,13 @@ async def get_recent_queries(
 ) -> Any:
     """
     Get the most recent query history entries.
-    FIXED: Properly handle sources_retrieved format conversion
     """
     try:
         recent_entries = crud_query_history.get_recent_queries(db=db, limit=limit)
         
-        # Convert to response format with proper sources_retrieved handling
+        # Convert to response format
         response_entries = []
         for entry in recent_entries:
-            # FIXED: Convert sources_retrieved from strings to proper dict format
-            sources_retrieved = []
-            if entry.sources_retrieved:
-                if isinstance(entry.sources_retrieved, list):
-                    for source in entry.sources_retrieved:
-                        if isinstance(source, str):
-                            # Convert string to dict format expected by schema
-                            sources_retrieved.append({
-                                "document_name": source,
-                                "relevance_score": 0.0
-                            })
-                        elif isinstance(source, dict):
-                            # Already in correct format
-                            sources_retrieved.append(source)
-                        else:
-                            # Fallback for other types
-                            sources_retrieved.append({
-                                "document_name": str(source),
-                                "relevance_score": 0.0
-                            })
-            
             response_entries.append(QueryHistoryResponse(
                 id=entry.id,
                 user_id=entry.user_id,
@@ -195,7 +155,7 @@ async def get_recent_queries(
                 response_text=entry.response_text,
                 query_timestamp=entry.query_timestamp,
                 llm_model_used=entry.llm_model_used,
-                sources_retrieved=sources_retrieved,  # FIXED: Proper format
+                sources_retrieved=entry.sources_retrieved or [],
                 processing_time_ms=entry.processing_time_ms,
                 department_filter=entry.department_filter,
                 gpu_accelerated=entry.gpu_accelerated
