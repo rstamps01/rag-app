@@ -293,7 +293,7 @@ Answer: """
             with torch.no_grad():
                 if torch.cuda.is_available() and self._is_blackwell_architecture():
                     # Use RTX 5090 Blackwell optimizations
-                    with torch.cuda.amp.autocast(dtype=torch.float16):
+                    with torch.amp.autocast("cuda", dtype=torch.float16):
                         outputs = self.model.generate(
                             input_ids=inputs["input_ids"],
                             attention_mask=inputs["attention_mask"],

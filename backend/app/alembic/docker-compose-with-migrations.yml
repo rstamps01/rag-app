@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  backend-07:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend-07
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    
+    # Updated command to include migrations
+    command: >
+      sh -c "
+        echo 'Waiting for cache initialization...' &&
+        while [ ! -f /app/models_cache/.initialization_complete ]; do
+          echo 'Cache not ready, waiting...'
+          sleep 2
+        done &&
+        echo 'Cache initialization detected, starting backend with migrations...' &&
+        cd /app &&
+        
+        # Wait for PostgreSQL
+        while ! pg_isready -h postgres-07 -p 5432 -U rag; do
+          echo 'PostgreSQL is unavailable - sleeping'
+          sleep 2
+        done &&
+        
+        # Run migrations
+        echo 'Running database migrations...' &&
+        alembic upgrade head &&
+        
+        # Start application
+        echo 'Starting FastAPI application...' &&
+        PYTHONPATH=/app python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+      "
+    
+    # ... rest of existing configuration remains the same
+    
+    depends_on:
+      postgres-07:
+        condition: service_healthy
+      qdrant-07:
+        condition: service_healthy
+    
+    networks:
+      - network-07
+
+  # ... rest of services remain the same
