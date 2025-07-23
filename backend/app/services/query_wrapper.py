@@ -70,10 +70,11 @@ async def process_query(
         
         # Process the query
         try:
-            response = await query_processor.process_query(
+            response = query_processor.process_query(
                 query=query_text,
-                department=department,
-                use_rag=True
+                department_filter=department,
+                user_id=user_id,
+                db=db
             )
             
             return response

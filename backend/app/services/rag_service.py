@@ -163,31 +163,63 @@ Answer:"""
             # Generate response with RTX 5090 optimizations
             tokenizer = self.tokenizers[model_id]
             model = self.models[model_id]
-            
-            inputs = tokenizer(prompt, return_tensors="pt").to(self.device)
-            
-            # Use mixed precision for RTX 5090
-            if self.is_rtx5090 and self.scaler is not None:
-                with torch.cuda.amp.autocast():
-                    output = model.generate(
-                        **inputs,
-                        max_new_tokens=512,
-                        temperature=0.7,
-                        top_p=0.9,
-                        do_sample=True,
-                        pad_token_id=tokenizer.eos_token_id
-                    )
-            else:
-                with torch.no_grad():
-                    output = model.generate(
-                        **inputs,
-                        max_new_tokens=512,
-                        temperature=0.7,
-                        top_p=0.9,
-                        do_sample=True,
-                        pad_token_id=tokenizer.eos_token_id
-                    )
-            
+
+#######            
+    #        inputs = tokenizer(prompt, return_tensors="pt").to(self.device)
+    #        
+    #        # Use mixed precision for RTX 5090
+    #        if self.is_rtx5090 and self.scaler is not None:
+    #            with torch.amp.autocast("cuda"):
+    #                output = model.generate(
+    #                    **inputs,
+    #                    max_new_tokens=512,
+    #                    temperature=0.7,
+    #                    top_p=0.9,
+    #                    do_sample=True,
+    #                    pad_token_id=tokenizer.eos_token_id
+    #                )
+    #        else:
+    #            with torch.no_grad():
+    #                output = model.generate(
+    #                    **inputs,
+    #                    max_new_tokens=512,
+    #                    temperature=0.7,
+    #                    top_p=0.9,
+    #                    do_sample=True,
+    #                    pad_token_id=tokenizer.eos_token_id
+    #                )
+######
+
+            # For RTX 5090 path (line ~167)
+            inputs = tokenizer(prompt, return_tensors="pt", padding=True, truncation=True).to(self.device)
+
+            with torch.amp.autocast("cuda"):
+                output = model.generate(
+                    input_ids=inputs['input_ids'],
+                    attention_mask=inputs['attention_mask'],  # ← ENSURE this is included
+                    max_new_tokens=512,
+                    temperature=0.7,
+                    top_p=0.9,
+                    do_sample=True,
+                    pad_token_id=tokenizer.pad_token_id if tokenizer.pad_token_id else tokenizer.eos_token_id
+                )
+
+            # For non-RTX path (line ~182)  
+            inputs = tokenizer(prompt, return_tensors="pt", padding=True, truncation=True).to(self.device)
+
+            with torch.no_grad():
+                output = model.generate(
+                    input_ids=inputs['input_ids'],
+                    attention_mask=inputs['attention_mask'],  # ← ENSURE this is included
+                    max_new_tokens=512,
+                    temperature=0.7,
+                    top_p=0.9,
+                    do_sample=True,
+                    pad_token_id=tokenizer.pad_token_id if tokenizer.pad_token_id else tokenizer.eos_token_id
+                )
+
+###### Above Updated 7/22/25 ###### 
+           
             response_text = tokenizer.decode(output[0], skip_special_tokens=True)
             
             # Extract just the answer part (after "Answer:")

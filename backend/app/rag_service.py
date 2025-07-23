@@ -168,10 +168,10 @@ Answer:"""
         
         # Use mixed precision for RTX 5090
         if self.is_rtx5090 and self.scaler is not None:
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast("cuda"):
                 output = model.generate(
                     **inputs,
-                    max_new_tokens=512,
+                    max_new_tokens=1000,
                     temperature=0.7,
                     top_p=0.9,
                     do_sample=True

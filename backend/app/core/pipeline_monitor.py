@@ -156,7 +156,131 @@ class PipelineMonitor:
         except Exception as e:
             # Fail gracefully - don't let logging errors break document processing
             logger.error(f"Failed to log document processing event for {filename}: {e}")
+
+######
+
+    def log_query_processed(self, query, processing_time, sources_count, success=True, error=None, **kwargs):
+        """
+        Log query processing completion/failure - ADDED METHOD to fix AttributeError
         
+        This method matches the usage in query_processor.py:
+        - pipeline_monitor.log_query_processed(query, processing_time, sources_count, success, error)
+        
+        Args:
+            query (str): The user query that was processed
+            processing_time (float): Time taken to process the query in seconds
+            sources_count (int): Number of sources retrieved for the query
+            success (bool): Whether query processing was successful
+            error (str): Error message if processing failed
+            **kwargs: Additional keyword arguments for flexibility
+        """
+        try:
+            # Create a unique pipeline ID for this query processing event
+            pipeline_id = str(uuid.uuid4())
+            
+            # Prepare event data
+            event_data = {
+                'query': query[:200] + '...' if len(query) > 200 else query,  # Truncate long queries
+                'processing_time': processing_time,
+                'sources_count': sources_count,
+                'success': success,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Add error information if processing failed
+            if not success and error:
+                event_data['error'] = error
+            
+            # Add any additional kwargs
+            event_data.update(kwargs)
+            
+            # Create the pipeline event
+            event = {
+                'pipeline_id': pipeline_id,
+                'stage': 'query_processed',
+                'timestamp': datetime.now().isoformat(),
+                'data': event_data
+            }
+            
+            # Add to processing queue
+            self.events_queue.put(event)
+            
+            # Also log to standard logger for immediate visibility
+            if success:
+                logger.info(f"Query processed successfully: '{query[:50]}...' - "
+                        f"{sources_count} sources, {processing_time:.2f}s")
+            else:
+                logger.error(f"Query processing failed: '{query[:50]}...' - {error}")
+                
+        except Exception as e:
+            # Fail gracefully - don't let logging errors break query processing
+            logger.error(f"Failed to log query processing event: {e}")
+
+    def get_query_processing_stats(self):
+        """
+        Get statistics about query processing - ADDED METHOD for monitoring
+        
+        Returns:
+            dict: Statistics including total processed, success/failure counts, and performance metrics
+        """
+        stats = {
+            'total_processed': 0,
+            'successful': 0,
+            'failed': 0,
+            'total_processing_time': 0.0,
+            'total_sources_retrieved': 0,
+            'avg_processing_time': 0.0,
+            'avg_sources_per_query': 0.0,
+            'recent_queries': []
+        }
+        
+        try:
+            for pipeline_events in self.pipeline_events.values():
+                for event in pipeline_events:
+                    if event.get('stage') == 'query_processed':
+                        data = event.get('data', {})
+                        stats['total_processed'] += 1
+                        
+                        # Count success/failure
+                        if data.get('success', False):
+                            stats['successful'] += 1
+                        else:
+                            stats['failed'] += 1
+                        
+                        # Accumulate processing metrics
+                        processing_time = data.get('processing_time', 0)
+                        if processing_time:
+                            stats['total_processing_time'] += processing_time
+                        
+                        sources_count = data.get('sources_count', 0)
+                        stats['total_sources_retrieved'] += sources_count
+                        
+                        # Keep track of recent queries (last 10)
+                        query_info = {
+                            'query': data.get('query', 'unknown'),
+                            'success': data.get('success', False),
+                            'timestamp': data.get('timestamp', ''),
+                            'sources_count': sources_count,
+                            'processing_time': processing_time
+                        }
+                        stats['recent_queries'].append(query_info)
+            
+            # Calculate averages
+            if stats['total_processed'] > 0:
+                stats['avg_processing_time'] = stats['total_processing_time'] / stats['total_processed']
+                stats['avg_sources_per_query'] = stats['total_sources_retrieved'] / stats['total_processed']
+            
+            # Sort recent queries by timestamp (most recent first) and limit to 10
+            stats['recent_queries'].sort(key=lambda x: x['timestamp'], reverse=True)
+            stats['recent_queries'] = stats['recent_queries'][:10]
+            
+        except Exception as e:
+            logger.error(f"Error calculating query processing stats: {e}")
+        
+        return stats
+
+###### Added above on 7/22/25 ######
+
     def get_pipeline_events(self, pipeline_id):
         """Get all events for a specific pipeline"""
         return self.pipeline_events.get(pipeline_id, [])
