@@ -6,9 +6,9 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 // Import Page Components
 import DocumentsPage from './components/pages/DocumentsPage'; // <-- Import DocumentsPage
 import QueriesPage from './components/pages/QueriesPage';   // <-- Import QueriesPage
-import PipelineDashboard from './components/monitoring/PipelineDashboard'; // Assuming this path is correct
-import PipelineMonitoringDashboard from './components/monitoring/PipelineMonitoringDashboard'; //
+import MonitoringPage from './components/monitoring/PipelineDashboard'; // 
 import TestPage from './components/monitoring/TestPage'; //
+
 //
 // In your main App.jsx or router configuration - NEW
 // import { Route } from 'react-router-dom';
@@ -30,8 +30,7 @@ function App() {
               <li><Link to="/documents" className="hover:text-gray-300">Documents</Link></li>
               <li><Link to="/queries" className="hover:text-gray-300">Queries</Link></li> 
               <li><Link to="/dashboard" className="hover:text-gray-300">Pipeline Dashboard</Link></li>
-              <li><Link to="/monitoring" className="hover:text-gray-300">Pipeline Monitoring</Link></li>
-              <li><Link to="/test" className="hover:text-gray-300">Test Page</Link></li>
+              <li><Link to="/testpage" className="hover:text-gray-300">Test Page</Link></li>    
             </ul>
           </nav>
         </header>
@@ -53,14 +52,11 @@ function App() {
             {/* Queries Route - Use the new component */}
             <Route path="/queries" element={<QueriesPage />} />
             
-            {/* MonitorDashboard Route - Use the new component */}
-            <Route path="/dashboard" element={<PipelineMonitoringDashboard />} />
+            {/* Dashboard Route */}
+            <Route path="/dashboard" element={<MonitoringPage />} />
 
             {/* Monitoring Route */}
-            <Route path="/monitoring" element={<PipelineDashboard />} />
-
-            {/* Monitoring Route */}
-            <Route path="/test" element={<TestPage />} />
+            <Route path="/testpage" element={<TestPage />} />
           </Routes>
         </main>
 

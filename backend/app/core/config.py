@@ -58,4 +58,4 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 # CRITICAL: Create the settings instance that other modules import
-settings = Settings()
+Setting = Settings()

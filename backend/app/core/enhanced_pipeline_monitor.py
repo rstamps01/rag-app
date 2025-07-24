@@ -17,7 +17,11 @@ class EnhancedPipelineMonitor(PipelineMonitor):
     Enhanced pipeline monitor that broadcasts real-time events via WebSocket
     Extends the existing PipelineMonitor with real-time capabilities
     """
-    
+
+    async def initialize(self):
+        """Initialize the monitoring component"""
+        # Existing initialization code here
+
     def __init__(self):
         super().__init__()
         self.websocket_manager = websocket_manager
@@ -26,6 +30,8 @@ class EnhancedPipelineMonitor(PipelineMonitor):
         
         logger.info("EnhancedPipelineMonitor initialized")
     
+        pass
+
     async def start_monitoring(self):
         """Start the enhanced monitoring system"""
         await self.websocket_manager.start()
