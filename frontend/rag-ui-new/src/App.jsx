@@ -1,13 +1,13 @@
-// File Path: /home/vastdata/rag-app/frontend/rag-ui-new/src/App.jsx //
+// File Path: /home/vastdata/rag-app/frontend/rag-ui-new/src/App.jsx
 
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 
 // Import Page Components
-import DocumentsPage from './components/pages/DocumentsPage'; // <-- Import DocumentsPage
-import QueriesPage from './components/pages/QueriesPage';   // <-- Import QueriesPage
-import MonitoringPage from './components/monitoring/PipelineDashboard'; // 
-import TestPage from './components/monitoring/TestPage'; //
+import DocumentsPage from './components/pages/DocumentsPage'; //        <-- Import DocumentsPage
+import QueriesPage from './components/pages/QueriesPage';   //          <-- Import QueriesPage
+import TestPage from './components/monitoring/TestPage'; //             <-- Import TestPag
+import MonitoringPage from './components/monitoring/MonitoringPage'; // <-- Import MonitoringPage
 
 //
 // In your main App.jsx or router configuration - NEW
@@ -28,8 +28,8 @@ function App() {
             <ul className="flex space-x-4">
               <li><Link to="/" className="hover:text-gray-300">Home</Link></li>
               <li><Link to="/documents" className="hover:text-gray-300">Documents</Link></li>
-              <li><Link to="/queries" className="hover:text-gray-300">Queries</Link></li> 
-              <li><Link to="/dashboard" className="hover:text-gray-300">Pipeline Dashboard</Link></li>
+              <li><Link to="/queries" className="hover:text-gray-300">Queries</Link></li>
+              <li><Link to="/monitoring" className="nav-link">Pipeline Monitor</Link></li>
               <li><Link to="/testpage" className="hover:text-gray-300">Test Page</Link></li>    
             </ul>
           </nav>
@@ -53,7 +53,7 @@ function App() {
             <Route path="/queries" element={<QueriesPage />} />
             
             {/* Dashboard Route */}
-            <Route path="/dashboard" element={<MonitoringPage />} />
+            <Route path="/monitoring" element={<MonitoringPage />} />
 
             {/* Monitoring Route */}
             <Route path="/testpage" element={<TestPage />} />

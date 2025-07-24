@@ -1,16 +1,10 @@
 from fastapi import FastAPI, Depends, HTTPException, APIRouter, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import auth, documents, queries, admin, system, monitoring
-from app.core.config import settings
 from typing import List
 import os
 import logging
 import sys
 import datetime
-
-# --- Database Table Creation --- 
-from app.db.base import Base, engine
-from app.models import models as db_models
 
 # Configure basic logging to output to stdout
 logging.basicConfig(
@@ -21,11 +15,25 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# --- Database Table Creation --- 
+try:
+    from app.db.base import Base, engine
+    from app.models import models as db_models
+    DATABASE_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Database modules not available: {e}")
+    DATABASE_AVAILABLE = False
+    engine = None
+
 def create_db_and_tables():
     """
     Create database tables if they don't exist.
     Uses SQLAlchemy's create_all method which is safe to call multiple times.
     """
+    if not DATABASE_AVAILABLE:
+        logger.warning("Database not available - skipping table creation")
+        return
+        
     logger.info("Creating database tables (if they don't exist)...")
     try:
         db_models.Base.metadata.create_all(bind=engine)
@@ -33,8 +41,8 @@ def create_db_and_tables():
     except Exception as e:
         logger.error(f"Error creating database tables: {e}", exc_info=True)
         # Log the error but don't raise to allow app to start even with table issues
-        # This helps in scenarios where some tables exist but others have issues
 
+# Create FastAPI app
 app = FastAPI(
     title="RAG AI Application API with Visual Monitoring", 
     version="1.1.0",
@@ -62,7 +70,8 @@ async def on_startup():
         # Try to initialize WebSocket manager if available
         try:
             from app.core.websocket_manager import websocket_manager
-            await websocket_manager.initialize()
+            if hasattr(websocket_manager, 'initialize'):
+                await websocket_manager.initialize()
             logger.info("✅ WebSocket manager initialized successfully")
         except ImportError:
             logger.info("ℹ️  WebSocket manager not available - monitoring will work without real-time updates")
@@ -72,7 +81,8 @@ async def on_startup():
         # Try to initialize enhanced pipeline monitoring if available
         try:
             from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor
-            await enhanced_pipeline_monitor.initialize()
+            if hasattr(enhanced_pipeline_monitor, 'initialize'):
+                await enhanced_pipeline_monitor.initialize()
             logger.info("✅ Enhanced pipeline monitoring initialized successfully")
         except ImportError:
             logger.info("ℹ️  Enhanced pipeline monitoring not available - using basic monitoring")
@@ -82,7 +92,8 @@ async def on_startup():
         # Try to initialize enhanced query wrapper if available
         try:
             from app.services.enhanced_query_wrapper import enhanced_query_wrapper
-            await enhanced_query_wrapper.initialize()
+            if hasattr(enhanced_query_wrapper, 'initialize'):
+                await enhanced_query_wrapper.initialize()
             logger.info("✅ Enhanced query wrapper initialized successfully")
         except ImportError:
             logger.info("ℹ️  Enhanced query wrapper not available - using standard query processing")
@@ -108,7 +119,8 @@ async def on_shutdown():
         # Stop enhanced pipeline monitoring if available
         try:
             from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor
-            await enhanced_pipeline_monitor.stop_monitoring()
+            if hasattr(enhanced_pipeline_monitor, 'stop_monitoring'):
+                await enhanced_pipeline_monitor.stop_monitoring()
             logger.info("✅ Enhanced pipeline monitoring stopped")
         except ImportError:
             pass
@@ -118,7 +130,8 @@ async def on_shutdown():
         # Cleanup WebSocket manager if available
         try:
             from app.core.websocket_manager import websocket_manager
-            await websocket_manager.cleanup()
+            if hasattr(websocket_manager, 'cleanup'):
+                await websocket_manager.cleanup()
             logger.info("✅ WebSocket manager cleaned up")
         except ImportError:
             pass
@@ -140,23 +153,41 @@ app.add_middleware(
     expose_headers=["X-Pipeline-ID", "X-Processing-Time", "X-GPU-Utilization"]  # Monitoring headers
 )
 
-# Include routers with consistent prefix pattern
-app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["authentication"])
-app.include_router(documents.router, prefix=f"{settings.API_V1_STR}/documents", tags=["documents"])
+# Get API prefix (fallback to default if settings not available)
+try:
+    from app.core.config import settings
+    API_V1_STR = settings.API_V1_STR
+except ImportError:
+    API_V1_STR = "/api/v1"
+    logger.warning("Settings not available, using default API prefix: /api/v1")
 
-# Use standard queries router (enhanced version will be used automatically if available)
-app.include_router(queries.router, prefix=f"{settings.API_V1_STR}/queries", tags=["queries"])
+# Include routers with graceful error handling
+routers_to_include = [
+    ("auth", "authentication"),
+    ("documents", "documents"), 
+    ("queries", "queries"),
+    ("admin", "admin"),
+    ("system", "system"),
+    ("monitoring", "monitoring")
+]
 
-app.include_router(admin.router, prefix=f"{settings.API_V1_STR}/admin", tags=["admin"])
-app.include_router(system.router, prefix=f"{settings.API_V1_STR}/system", tags=["system"])
-app.include_router(monitoring.router, prefix=f"{settings.API_V1_STR}/monitoring", tags=["monitoring"])
+for router_name, tag in routers_to_include:
+    try:
+        module = __import__(f"app.api.routes.{router_name}", fromlist=[router_name])
+        router = getattr(module, 'router')
+        app.include_router(router, prefix=f"{API_V1_STR}/{router_name}", tags=[tag])
+        logger.info(f"✅ {router_name.capitalize()} router included")
+    except ImportError as e:
+        logger.warning(f"⚠️  {router_name.capitalize()} router not available: {e}")
+    except Exception as e:
+        logger.error(f"❌ Error including {router_name} router: {e}")
 
 # Include WebSocket monitoring router if available
 try:
     from app.api.routes import monitoring_websocket
     app.include_router(
         monitoring_websocket.router, 
-        prefix=f"{settings.API_V1_STR}/monitoring", 
+        prefix=f"{API_V1_STR}/monitoring", 
         tags=["websocket-monitoring"]
     )
     logger.info("✅ WebSocket monitoring routes included")
@@ -183,13 +214,14 @@ async def root():
     try:
         # Check if enhanced monitoring is available
         from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor
-        health = enhanced_pipeline_monitor.get_health_status()
-        monitoring_status = health.get("status", "unknown")
-        monitoring_features.update({
-            "real_time_monitoring": True,
-            "visual_pipeline": True,
-            "websocket_enabled": True
-        })
+        if hasattr(enhanced_pipeline_monitor, 'get_health_status'):
+            health = enhanced_pipeline_monitor.get_health_status()
+            monitoring_status = health.get("status", "unknown")
+            monitoring_features.update({
+                "real_time_monitoring": True,
+                "visual_pipeline": True,
+                "websocket_enabled": True
+            })
     except ImportError:
         pass
     except Exception as e:
@@ -202,7 +234,7 @@ async def root():
         "redoc": "/redoc",
         "monitoring": {
             "status": monitoring_status,
-            "websocket_endpoint": f"{settings.API_V1_STR}/monitoring/ws",
+            "websocket_endpoint": f"{API_V1_STR}/monitoring/ws",
             "dashboard_url": "/monitoring"
         },
         "features": monitoring_features
@@ -217,18 +249,24 @@ async def health_check():
     health_data = {
         "status": "healthy",
         "timestamp": datetime.datetime.now().isoformat(),
-        "database": "connected" if engine else "disconnected",
+        "database": "connected" if (DATABASE_AVAILABLE and engine) else "disconnected",
         "components": {}
     }
     
     # Check enhanced pipeline monitoring if available
     try:
         from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor
-        monitoring_health = enhanced_pipeline_monitor.get_health_status()
-        health_data["components"]["pipeline_monitoring"] = {
-            "status": "healthy",
-            "details": monitoring_health
-        }
+        if hasattr(enhanced_pipeline_monitor, 'get_health_status'):
+            monitoring_health = enhanced_pipeline_monitor.get_health_status()
+            health_data["components"]["pipeline_monitoring"] = {
+                "status": "healthy",
+                "details": monitoring_health
+            }
+        else:
+            health_data["components"]["pipeline_monitoring"] = {
+                "status": "basic",
+                "message": "Enhanced monitoring available but not fully initialized"
+            }
     except ImportError:
         health_data["components"]["pipeline_monitoring"] = {
             "status": "not_available",
@@ -243,12 +281,18 @@ async def health_check():
     # Check WebSocket manager if available
     try:
         from app.core.websocket_manager import websocket_manager
-        websocket_health = websocket_manager.get_health_status()
-        health_data["components"]["websocket_manager"] = {
-            "status": "healthy",
-            "active_connections": websocket_health.get("active_connections", 0),
-            "total_messages": websocket_health.get("total_messages", 0)
-        }
+        if hasattr(websocket_manager, 'get_health_status'):
+            websocket_health = websocket_manager.get_health_status()
+            health_data["components"]["websocket_manager"] = {
+                "status": "healthy",
+                "active_connections": websocket_health.get("active_connections", 0),
+                "total_messages": websocket_health.get("total_messages", 0)
+            }
+        else:
+            health_data["components"]["websocket_manager"] = {
+                "status": "basic",
+                "message": "WebSocket manager available but not fully initialized"
+            }
     except ImportError:
         health_data["components"]["websocket_manager"] = {
             "status": "not_available",
@@ -263,11 +307,17 @@ async def health_check():
     # Check enhanced query wrapper if available
     try:
         from app.services.enhanced_query_wrapper import enhanced_query_wrapper
-        wrapper_health = enhanced_query_wrapper.get_health_status()
-        health_data["components"]["query_wrapper"] = {
-            "status": "healthy" if wrapper_health.get("initialized") else "initializing",
-            "details": wrapper_health
-        }
+        if hasattr(enhanced_query_wrapper, 'get_health_status'):
+            wrapper_health = enhanced_query_wrapper.get_health_status()
+            health_data["components"]["query_wrapper"] = {
+                "status": "healthy" if wrapper_health.get("initialized") else "initializing",
+                "details": wrapper_health
+            }
+        else:
+            health_data["components"]["query_wrapper"] = {
+                "status": "basic",
+                "message": "Enhanced query wrapper available but not fully initialized"
+            }
     except ImportError:
         health_data["components"]["query_wrapper"] = {
             "status": "not_available",
@@ -303,20 +353,23 @@ async def monitoring_status():
         
         try:
             from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor
-            pipeline_status = enhanced_pipeline_monitor.get_health_status()
-            monitoring_available = True
+            if hasattr(enhanced_pipeline_monitor, 'get_health_status'):
+                pipeline_status = enhanced_pipeline_monitor.get_health_status()
+                monitoring_available = True
         except ImportError:
             pass
         
         try:
             from app.core.websocket_manager import websocket_manager
-            websocket_status = websocket_manager.get_health_status()
+            if hasattr(websocket_manager, 'get_health_status'):
+                websocket_status = websocket_manager.get_health_status()
         except ImportError:
             pass
         
         try:
             from app.services.enhanced_query_wrapper import enhanced_query_wrapper
-            wrapper_status = enhanced_query_wrapper.get_health_status()
+            if hasattr(enhanced_query_wrapper, 'get_health_status'):
+                wrapper_status = enhanced_query_wrapper.get_health_status()
         except ImportError:
             pass
         
@@ -336,10 +389,10 @@ async def monitoring_status():
             "websocket_manager": websocket_status,
             "query_wrapper": wrapper_status,
             "endpoints": {
-                "websocket": f"{settings.API_V1_STR}/monitoring/ws" if websocket_status.get("status") != "not_available" else "not_available",
-                "metrics": f"{settings.API_V1_STR}/monitoring/metrics",
-                "pipeline": f"{settings.API_V1_STR}/monitoring/pipeline",
-                "health": f"{settings.API_V1_STR}/monitoring/health"
+                "websocket": f"{API_V1_STR}/monitoring/ws" if websocket_status.get("status") != "not_available" else "not_available",
+                "metrics": f"{API_V1_STR}/monitoring/metrics",
+                "pipeline": f"{API_V1_STR}/monitoring/pipeline",
+                "health": f"{API_V1_STR}/monitoring/health"
             }
         }
     except Exception as e:

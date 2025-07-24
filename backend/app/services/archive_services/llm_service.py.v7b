@@ -1,479 +1,150 @@
-from typing import Dict, Any, List, Optional
-import logging
 import os
-import sys
 import torch
-from pathlib import Path
-import time
-
-# Add scripts directory to path for cache utilities (adjusted for actual structure)
-sys.path.insert(0, '/home/vastdata/rag-app-07/backend/scripts')
-sys.path.insert(0, '/app/scripts')  # Container path
-
-try:
-    from transformers import (
-        AutoTokenizer, 
-        AutoModelForCausalLM, 
-        BitsAndBytesConfig,
-        pipeline
-    )
-    # Import revised cache utilities
-    from scripts.model_cache_utils import ModelCacheManager, find_model_in_cache, setup_cache_environment
-except ImportError as e:
-    logging.error(f"Failed to import required packages: {e}")
-    # Fallback for missing cache utilities
-    class ModelCacheManager:
-        def __init__(self, *args, **kwargs): 
-            self.hf_cache_dir = Path("/home/vastdata/rag-app-07/huggingface_cache")
-        def is_model_cached(self, model_name): return False
-        def get_model_cache_path(self, model_name): return None
-        def get_cache_info(self): return {"status": "fallback"}
-    
-    def find_model_in_cache(model_name, cache_dirs=None): return None
-    def setup_cache_environment(): pass
+import logging
+from typing import Optional, Dict, Any
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
 class LLMService:
-    """
-    Enhanced LLM Service for vastdata Deployment with Local Cache Support
-    Optimized for /home/vastdata/rag-app-07/ structure with RTX 5090 optimizations
-    """
+    """LLM Service for handling model loading and text generation"""
     
-    def __init__(self, model_name: str = "mistralai/Mistral-7B-Instruct-v0.2"):
-        self.model_name = model_name
+    def __init__(self):
         self.model = None
         self.tokenizer = None
-        self.device = self._setup_device()
-        
-        # Initialize cache manager for vastdata user
-        self.cache_manager = ModelCacheManager(user="vastdata")
-        
-        # Set up cache environment for actual deployment
-        setup_cache_environment(user="vastdata")
-        
-        # RTX 5090 optimizations
-        self._setup_rtx5090_optimizations()
-        
-        # Load model and tokenizer
-        self._load_model_and_tokenizer()
-    
-    def _setup_device(self) -> str:
-        """Set up device with RTX 5090 optimizations"""
-        if torch.cuda.is_available():
-            device_name = torch.cuda.get_device_name(0)
-            logger.info(f"CUDA device detected: {device_name}")
+        self.embedding_model = None
+        self.model_cache_dir = "/app/models_cache/hub"
+        self._initialize_models()
+
+    def _initialize_models(self):
+        """Initialize the Mistral model and tokenizer"""
+        try:
+            model_path = "mistralai/Mistral-7B-Instruct-v0.2"
+
+    ######
+
+            # Load tokenizer and model
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+            self.model = AutoModelForCausalLM.from_pretrained(model_path)
+
+            # ADDED: Configure tokenizer properly
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+                
+            # Ensure pad_token_id is set correctly
+            if self.tokenizer.pad_token_id is None:
+                self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+
+            logger.info("Mistral-7B model loaded successfully")
+
+    ###### Added 7/22/25 #######
             
-            # Check if RTX 5090
-            is_rtx5090 = "RTX 5090" in device_name or "5090" in device_name
-            if is_rtx5090:
-                logger.info("RTX 5090 detected - enabling advanced optimizations")
-                self.is_rtx5090 = True
+            logger.info("Mistral-7B model loaded successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to load Mistral model: {str(e)}")
+            raise
+    
+    def generate_response(self, query: str, context: str = "", max_length: int = 512) -> str:
+        """Generate response using the loaded model"""
+        try:
+            if not self.model or not self.tokenizer:
+                return "Model not properly initialized"
+            
+            # Prepare prompt with context
+            if context:
+                prompt = f"Context: {context}\n\nQuestion: {query}\n\nAnswer:"
             else:
-                self.is_rtx5090 = False
-            
-            return "cuda"
-        else:
-            logger.warning("CUDA not available, using CPU")
-            self.is_rtx5090 = False
-            return "cpu"
-    
-    def _setup_rtx5090_optimizations(self):
-        """Configure RTX 5090 specific optimizations for Ada Lovelace architecture"""
-        if self.device == "cuda":
-            try:
-                # Enable TensorFloat-32 for RTX 5090 Ada Lovelace architecture
-                torch.set_float32_matmul_precision('high')
-                logger.info("✅ TensorFloat-32 precision enabled for RTX 5090")
-                
-                # Enable CUDA optimizations
-                torch.backends.cuda.matmul.allow_tf32 = True
-                torch.backends.cudnn.allow_tf32 = True
-                logger.info("✅ CUDA TF32 optimizations enabled")
-                
-                # Memory optimization for RTX 5090's 32GB VRAM
-                torch.cuda.empty_cache()
-                logger.info("✅ CUDA cache cleared")
-                
-                # Set memory fraction for RTX 5090 (conservative)
-                if self.is_rtx5090:
-                    torch.cuda.set_per_process_memory_fraction(0.8)  # Use 80% of 32GB
-                    logger.info("✅ RTX 5090 memory fraction set to 80%")
-                
-            except Exception as e:
-                logger.warning(f"Some RTX 5090 optimizations failed: {e}")
-    
-    def _get_quantization_config(self) -> Optional[BitsAndBytesConfig]:
-        """Get quantization configuration optimized for RTX 5090"""
-        if self.device == "cuda":
-            try:
-                # RTX 5090 has 32GB VRAM, so we can be more aggressive with quantization
-                return BitsAndBytesConfig(
-                    load_in_8bit=True,
-                    llm_int8_threshold=6.0,
-                    llm_int8_has_fp16_weight=False,
-                    llm_int8_enable_fp32_cpu_offload=False,
-                    # RTX 5090 specific optimizations
-                    bnb_4bit_compute_dtype=torch.float16,
-                    bnb_4bit_use_double_quant=True,
-                )
-            except Exception as e:
-                logger.warning(f"8-bit quantization not available: {e}")
-        return None
-    
-    def _load_from_cache(self) -> tuple[Optional[Any], Optional[Any]]:
-        """Load model and tokenizer from actual cache locations"""
-        try:
-            # Check if model is in actual cache structure
-            if not self.cache_manager.is_model_cached(self.model_name):
-                logger.info(f"Model {self.model_name} not found in vastdata cache")
-                return None, None
-            
-            cache_path = self.cache_manager.get_model_cache_path(self.model_name)
-            logger.info(f"Loading model from vastdata cache: {cache_path}")
-            
-            # Load tokenizer from cache
-            tokenizer = AutoTokenizer.from_pretrained(
-                str(cache_path),
-                local_files_only=True,
-                trust_remote_code=True,
-                cache_dir=str(self.cache_manager.hf_cache_dir)
-            )
-            
-            # Ensure pad token is set
-            if tokenizer.pad_token is None:
-                tokenizer.pad_token = tokenizer.eos_token
-            
-            logger.info("✅ Tokenizer loaded from vastdata cache")
-            
-            # Prepare model loading arguments optimized for RTX 5090
-            model_kwargs = {
-                "local_files_only": True,
-                "trust_remote_code": True,
-                "torch_dtype": torch.float16,
-                "low_cpu_mem_usage": True,
-                "device_map": "auto" if self.device == "cuda" else None,
-                "cache_dir": str(self.cache_manager.hf_cache_dir)
-            }
-            
-            # Add quantization if available
-            quantization_config = self._get_quantization_config()
-            if quantization_config:
-                model_kwargs["quantization_config"] = quantization_config
-                logger.info("✅ 8-bit quantization enabled for RTX 5090")
-            
-            # Add Flash Attention for RTX 5090 Ada Lovelace
-            if self.device == "cuda" and self.is_rtx5090:
-                try:
-                    model_kwargs["attn_implementation"] = "flash_attention_2"
-                    logger.info("✅ Flash Attention 2 enabled for RTX 5090")
-                except Exception:
-                    logger.info("Flash Attention 2 not available, using default attention")
-            
-            # Load model from vastdata cache
-            model = AutoModelForCausalLM.from_pretrained(
-                str(cache_path),
-                **model_kwargs
-            )
-            
-            logger.info("✅ Model loaded from vastdata cache successfully")
-            return model, tokenizer
-            
-        except Exception as e:
-            logger.error(f"Failed to load from vastdata cache: {e}")
-            return None, None
-    
-    def _load_from_huggingface(self) -> tuple[Optional[Any], Optional[Any]]:
-        """Load model and tokenizer from HuggingFace with caching to vastdata structure"""
-        try:
-            logger.info(f"Loading model from HuggingFace: {self.model_name}")
-            
-            # Get HuggingFace token
-            hf_token = os.environ.get("HUGGINGFACE_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-            
-            # Load tokenizer with vastdata cache
-            tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                cache_dir=str(self.cache_manager.hf_cache_dir),
-                token=hf_token,
-                trust_remote_code=True
-            )
-            
-            if tokenizer.pad_token is None:
-                tokenizer.pad_token = tokenizer.eos_token
-            
-            logger.info("✅ Tokenizer loaded from HuggingFace")
-            
-            # Prepare model loading arguments for RTX 5090
-            model_kwargs = {
-                "cache_dir": str(self.cache_manager.hf_cache_dir),
-                "token": hf_token,
-                "trust_remote_code": True,
-                "torch_dtype": torch.float16,
-                "low_cpu_mem_usage": True,
-                "device_map": "auto" if self.device == "cuda" else None,
-            }
-            
-            # Add quantization if available
-            quantization_config = self._get_quantization_config()
-            if quantization_config:
-                model_kwargs["quantization_config"] = quantization_config
-            
-            # Add Flash Attention for RTX 5090
-            if self.device == "cuda" and self.is_rtx5090:
-                try:
-                    model_kwargs["attn_implementation"] = "flash_attention_2"
-                except Exception:
-                    pass
-            
-            # Load model
-            model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                **model_kwargs
-            )
-            
-            logger.info("✅ Model loaded from HuggingFace successfully")
-            return model, tokenizer
-            
-        except Exception as e:
-            logger.error(f"Failed to load from HuggingFace: {e}")
-            return None, None
-    
-    def _load_model_and_tokenizer(self):
-        """Load model and tokenizer with cache-first strategy for vastdata deployment"""
-        start_time = time.time()
-        
-        # Strategy 1: Try loading from vastdata cache first
-        logger.info("Attempting to load from vastdata cache...")
-        self.model, self.tokenizer = self._load_from_cache()
-        
-        # Strategy 2: Fallback to HuggingFace download
-        if self.model is None or self.tokenizer is None:
-            logger.info("Cache loading failed, attempting HuggingFace download...")
-            self.model, self.tokenizer = self._load_from_huggingface()
-        
-        # Strategy 3: Final fallback (should not happen in production)
-        if self.model is None or self.tokenizer is None:
-            logger.error("All loading strategies failed")
-            raise RuntimeError(f"Failed to load model {self.model_name}")
-        
-        load_time = time.time() - start_time
-        logger.info(f"✅ Model loading completed in {load_time:.2f} seconds")
-        
-        # Log model information
-        self._log_model_info()
-    
-    def _log_model_info(self):
-        """Log model information and RTX 5090 memory usage"""
-        try:
-            if self.model is not None:
-                # Model parameters
-                total_params = sum(p.numel() for p in self.model.parameters())
-                trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-                
-                logger.info(f"Model loaded: {self.model_name}")
-                logger.info(f"Total parameters: {total_params:,}")
-                logger.info(f"Trainable parameters: {trainable_params:,}")
-                logger.info(f"Device: {self.device}")
-                logger.info(f"RTX 5090 optimized: {self.is_rtx5090}")
-                
-                # RTX 5090 memory usage (32GB VRAM)
-                if self.device == "cuda":
-                    allocated = torch.cuda.memory_allocated(0) / 1024**3
-                    reserved = torch.cuda.memory_reserved(0) / 1024**3
-                    total_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
-                    
-                    logger.info(f"GPU Memory - Allocated: {allocated:.2f}GB")
-                    logger.info(f"GPU Memory - Reserved: {reserved:.2f}GB") 
-                    logger.info(f"GPU Memory - Total: {total_memory:.2f}GB")
-                    
-                    if self.is_rtx5090:
-                        utilization = (allocated / total_memory) * 100
-                        logger.info(f"RTX 5090 VRAM Utilization: {utilization:.1f}%")
-                
-        except Exception as e:
-            logger.warning(f"Failed to log model info: {e}")
-    
-    def generate_response(
-        self, 
-        prompt: str, 
-        max_length: int = 2048, 
-        temperature: float = 0.7,
-        top_p: float = 0.9,
-        do_sample: bool = True
-    ) -> str:
-        """
-        Generate response using RTX 5090 optimized inference
-        """
-        if self.model is None or self.tokenizer is None:
-            raise RuntimeError("Model not loaded")
-        
-        try:
-            start_time = time.time()
-            
-            # Format prompt for Mistral v0.2 instruction format
-            formatted_prompt = self._format_mistral_prompt(prompt)
-            
-            # Tokenize input with extended context for Mistral v0.2
+                prompt = f"Question: {query}\n\nAnswer:"
+
+######            
+    #        # Tokenize input
+    #        inputs = self.tokenizer.encode(prompt, return_tensors="pt")
+    #        
+    #        # Move to GPU if available
+    #        if torch.cuda.is_available():
+    #            inputs = inputs.cuda()
+    #            self.model = self.model.cuda()
+    #
+    #        
+    #        # Generate response
+    #        with torch.no_grad():
+    #            outputs = self.model.generate(
+    #                inputs,
+    #                max_length=max_length,
+    #                num_return_sequences=1,
+    #                temperature=0.7,
+    #                do_sample=True,
+    #               pad_token_id=self.tokenizer.eos_token_id
+    #            )
+######
+
+            # Tokenize input with proper attention mask
             inputs = self.tokenizer(
-                formatted_prompt,
-                return_tensors="pt",
+                prompt, 
+                return_tensors="pt", 
+                padding=True, 
                 truncation=True,
-                max_length=min(max_length, 32768)  # Mistral v0.2 32K context window
+                max_length=1024  # Allow longer input
             )
-            
-            if self.device == "cuda":
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            
-            # Generate with RTX 5090 optimizations
-            generation_kwargs = {
-                "max_length": max_length,
-                "temperature": temperature,
-                "top_p": top_p,
-                "do_sample": do_sample,
-                "pad_token_id": self.tokenizer.eos_token_id,
-                "eos_token_id": self.tokenizer.eos_token_id,
-                "use_cache": True,
-            }
-            
-            # RTX 5090 specific optimizations
-            if self.is_rtx5090:
-                generation_kwargs.update({
-                    "num_beams": 1,  # Faster for RTX 5090
-                    "early_stopping": True,
-                    "repetition_penalty": 1.1
-                })
-            
-            # Use mixed precision for RTX 5090 Ada Lovelace
-            if self.device == "cuda":
-                with torch.cuda.amp.autocast():
-                    with torch.no_grad():
-                        outputs = self.model.generate(
-                            inputs["input_ids"],
-                            attention_mask=inputs.get("attention_mask"),
-                            **generation_kwargs
-                        )
-            else:
-                with torch.no_grad():
-                    outputs = self.model.generate(
-                        inputs["input_ids"],
-                        attention_mask=inputs.get("attention_mask"),
-                        **generation_kwargs
-                    )
+
+            # Move to GPU if available
+            if torch.cuda.is_available():
+                inputs = {k: v.cuda() for k, v in inputs.items()}
+                self.model = self.model.cuda()
+
+            # Set pad token if not set
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+
+            # Generate response with proper parameters
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    input_ids=inputs['input_ids'],
+                    attention_mask=inputs['attention_mask'],  # ← FIXED: Add attention mask
+                    max_new_tokens=512,                       # ← FIXED: Use max_new_tokens instead of max_length
+                    num_return_sequences=1,
+                    temperature=0.7,
+                    do_sample=True,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    repetition_penalty=1.1,                  # ← ADDED: Prevent repetition
+                    length_penalty=1.0                       # ← ADDED: Control length preference
+                )
+###### Added 7/22/25 #######
             
             # Decode response
-            response = self.tokenizer.decode(
-                outputs[0][inputs["input_ids"].shape[1]:],
-                skip_special_tokens=True
-            ).strip()
+            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
             
-            generation_time = time.time() - start_time
-            logger.info(f"Response generated in {generation_time:.2f} seconds")
-            
-            # Log RTX 5090 performance metrics
-            if self.is_rtx5090:
-                tokens_generated = len(outputs[0]) - inputs["input_ids"].shape[1]
-                tokens_per_second = tokens_generated / generation_time
-                logger.info(f"RTX 5090 Performance: {tokens_per_second:.1f} tokens/second")
+            # Extract only the answer part
+            if "Answer:" in response:
+                response = response.split("Answer:")[-1].strip()
             
             return response
             
         except Exception as e:
-            logger.error(f"Generation failed: {e}")
-            raise
+            logger.error(f"Response generation failed: {str(e)}")
+            return f"Error generating response: {str(e)}"
     
-    def _format_mistral_prompt(self, prompt: str) -> str:
-        """Format prompt for Mistral v0.2 instruction format"""
-        return f"<s>[INST] {prompt} [/INST]"
-    
-    def get_model_info(self) -> Dict[str, Any]:
-        """Get model information and status for vastdata deployment"""
-        info = {
-            "model_name": self.model_name,
-            "device": self.device,
-            "is_rtx5090": self.is_rtx5090,
-            "loaded": self.model is not None and self.tokenizer is not None,
-            "cache_info": self.cache_manager.get_cache_info(),
-            "deployment_info": {
-                "user": "vastdata",
-                "base_dir": "/home/vastdata/rag-app-07",
-                "cache_strategy": "vastdata_local_first"
-            }
-        }
-        
-        if self.device == "cuda" and torch.cuda.is_available():
-            gpu_props = torch.cuda.get_device_properties(0)
-            info["gpu_info"] = {
-                "device_name": torch.cuda.get_device_name(0),
-                "memory_allocated_gb": torch.cuda.memory_allocated(0) / 1024**3,
-                "memory_reserved_gb": torch.cuda.memory_reserved(0) / 1024**3,
-                "memory_total_gb": gpu_props.total_memory / 1024**3,
-                "compute_capability": f"{gpu_props.major}.{gpu_props.minor}",
-                "multiprocessor_count": gpu_props.multi_processor_count
-            }
-            
-            if self.is_rtx5090:
-                info["rtx5090_optimizations"] = {
-                    "tf32_enabled": torch.backends.cuda.matmul.allow_tf32,
-                    "flash_attention": "enabled" if hasattr(self.model, "config") and 
-                                    getattr(self.model.config, "attn_implementation", None) == "flash_attention_2" else "disabled",
-                    "mixed_precision": "enabled",
-                    "memory_fraction": "80%"
-                }
-        
-        return info
-    
-    def health_check(self) -> Dict[str, Any]:
-        """Perform health check on the LLM service for vastdata deployment"""
+    def load_embedding_model(self) -> SentenceTransformer:
+        """Load and return the embedding model"""
         try:
-            # Basic functionality test
-            test_response = self.generate_response(
-                "Hello, this is a test.",
-                max_length=50,
-                temperature=0.1
-            )
-            
-            return {
-                "status": "healthy",
-                "model_loaded": True,
-                "test_response_length": len(test_response),
-                "cache_available": self.cache_manager.is_model_cached(self.model_name),
-                "device": self.device,
-                "rtx5090_optimized": self.is_rtx5090,
-                "deployment": "vastdata",
-                "cache_path": str(self.cache_manager.get_model_cache_path(self.model_name))
-            }
-            
+            if not self.embedding_model:
+                model_path = f"{self.model_cache_dir}/models--sentence-transformers--all-MiniLM-L6-v2"
+                self.embedding_model = SentenceTransformer(model_path)
+            return self.embedding_model
         except Exception as e:
-            return {
-                "status": "unhealthy",
-                "error": str(e),
-                "model_loaded": self.model is not None,
-                "device": self.device,
-                "deployment": "vastdata"
-            }
+            logger.error(f"Failed to load embedding model: {str(e)}")
+            raise
 
-# Global LLM service instance
-_llm_service = None
+# Legacy function support (for backward compatibility)
+def load_mistral_model():
+    """Legacy function - use LLMService class instead"""
+    service = LLMService()
+    return service.model, service.tokenizer
 
-def get_llm_service() -> LLMService:
-    """Get or create global LLM service instance for vastdata deployment"""
-    global _llm_service
-    if _llm_service is None:
-        _llm_service = LLMService()
-    return _llm_service
-
-def generate_response(prompt: str, **kwargs) -> str:
-    """Convenience function for generating responses"""
-    service = get_llm_service()
-    return service.generate_response(prompt, **kwargs)
-
-def get_model_info() -> Dict[str, Any]:
-    """Convenience function for getting model info"""
-    service = get_llm_service()
-    return service.get_model_info()
-
-def health_check() -> Dict[str, Any]:
-    """Convenience function for health check"""
-    service = get_llm_service()
-    return service.health_check()
+def load_embedding_model():
+    """Legacy function - use LLMService class instead"""
+    service = LLMService()
+    return service.load_embedding_model()

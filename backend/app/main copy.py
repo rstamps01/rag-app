@@ -1,10 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, APIRouter, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import auth, documents, queries, admin, system, monitoring
-from app.api.routes import monitoring_websocket
 from app.core.config import settings
-from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor
-from app.core.websocket_manager import websocket_manager
 from typing import List
 import os
 import logging
@@ -40,7 +37,7 @@ def create_db_and_tables():
 
 app = FastAPI(
     title="RAG AI Application API with Visual Monitoring", 
-    version="1.0.0",
+    version="1.1.0",
     description="Retrieval-Augmented Generation API with n8n.io-inspired visual pipeline monitoring",
     docs_url="/docs",
     redoc_url="/redoc"

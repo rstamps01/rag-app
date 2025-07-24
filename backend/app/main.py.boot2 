@@ -1,15 +1,16 @@
 from fastapi import FastAPI, Depends, HTTPException, APIRouter, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import auth, documents, queries, admin, system, monitoring, monitoring_websocket, queries_enhanced
+#from app.api.routes import #auth #, documents #, queries #, admin #, system #, monitoring
+from app.api.routes import monitoring_websocket
 from app.core.config import settings
 from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor
-#from typing import List
+from app.core.websocket_manager import websocket_manager
+from typing import List
 import os
 import logging
 import sys
-from app.core.websocket_manager import websocket_manager
 
-# --- Database Table Creation ---
+# --- Database Table Creation --- 
 from app.db.base import Base, engine
 from app.models import models as db_models
 
@@ -50,20 +51,28 @@ async def on_startup():
     Startup event handler that runs when the application starts.
     Initializes database tables and performs other startup tasks.
     """
+    logger.info("Application startup: Initializing database...")
+    create_db_and_tables()
+    
     # Create necessary directories
     os.makedirs("/app/data/uploads", exist_ok=True)
     os.makedirs("/app/data/logs", exist_ok=True)
     os.makedirs("/app/models_cache", exist_ok=True)
+    
+    # Start enhanced pipeline monitoring
+    logger.info("Application startup: Initializing enhanced pipeline monitoring...")
+    await enhanced_pipeline_monitor.start_monitoring()
+    
+    logger.info("Application startup completed successfully.")
 
-    # Add to startup event
+# Add to startup event
 @app.on_event("startup")
 async def startup_event():
     # Existing startup code...
 
     # Initialize enhanced monitoring
     await enhanced_pipeline_monitor.initialize()
-    logger.info("Application startup: Initializing database...")
-    create_db_and_tables()
+    logger.info("Enhanced pipeline monitoring initialized")
 
 # Add WebSocket router
 app.include_router(
@@ -94,17 +103,13 @@ app.add_middleware(
 # Include routers with consistent prefix pattern
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["authentication"])
 app.include_router(documents.router, prefix=f"{settings.API_V1_STR}/documents", tags=["documents"])
-#app.include_router(queries.router, prefix=f"{settings.API_V1_STR}/queries", tags=["queries"])
-
+app.include_router(queries.router, prefix=f"{settings.API_V1_STR}/queries", tags=["queries"])
 app.include_router(admin.router, prefix=f"{settings.API_V1_STR}/admin", tags=["admin"])
 app.include_router(system.router, prefix=f"{settings.API_V1_STR}/system", tags=["system"])
 app.include_router(monitoring.router, prefix=f"{settings.API_V1_STR}/monitoring", tags=["monitoring"])
 
 # Include WebSocket monitoring router
 app.include_router(monitoring_websocket.router, prefix=f"{settings.API_V1_STR}", tags=["websocket-monitoring"])
-
-from app.api.routes import queries_enhanced
-app.include_router(queries_enhanced.router, prefix="/api/v1/queries", tags=["queries"])
 
 @app.get("/")
 async def root():
