@@ -483,7 +483,3 @@ const QueriesPage = () => {
 };
 
 export default QueriesPage;
-
-
-
-live
