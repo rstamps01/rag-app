@@ -18,6 +18,7 @@ class PipelineWebSocketManager:
     Manages WebSocket connections for real-time pipeline monitoring
     Broadcasts pipeline events and metrics to connected clients
     """
+
     async def initialize(self):
         """Initialize the monitoring component"""
         # Existing initialization code here
