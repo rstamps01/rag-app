@@ -1,0 +1,212 @@
+"""
+RAG Application Main Entry Point
+Enhanced with graceful error handling and monitoring integration
+"""
+import logging
+import sys
+from contextlib import asynccontextmanager
+from typing import Optional
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Global variables for components
+websocket_manager = None
+enhanced_pipeline_monitor = None
+enhanced_query_wrapper = None
+
+# Configuration with fallback
+try:
+    from app.core.config import settings
+    API_V1_STR = settings.API_V1_STR
+    PROJECT_NAME = settings.PROJECT_NAME
+    logger.info("✅ Settings loaded successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Settings not available: {e}, using defaults")
+    API_V1_STR = "/api/v1"
+    PROJECT_NAME = "RAG Application"
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager"""
+    global websocket_manager, enhanced_pipeline_monitor, enhanced_query_wrapper
+    
+    logger.info("🚀 Starting RAG Application...")
+    
+    # Initialize WebSocket Manager
+    try:
+        from app.core.websocket_manager import websocket_manager as ws_manager
+        websocket_manager = ws_manager
+        if hasattr(websocket_manager, 'initialize'):
+            await websocket_manager.initialize()
+        logger.info("✅ WebSocket manager initialized")
+    except ImportError as e:
+        logger.warning(f"⚠️  WebSocket manager not available: {e}")
+    except Exception as e:
+        logger.warning(f"⚠️  WebSocket manager initialization failed: {e}")
+    
+    # Initialize Enhanced Pipeline Monitor
+    try:
+        from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor as monitor
+        enhanced_pipeline_monitor = monitor
+        if hasattr(enhanced_pipeline_monitor, 'initialize'):
+            await enhanced_pipeline_monitor.initialize()
+        logger.info("✅ Enhanced pipeline monitor initialized")
+    except ImportError as e:
+        logger.warning(f"⚠️  Enhanced pipeline monitor not available: {e}")
+    except Exception as e:
+        logger.warning(f"⚠️  Enhanced pipeline monitor initialization failed: {e}")
+    
+    # Initialize Enhanced Query Wrapper
+    try:
+        from app.services.enhanced_query_wrapper import enhanced_query_wrapper as wrapper
+        enhanced_query_wrapper = wrapper
+        if hasattr(enhanced_query_wrapper, 'initialize'):
+            await enhanced_query_wrapper.initialize()
+        logger.info("✅ Enhanced query wrapper initialized")
+    except ImportError as e:
+        logger.warning(f"⚠️  Enhanced query wrapper not available: {e}")
+    except Exception as e:
+        logger.warning(f"⚠️  Enhanced query wrapper initialization failed: {e}")
+    
+    logger.info("🎉 Application startup completed")
+    
+    yield
+    
+    # Cleanup
+    logger.info("🔄 Shutting down application...")
+    
+    if enhanced_pipeline_monitor and hasattr(enhanced_pipeline_monitor, 'shutdown'):
+        try:
+            await enhanced_pipeline_monitor.shutdown()
+            logger.info("✅ Enhanced pipeline monitor shutdown")
+        except Exception as e:
+            logger.warning(f"⚠️  Enhanced pipeline monitor shutdown failed: {e}")
+    
+    if websocket_manager and hasattr(websocket_manager, 'shutdown'):
+        try:
+            await websocket_manager.shutdown()
+            logger.info("✅ WebSocket manager shutdown")
+        except Exception as e:
+            logger.warning(f"⚠️  WebSocket manager shutdown failed: {e}")
+    
+    logger.info("👋 Application shutdown completed")
+
+# Create FastAPI app
+app = FastAPI(
+    title=PROJECT_NAME,
+    version="1.1.0",
+    description="RAG Application with Visual Monitoring",
+    lifespan=lifespan
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers with graceful error handling
+routers_to_include = [
+    ("auth", "Authentication"),
+    ("documents", "Documents"),
+    ("queries", "Queries"),
+    ("admin", "Admin"),
+    ("system", "System"),
+    ("monitoring", "Monitoring"),
+    ("monitoring_websocket", "Monitoring WebSocket")
+]
+
+for router_name, tag in routers_to_include:
+    try:
+        if router_name == "auth":
+            from app.api.routes.auth import router
+            app.include_router(router, prefix=f"{API_V1_STR}/auth", tags=[tag])
+        elif router_name == "documents":
+            from app.api.routes.documents import router
+            app.include_router(router, prefix=f"{API_V1_STR}/documents", tags=[tag])
+        elif router_name == "queries":
+            # Try enhanced queries first, fallback to standard
+            try:
+                from app.api.routes.queries_enhanced import router
+                app.include_router(router, prefix=f"{API_V1_STR}/queries", tags=[tag])
+                logger.info(f"✅ Enhanced {router_name} router included")
+            except ImportError:
+                from app.api.routes.queries import router
+                app.include_router(router, prefix=f"{API_V1_STR}/queries", tags=[tag])
+                logger.info(f"✅ Standard {router_name} router included")
+        elif router_name == "admin":
+            from app.api.routes.admin import router
+            app.include_router(router, prefix=f"{API_V1_STR}/admin", tags=[tag])
+        elif router_name == "system":
+            from app.api.routes.system import router
+            app.include_router(router, prefix=f"{API_V1_STR}/system", tags=[tag])
+        elif router_name == "monitoring":
+            from app.api.routes.monitoring import router
+            app.include_router(router, prefix=f"{API_V1_STR}/monitoring", tags=[tag])
+        elif router_name == "monitoring_websocket":
+            from app.api.routes.monitoring_websocket import router
+            app.include_router(router, prefix=f"{API_V1_STR}/monitoring", tags=[tag])
+        
+        if router_name != "queries":  # Already logged for queries
+            logger.info(f"✅ {router_name.capitalize()} router included")
+            
+    except ImportError as e:
+        logger.warning(f"⚠️  {router_name} router not available: {e}")
+    except Exception as e:
+        logger.error(f"❌ Failed to include {router_name} router: {e}")
+
+@app.get("/")
+async def root():
+    """Root endpoint with system information"""
+    return {
+        "message": f"Welcome to {PROJECT_NAME} API with Visual Monitoring",
+        "version": "1.1.0",
+        "status": "running",
+        "monitoring": {
+            "websocket_available": websocket_manager is not None,
+            "pipeline_monitor_available": enhanced_pipeline_monitor is not None,
+            "enhanced_wrapper_available": enhanced_query_wrapper is not None
+        },
+        "endpoints": {
+            "health": "/health",
+            "docs": "/docs",
+            "api": API_V1_STR
+        }
+    }
+
+@app.get("/health")
+async def health_check():
+    """Comprehensive health check"""
+    health_status = {
+        "status": "healthy",
+        "components": {
+            "api": {"status": "healthy"},
+            "websocket_manager": {
+                "status": "healthy" if websocket_manager else "unavailable",
+                "active_connections": getattr(websocket_manager, 'active_connections', 0) if websocket_manager else 0
+            },
+            "pipeline_monitor": {
+                "status": "healthy" if enhanced_pipeline_monitor else "unavailable"
+            },
+            "query_wrapper": {
+                "status": "healthy" if enhanced_query_wrapper else "unavailable"
+            }
+        }
+    }
+    
+    return health_status
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

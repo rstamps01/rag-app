@@ -1,0 +1,82 @@
+"""
+Application configuration settings
+"""
+import os
+from typing import Optional
+
+try:
+    # Try new pydantic-settings import first
+    from pydantic_settings import BaseSettings
+except ImportError:
+    try:
+        # Fallback to older pydantic import
+        from pydantic import BaseSettings
+    except ImportError:
+        # If neither works, create a simple class
+        class BaseSettings:
+            def __init__(self, **kwargs):
+                for key, value in kwargs.items():
+                    setattr(self, key, value)
+
+class Settings(BaseSettings):
+    """
+    Application settings with environment variable support
+    """
+    # API Configuration
+    API_V1_STR: str = "/api/v1"
+    PROJECT_NAME: str = "RAG AI Application"
+    VERSION: str = "1.1.0"
+    
+    # Database Configuration
+    DATABASE_URL: Optional[str] = None
+    
+    # Security Configuration
+    SECRET_KEY: str = "your-secret-key-change-in-production"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    
+    # CORS Configuration
+    BACKEND_CORS_ORIGINS: list = ["*"]  # In production, restrict this
+    
+    # File Upload Configuration
+    MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
+    UPLOAD_DIR: str = "/app/data/uploads"
+    
+    # Model Configuration
+    MODELS_CACHE_DIR: str = "/app/models_cache"
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    LLM_MODEL: str = "mistralai/Mistral-7B-Instruct-v0.2"
+    
+    # Vector Database Configuration
+    QDRANT_URL: str = "http://qdrant-07:6333"
+    QDRANT_COLLECTION: str = "rag"
+    
+    # GPU Configuration
+    CUDA_VISIBLE_DEVICES: str = "0"
+    GPU_MEMORY_FRACTION: float = 0.9
+    
+    # Monitoring Configuration
+    ENABLE_MONITORING: bool = True
+    MONITORING_WEBSOCKET_PATH: str = "/api/v1/monitoring/ws"
+    
+    # Logging Configuration
+    LOG_LEVEL: str = "INFO"
+    
+    def __init__(self, **kwargs):
+        # Initialize with environment variables
+        self.DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rag:rag@postgres-07:5432/rag")
+        self.SECRET_KEY = os.getenv("SECRET_KEY", self.SECRET_KEY)
+        self.QDRANT_URL = os.getenv("QDRANT_URL", self.QDRANT_URL)
+        self.CUDA_VISIBLE_DEVICES = os.getenv("CUDA_VISIBLE_DEVICES", self.CUDA_VISIBLE_DEVICES)
+        self.LOG_LEVEL = os.getenv("LOG_LEVEL", self.LOG_LEVEL)
+        
+        # Apply any additional kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+# Create the global settings instance
+settings = Settings()
+
+# Export commonly used values for backward compatibility
+API_V1_STR = settings.API_V1_STR
+DATABASE_URL = settings.DATABASE_URL
+SECRET_KEY = settings.SECRET_KEY
