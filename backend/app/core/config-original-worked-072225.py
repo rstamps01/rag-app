@@ -1,0 +1,69 @@
+## Changed settings to Settings
+
+"""
+Application configuration settings
+"""
+import os
+from typing import Optional
+from pydantic import BaseSettings
+
+class Settings(BaseSettings):
+    """
+    Application settings with environment variable support
+    """
+    # API Configuration
+    API_V1_STR: str = "/api/v1"
+    PROJECT_NAME: str = "RAG AI Application"
+    VERSION: str = "1.1.0"
+    
+    # Database Configuration
+    DATABASE_URL: Optional[str] = os.getenv(
+        "DATABASE_URL", 
+        "postgresql://rag:rag@postgres-07:5432/rag"
+    )
+    
+    # Security Configuration
+    SECRET_KEY: str = os.getenv(
+        "SECRET_KEY", 
+        "your-secret-key-change-in-production"
+    )
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    
+    # CORS Configuration
+    BACKEND_CORS_ORIGINS: list = ["*"]  # In production, restrict this
+    
+    # File Upload Configuration
+    MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
+    UPLOAD_DIR: str = "/app/data/uploads"
+    
+    # Model Configuration
+    MODELS_CACHE_DIR: str = "/app/models_cache"
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    LLM_MODEL: str = "mistralai/Mistral-7B-Instruct-v0.2"
+    
+    # Vector Database Configuration
+    QDRANT_URL: str = os.getenv("QDRANT_URL", "http://qdrant-07:6333")
+    QDRANT_COLLECTION: str = "rag"
+    
+    # GPU Configuration
+    CUDA_VISIBLE_DEVICES: str = os.getenv("CUDA_VISIBLE_DEVICES", "0")
+    GPU_MEMORY_FRACTION: float = 0.9
+    
+    # Monitoring Configuration
+    ENABLE_MONITORING: bool = True
+    MONITORING_WEBSOCKET_PATH: str = "/api/v1/monitoring/ws"
+    
+    # Logging Configuration
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    
+    class Config:
+        case_sensitive = True
+        env_file = ".env"
+
+# Create the global settings instance
+Settings = Settings()
+
+# Export commonly used values
+API_V1_STR = Settings.API_V1_STR
+DATABASE_URL = Settings.DATABASE_URL
+SECRET_KEY = Settings.SECRET_KEY

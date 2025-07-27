@@ -136,12 +136,12 @@ services:
         - BUILDKIT_INLINE_CACHE=1
     container_name: frontend-07
     environment:
-      # FIXED: Use localhost for browser-based requests (React runs in browser)
-      # React apps run in the browser, not in the container, so they need localhost
-      - REACT_APP_API_URL=http://localhost:8000
+      # FIXED: Use backend container name for internal communication
+      # For container-to-container communication, use the service name
+      - REACT_APP_API_URL=http://backend-07:8000
       - REACT_APP_ENVIRONMENT=production
-      # Internal container communication (for server-side rendering if needed)
-      - REACT_APP_API_URL_INTERNAL=http://backend-07:8000
+      # ADDED: Alternative configuration for development
+      # - REACT_APP_API_URL_EXTERNAL=http://localhost:8000
     volumes:
       - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
