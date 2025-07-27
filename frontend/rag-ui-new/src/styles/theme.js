@@ -1,48 +1,65 @@
-// n8n.io-inspired theme configuration
+// Theme configuration for RAG Application
+// Consistent dark theme matching Pipeline Monitor design
+
 export const theme = {
-    colors: {
-        primary: {
-            bg: '#1a1a2e',
-            secondary: '#16213e', 
-            accent: '#0f3460',
-            surface: '#1f2937',
-            card: '#374151'
-        },
-        text: {
-            primary: '#ffffff',
-            secondary: '#d1d5db',
-            muted: '#9ca3af',
-            accent: '#60a5fa'
-        },
-        status: {
-            success: '#10b981',
-            warning: '#f59e0b', 
-            error: '#ef4444',
-            info: '#3b82f6',
-            processing: '#8b5cf6'
-        },
-        border: {
-            default: '#4b5563',
-            hover: '#6b7280',
-            focus: '#3b82f6'
-        }
+  colors: {
+    // Background colors
+    background: {
+      primary: 'bg-gray-900',
+      secondary: 'bg-gray-800',
+      tertiary: 'bg-gray-700',
     },
-    components: {
-        card: 'bg-gray-800 border border-gray-700 rounded-lg',
-        button: {
-            primary: 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors font-medium',
-            secondary: 'bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded transition-colors font-medium',
-            danger: 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors font-medium',
-            ghost: 'text-gray-300 hover:text-white hover:bg-gray-700 px-4 py-2 rounded transition-colors'
-        },
-        input: 'bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none',
-        select: 'bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-blue-400 focus:outline-none'
+    
+    // Text colors
+    text: {
+      primary: 'text-white',
+      secondary: 'text-gray-300',
+      muted: 'text-gray-400',
     },
-    layout: {
-        header: 'bg-gray-800 border-b border-gray-700',
-        sidebar: 'bg-gray-800 border-r border-gray-700',
-        main: 'bg-gray-900 min-h-screen'
+    
+    // Accent colors
+    accent: {
+      primary: 'text-blue-400',
+      secondary: 'text-green-400',
+      warning: 'text-yellow-400',
+      error: 'text-red-400',
+    },
+    
+    // Border colors
+    border: {
+      primary: 'border-gray-700',
+      secondary: 'border-gray-600',
+      accent: 'border-blue-500',
     }
+  },
+  
+  components: {
+    // Card component styles
+    card: 'bg-gray-800 border border-gray-700 rounded-lg shadow-lg',
+    
+    // Button styles
+    button: {
+      primary: 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors duration-200',
+      secondary: 'bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md transition-colors duration-200',
+      outline: 'border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white px-4 py-2 rounded-md transition-colors duration-200',
+    },
+    
+    // Input styles
+    input: 'bg-gray-700 border border-gray-600 text-white placeholder-gray-400 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+    
+    // Navigation styles
+    nav: {
+      background: 'bg-gray-800 border-b border-gray-700',
+      link: 'text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200',
+      activeLink: 'bg-blue-600 text-white px-3 py-2 rounded-md text-sm font-medium',
+    }
+  },
+  
+  layout: {
+    container: 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8',
+    section: 'py-8',
+    grid: 'grid gap-6',
+  }
 };
 
 export default theme;
