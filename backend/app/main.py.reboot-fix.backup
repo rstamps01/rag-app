@@ -428,7 +428,7 @@ async def not_found_handler(request, exc):
         }
     )
 
-# TEMPORARILY DISABLED: # TEMPORARILY DISABLED: app.include_router(websocket_monitoring.router, prefix="/api/v1", tags=["websocket"])
+# TEMPORARILY DISABLED: app.include_router(websocket_monitoring.router, prefix="/api/v1", tags=["websocket"])
 if __name__ == "__main__":
     import uvicorn
     logger.info("🚀 Starting RAG Application with all API routes")
