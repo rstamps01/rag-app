@@ -15,8 +15,9 @@ const usePipelineMonitoring = () => {
     const [errorLog, setErrorLog] = useState([]);
 
     // WebSocket connection for real-time updates
-    const wsUrl = `ws://localhost:8000/api/v1/monitoring/ws/pipeline-monitoring`;
-    
+    //const wsUrl = `ws://localhost:8000/api/v1/monitoring/ws/pipeline-monitoring`;
+    const wsUrl = `ws://localhost:8000/api/v1/ws/pipeline-monitoring`;
+
     const handleWebSocketMessage = useCallback((message) => {
         switch (message.type) {
             case 'initial_state':
