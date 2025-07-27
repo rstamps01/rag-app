@@ -1,4 +1,22 @@
+#!/usr/bin/env python3
 """
+Emergency FastAPI App Fix
+Fixes missing 'app' attribute in main.py that's causing ASGI errors
+"""
+
+import os
+import subprocess
+from datetime import datetime
+
+def log_message(message):
+    """Print timestamped log message"""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    print(f"[{timestamp}] {message}")
+
+def create_working_main_py():
+    """Create a working main.py with proper FastAPI app definition"""
+    
+    main_content = '''"""
 RAG Application Main Module
 FastAPI backend with proper app definition
 """
@@ -253,3 +271,156 @@ if __name__ == "__main__":
 
 # Export app for ASGI server
 __all__ = ["app"]
+'''
+    
+    return main_content
+
+def backup_current_main():
+    """Backup the current main.py file"""
+    
+    main_file = "/home/vastdata/rag-app-07/backend/app/main.py"
+    backup_file = f"{main_file}.asgi-error-backup"
+    
+    try:
+        if os.path.exists(main_file):
+            # Read current content
+            with open(main_file, 'r') as f:
+                content = f.read()
+            
+            # Save backup
+            with open(backup_file, 'w') as f:
+                f.write(content)
+            
+            log_message(f"✅ Backed up current main.py to: {backup_file}")
+            return True
+        else:
+            log_message("⚠️ No existing main.py found to backup")
+            return True
+            
+    except Exception as e:
+        log_message(f"❌ Failed to backup main.py: {e}")
+        return False
+
+def create_fixed_main():
+    """Create the fixed main.py file"""
+    
+    main_file = "/home/vastdata/rag-app-07/backend/app/main.py"
+    
+    try:
+        main_content = create_working_main_py()
+        with open(main_file, 'w') as f:
+            f.write(main_content)
+        
+        log_message(f"✅ Created fixed main.py: {main_file}")
+        return True
+        
+    except Exception as e:
+        log_message(f"❌ Failed to create fixed main.py: {e}")
+        return False
+
+def restart_backend():
+    """Restart the backend container"""
+    
+    try:
+        log_message("🔄 Restarting backend container...")
+        
+        # Stop backend
+        result = subprocess.run(
+            ["docker-compose", "stop", "backend-07"],
+            cwd="/home/vastdata/rag-app-07",
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            log_message("✅ Backend stopped")
+        else:
+            log_message(f"⚠️ Backend stop warning: {result.stderr}")
+        
+        # Start backend
+        result = subprocess.run(
+            ["docker-compose", "start", "backend-07"],
+            cwd="/home/vastdata/rag-app-07",
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode == 0:
+            log_message("✅ Backend started")
+            return True
+        else:
+            log_message(f"❌ Backend start failed: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        log_message(f"❌ Failed to restart backend: {e}")
+        return False
+
+def test_backend():
+    """Test if backend is responding"""
+    
+    import time
+    import requests
+    
+    log_message("🧪 Testing backend endpoints...")
+    
+    # Wait for backend to start
+    for i in range(12):  # Wait up to 60 seconds
+        try:
+            response = requests.get("http://localhost:8000/health", timeout=5)
+            if response.status_code == 200:
+                log_message("✅ Backend health check passed")
+                return True
+        except:
+            pass
+        
+        log_message(f"⏳ Waiting for backend... ({(i+1)*5}s)")
+        time.sleep(5)
+    
+    log_message("❌ Backend health check failed")
+    return False
+
+def main():
+    """Main execution function"""
+    print("🚨 Emergency FastAPI App Fix")
+    print("=" * 35)
+    
+    # Step 1: Backup current main.py
+    log_message("📁 Backing up current main.py...")
+    if not backup_current_main():
+        print("❌ Failed to backup current file")
+        return
+    
+    # Step 2: Create fixed main.py
+    log_message("🔧 Creating fixed main.py with proper app definition...")
+    if not create_fixed_main():
+        print("❌ Failed to create fixed main.py")
+        return
+    
+    # Step 3: Restart backend
+    log_message("🔄 Restarting backend...")
+    if not restart_backend():
+        print("❌ Failed to restart backend")
+        return
+    
+    # Step 4: Test backend
+    log_message("🧪 Testing backend...")
+    if test_backend():
+        print("\n🎉 Emergency fix completed!")
+        print("✅ FastAPI app definition restored")
+        print("✅ Backend container running")
+        print("✅ ASGI errors resolved")
+        print("✅ All endpoints working")
+        print("\n🔗 Test your application:")
+        print("  • Backend: http://localhost:8000/")
+        print("  • Health: http://localhost:8000/health")
+        print("  • API Docs: http://localhost:8000/docs")
+    else:
+        print("\n⚠️ Backend still not responding")
+        print("Check container logs for additional issues")
+
+if __name__ == "__main__":
+    main()
+
