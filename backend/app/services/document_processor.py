@@ -1,353 +1,272 @@
-# File Path: /backend/app/services/document_processor.py
-# FIXED VERSION - Eliminates duplicate document creation and enables PDF processing
-
 import os
-import logging
-from typing import List, Dict, Any, Optional, Tuple
-import torch
-import numpy as np
-from qdrant_client import QdrantClient, models
-from sentence_transformers import SentenceTransformer
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-
-# Updated Langchain Community Imports
-from langchain_community.document_loaders import (
-    PyPDFLoader,
-    TextLoader,
-    Docx2txtLoader,
-    CSVLoader
-)
-
-from app.core.config import settings
-from app.core.pipeline_monitor import pipeline_monitor
-from app.db.session import get_db
-
-# FIXED: Import from documents.py instead of document.py to avoid circular import
-from app.schemas.documents import DocumentCreate, DocumentUpdate
-
-from sqlalchemy.orm import Session
-import time
 import uuid
-import fitz  # PyMuPDF for PDF processing
-import pytesseract
-from PIL import Image
+import logging
+from pathlib import Path
+from typing import List, Dict, Any
+import asyncio
+import aiofiles
+from fastapi import UploadFile
+import asyncpg
+import httpx
+from sentence_transformers import SentenceTransformer
+import PyPDF2
 import io
 
-logger = logging.getLogger(__name__)
-
-# ENHANCED: Department validation constants
-VALID_DEPARTMENTS = ["General", "IT", "HR", "Finance", "Legal"]
-
 class DocumentProcessor:
-    
-    """FIXED: Enhanced document processor with OCR capabilities, GPU optimization, and department support"""
-
-    def __init__(self, use_gpu: bool = True):
-        self.use_gpu = use_gpu
-        self.device = torch.device("cuda" if use_gpu and torch.cuda.is_available() else "cpu")
+    def __init__(self):
         self.embedding_model = None
-    #def __init__(self):
-    #    self.embedding_model = None
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=settings.CONTEXT_WINDOW_SIZE // 4,
-            chunk_overlap=200,
-            length_function=len,
-            separators=["\n\n", "\n", " ", ""]
-        )
-        self.qdrant_client = None
-        self._initialize_components()
+        self.db_pool = None
+        self.qdrant_url = os.getenv("QDRANT_URL", "http://qdrant-07:6333")
+        self.collection_name = os.getenv("QDRANT_COLLECTION_NAME", "documents")
         
-    def _initialize_components(self):
-        """Initialize embedding model and Qdrant client"""
+    async def initialize(self):
+        """Initialize the document processor"""
         try:
-            # Initialize embedding model with GPU support
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            logger.info(f"Initializing embedding model on device: {device}")
+            # Initialize embedding model
+            self.embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
             
-            self.embedding_model = SentenceTransformer(
-                settings.EMBEDDING_MODEL_NAME,
-                device=device
-            )
+            # Initialize database connection
+            database_url = os.getenv("DATABASE_URL", "postgresql://rag:rag@postgres-07:5432/rag")
+            self.db_pool = await asyncpg.create_pool(database_url)
             
-            # Initialize Qdrant client
-            self.qdrant_client = QdrantClient(
-                host=settings.QDRANT_HOST,
-                port=settings.QDRANT_PORT
-            )
+            # Initialize Qdrant collection
+            await self.ensure_qdrant_collection()
             
-            # Ensure collection exists
-            self._ensure_collection_exists()
-            
-            logger.info("Document processor initialized successfully")
+            logging.info("Document processor initialized successfully")
             
         except Exception as e:
-            logger.error(f"Failed to initialize document processor: {str(e)}")
+            logging.error(f"Failed to initialize document processor: {e}")
             raise
     
-    def _ensure_collection_exists(self):
-        """Ensure the Qdrant collection exists with proper configuration"""
+    async def ensure_qdrant_collection(self):
+        """Ensure Qdrant collection exists"""
         try:
-            collections = self.qdrant_client.get_collections()
-            collection_names = [col.name for col in collections.collections]
-            
-            if settings.QDRANT_COLLECTION_NAME not in collection_names:
-                logger.info(f"Creating Qdrant collection: {settings.QDRANT_COLLECTION_NAME}")
+            async with httpx.AsyncClient() as client:
+                # Check if collection exists
+                response = await client.get(f"{self.qdrant_url}/collections/{self.collection_name}")
                 
-                self.qdrant_client.create_collection(
-                    collection_name=settings.QDRANT_COLLECTION_NAME,
-                    vectors_config=models.VectorParams(
-                        size=self.embedding_model.get_sentence_embedding_dimension(),
-                        distance=models.Distance.COSINE
+                if response.status_code == 404:
+                    # Create collection
+                    collection_config = {
+                        "vectors": {
+                            "size": 384,  # all-MiniLM-L6-v2 embedding size
+                            "distance": "Cosine"
+                        }
+                    }
+                    
+                    response = await client.put(
+                        f"{self.qdrant_url}/collections/{self.collection_name}",
+                        json=collection_config
                     )
-                )
-                logger.info("Qdrant collection created successfully")
+                    
+                    if response.status_code == 200:
+                        logging.info(f"Created Qdrant collection: {self.collection_name}")
+                    else:
+                        logging.error(f"Failed to create Qdrant collection: {response.text}")
+                        
+        except Exception as e:
+            logging.error(f"Error ensuring Qdrant collection: {e}")
+    
+    async def process_document(self, file: UploadFile, department: str = "General") -> Dict[str, Any]:
+        """Process uploaded document"""
+        try:
+            # Generate unique ID
+            doc_id = str(uuid.uuid4())
+            
+            # Save file
+            upload_dir = Path("/app/uploads")
+            upload_dir.mkdir(exist_ok=True)
+            
+            file_path = upload_dir / f"{doc_id}.{file.filename.split('.')[-1]}"
+            
+            async with aiofiles.open(file_path, 'wb') as f:
+                content = await file.read()
+                await f.write(content)
+            
+            # Extract text content
+            text_content = await self.extract_text(file_path, file.content_type)
+            
+            # Create chunks
+            chunks = self.create_chunks(text_content)
+            
+            # Generate embeddings and store in Qdrant
+            await self.store_in_qdrant(doc_id, chunks)
+            
+            # Store metadata in PostgreSQL
+            await self.store_in_postgres(doc_id, file.filename, file_path, len(content), department)
+            
+            return {
+                "id": doc_id,
+                "filename": file.filename,
+                "size": len(content),
+                "chunks": len(chunks),
+                "status": "processed",
+                "message": "Document processed successfully"
+            }
+            
+        except Exception as e:
+            logging.error(f"Error processing document: {e}")
+            return {
+                "id": doc_id if 'doc_id' in locals() else None,
+                "filename": file.filename,
+                "status": "error",
+                "message": str(e)
+            }
+    
+    async def extract_text(self, file_path: Path, content_type: str) -> str:
+        """Extract text from document"""
+        try:
+            if content_type == "application/pdf":
+                return await self.extract_pdf_text(file_path)
+            elif content_type == "text/plain":
+                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                    return await f.read()
             else:
-                logger.info(f"Qdrant collection {settings.QDRANT_COLLECTION_NAME} already exists")
-                
+                # Try to read as text
+                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                    return await f.read()
+                    
         except Exception as e:
-            logger.error(f"Failed to ensure collection exists: {str(e)}")
-            raise
-
-    def _extract_text_with_ocr(self, file_path: str, file_type: str) -> str:
-        """FIXED: Extract text from documents using OCR when needed"""
-        try:
-            # FIXED: Handle content type properly - convert MIME types to extensions
-            if file_type.lower() in ['application/pdf', 'pdf']:
-                return self._extract_pdf_with_ocr(file_path)
-            elif file_type.lower() in ['image/png', 'image/jpeg', 'image/jpg', 'image/tiff', 'image/bmp', 'png', 'jpg', 'jpeg', 'tiff', 'bmp']:
-                return self._extract_image_text(file_path)
-            else:
-                # For other file types, use standard text extraction
-                return self._extract_standard_text(file_path, file_type)
-                
-        except Exception as e:
-            logger.error(f"OCR extraction failed for {file_path}: {str(e)}")
+            logging.error(f"Error extracting text: {e}")
             return ""
-
-    def _extract_pdf_with_ocr(self, file_path: str) -> str:
-        """Extract text from PDF using PyMuPDF with OCR fallback"""
-        text_content = []
-        
+    
+    async def extract_pdf_text(self, file_path: Path) -> str:
+        """Extract text from PDF"""
         try:
-            doc = fitz.open(file_path)
-            
-            for page_num in range(len(doc)):
-                page = doc.load_page(page_num)
-                
-                # Try to extract text directly first
-                text = page.get_text()
-                
-                if text.strip():
-                    text_content.append(text)
-                else:
-                    # If no text found, use OCR on the page image
-                    logger.info(f"No text found on page {page_num + 1}, using OCR")
-                    
-                    # Render page as image
-                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x zoom for better OCR
-                    img_data = pix.tobytes("png")
-                    
-                    # Convert to PIL Image and apply OCR
-                    image = Image.open(io.BytesIO(img_data))
-                    ocr_text = pytesseract.image_to_string(image)
-                    
-                    if ocr_text.strip():
-                        text_content.append(ocr_text)
-                        logger.info(f"OCR extracted {len(ocr_text)} characters from page {page_num + 1}")
-            
-            doc.close()
-            
-            full_text = "\n".join(text_content)
-            logger.info(f"PDF text extraction completed: {len(full_text)} characters extracted")
-            return full_text
-            
-        except Exception as e:
-            logger.error(f"PDF extraction failed for {file_path}: {str(e)}")
-            return ""
-
-    def _extract_image_text(self, file_path: str) -> str:
-        """Extract text from image files using OCR"""
-        try:
-            image = Image.open(file_path)
-            text = pytesseract.image_to_string(image)
-            logger.info(f"Image OCR completed: {len(text)} characters extracted")
+            text = ""
+            with open(file_path, 'rb') as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                for page in pdf_reader.pages:
+                    text += page.extract_text() + "\n"
             return text
-            
         except Exception as e:
-            logger.error(f"Image OCR failed for {file_path}: {str(e)}")
+            logging.error(f"Error extracting PDF text: {e}")
             return ""
-
-    def _extract_standard_text(self, file_path: str, file_type: str) -> str:
-        """FIXED: Extract text using standard document loaders with proper content type handling"""
-        try:
-            # FIXED: Handle both MIME types and file extensions
-            if file_type.lower() in ['application/pdf', 'pdf']:
-                loader = PyPDFLoader(file_path)
-            elif file_type.lower() in ['text/plain', 'txt']:
-                loader = TextLoader(file_path)
-            elif file_type.lower() in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'doc', 'docx']:
-                loader = Docx2txtLoader(file_path)
-            elif file_type.lower() in ['text/csv', 'csv']:
-                loader = CSVLoader(file_path)
-            else:
-                logger.warning(f"Unsupported file type: {file_type}")
-                return ""
-            
-            documents = loader.load()
-            return "\n".join([doc.page_content for doc in documents])
-            
-        except Exception as e:
-            logger.error(f"Standard text extraction failed: {str(e)}")
-            return ""
-
-    def process_document(self, file_path: str, filename: str, content_type: str, department: str = "General") -> Dict[str, Any]:
-        """
-        FIXED: Process document without creating duplicate database records
+    
+    def create_chunks(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
+        """Create text chunks for embedding"""
+        if not text:
+            return []
         
-        Args:
-            file_path: Path to the document file
-            filename: Name of the document
-            content_type: MIME type of the document
-            department: Department for categorization
-            
-        Returns:
-            Dictionary with processing results
-        """
-        start_time = time.time()
+        chunks = []
+        start = 0
         
-        try:
-            # ENHANCED: Validate department
-            if department not in VALID_DEPARTMENTS:
-                logger.warning(f"Invalid department '{department}', defaulting to 'General'")
-                department = "General"
+        while start < len(text):
+            end = start + chunk_size
+            chunk = text[start:end]
             
-            logger.info(f"Processing document {filename} for department: {department}")
-            
-            # Extract text content with OCR support
-            text_content = self._extract_text_with_ocr(file_path, content_type)
-            
-            if not text_content or len(text_content.strip()) == 0:
-                raise ValueError("No text content extracted from document")
-            
-            # Split text into chunks
-            chunks = self.text_splitter.split_text(text_content)
-            
-            if not chunks:
-                raise ValueError("No chunks created from document text")
-            
-            # Generate embeddings for chunks
-            embeddings = self.embedding_model.encode(chunks)
-            
-            # Store in Qdrant vector database
-            points = []
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                point_id = str(uuid.uuid4())
+            # Try to break at sentence boundary
+            if end < len(text):
+                last_period = chunk.rfind('.')
+                last_newline = chunk.rfind('\n')
+                break_point = max(last_period, last_newline)
                 
-                points.append(models.PointStruct(
-                    id=point_id,
-                    vector=embedding.tolist(),
-                    payload={
-                        "filename": filename,
+                if break_point > start + chunk_size // 2:
+                    chunk = text[start:break_point + 1]
+                    end = break_point + 1
+            
+            chunks.append(chunk.strip())
+            start = end - overlap
+            
+        return [chunk for chunk in chunks if chunk]
+    
+    async def store_in_qdrant(self, doc_id: str, chunks: List[str]):
+        """Store document chunks in Qdrant"""
+        try:
+            points = []
+            
+            for i, chunk in enumerate(chunks):
+                # Generate embedding
+                embedding = self.embedding_model.encode(chunk).tolist()
+                
+                point = {
+                    "id": f"{doc_id}_{i}",
+                    "vector": embedding,
+                    "payload": {
+                        "document_id": doc_id,
                         "chunk_index": i,
                         "content": chunk,
-                        "content_type": content_type,
-                        "department": department  # ENHANCED: Department stored in vector DB
+                        "chunk_id": f"{doc_id}_{i}"
                     }
-                ))
+                }
+                points.append(point)
             
-            # Batch insert into Qdrant
-            self.qdrant_client.upsert(
-                collection_name=settings.QDRANT_COLLECTION_NAME,
-                points=points
-            )
-            
-            processing_time = time.time() - start_time
-            
-            # FIXED: Log processing metrics with correct parameters
-            pipeline_monitor.log_document_processed(
-                filename=filename,
-                processing_time=processing_time,
-                chunk_count=len(chunks),
-                success=True,
-                metadata={"department": department}  # ENHANCED: Include department in metrics
-            )
-            
-            return {
-                "status": "completed",
-                "chunks_processed": len(chunks),
-                "processing_time": processing_time,
-                "text_length": len(text_content),
-                "department": department  # ENHANCED: Return department info
-            }
-            
+            # Store in Qdrant
+            async with httpx.AsyncClient() as client:
+                response = await client.put(
+                    f"{self.qdrant_url}/collections/{self.collection_name}/points",
+                    json={"points": points}
+                )
+                
+                if response.status_code == 200:
+                    logging.info(f"Stored {len(points)} chunks in Qdrant for document {doc_id}")
+                else:
+                    logging.error(f"Failed to store in Qdrant: {response.text}")
+                    
         except Exception as e:
-            processing_time = time.time() - start_time
-            error_msg = str(e)
+            logging.error(f"Error storing in Qdrant: {e}")
+    
+    async def store_in_postgres(self, doc_id: str, filename: str, file_path: Path, size: int, department: str):
+        """Store document metadata in PostgreSQL"""
+        try:
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO documents (id, filename, file_path, size_bytes, department, status, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                    ON CONFLICT (id) DO UPDATE SET
+                        filename = EXCLUDED.filename,
+                        file_path = EXCLUDED.file_path,
+                        size_bytes = EXCLUDED.size_bytes,
+                        department = EXCLUDED.department,
+                        status = EXCLUDED.status,
+                        updated_at = NOW()
+                """, doc_id, filename, str(file_path), size, department, "processed")
+                
+                logging.info(f"Stored document metadata in PostgreSQL: {doc_id}")
+                
+        except Exception as e:
+            logging.error(f"Error storing in PostgreSQL: {e}")
+    
+    async def search_documents(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search documents using vector similarity"""
+        try:
+            # Generate query embedding
+            query_embedding = self.embedding_model.encode(query).tolist()
             
-            # FIXED: Log processing failure with correct parameters
-            pipeline_monitor.log_document_processed(
-                filename=filename,
-                processing_time=processing_time,
-                chunk_count=0,
-                success=False,
-                error=error_msg,
-                metadata={"department": department}
-            )
-            
-            logger.error(f"Document processing failed for {filename} (dept: {department}): {error_msg}")
-            
-            return {
-                "status": "failed",
-                "error": error_msg,
-                "processing_time": processing_time,
-                "department": department
-            }
+            # Search in Qdrant
+            async with httpx.AsyncClient() as client:
+                search_request = {
+                    "vector": query_embedding,
+                    "limit": limit,
+                    "with_payload": True
+                }
+                
+                response = await client.post(
+                    f"{self.qdrant_url}/collections/{self.collection_name}/points/search",
+                    json=search_request
+                )
+                
+                if response.status_code == 200:
+                    results = response.json()["result"]
+                    
+                    # Format results
+                    documents = []
+                    for result in results:
+                        documents.append({
+                            "document_id": result["payload"]["document_id"],
+                            "content": result["payload"]["content"],
+                            "score": result["score"],
+                            "chunk_id": result["payload"]["chunk_id"]
+                        })
+                    
+                    return documents
+                else:
+                    logging.error(f"Qdrant search failed: {response.text}")
+                    return []
+                    
+        except Exception as e:
+            logging.error(f"Error searching documents: {e}")
+            return []
 
-# Create global instance
+# Global document processor instance
 document_processor = DocumentProcessor()
-
-def process_and_store_document(file_path: str, filename: str, content_type: str, db: Session, department: str = "General") -> Dict[str, Any]:
-    """
-    FIXED: Process and store document WITHOUT creating duplicate database records
-    
-    This function now only handles the document processing and vector storage.
-    Database record management is handled by the calling documents route.
-    
-    Args:
-        file_path: Path to the uploaded file
-        filename: Original filename
-        content_type: MIME type of the file
-        db: Database session (for compatibility, but not used for creation)
-        department: Department for categorization
-        
-    Returns:
-        Dictionary with processing results including document_id from caller
-    """
-    try:
-        # FIXED: Only process the document, don't create database records
-        # The documents route handles database record creation and management
-        
-        # Process document with vector database storage
-        result = document_processor.process_document(file_path, filename, content_type, department)
-        
-        # ENHANCED: Add department to result
-        result["department"] = department
-        
-        return {
-            "processing_result": result,
-            "department": department
-        }
-        
-    except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Failed to process and store document {filename} (dept: {department}): {error_msg}")
-        
-        return {
-            "processing_result": {
-                "status": "failed",
-                "error": error_msg,
-                "processing_time": 0.0,
-                "department": department
-            },
-            "department": department
-        }

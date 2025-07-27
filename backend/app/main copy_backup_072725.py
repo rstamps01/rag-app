@@ -1,37 +1,17 @@
-#!/usr/bin/env python3
 """
-Direct Main.py Fix
-Creates a clean, working main.py file directly
-"""
-
-import os
-import shutil
-from datetime import datetime
-
-def log_message(message):
-    """Print timestamped log message"""
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{timestamp}] {message}")
-
-def create_clean_main():
-    """Create a completely clean main.py file"""
-    
-    # Clean, working main.py content
-    main_content = '''"""
 RAG Application Main FastAPI Application
-Clean version with proper syntax and all required endpoints
+Fixed version with proper syntax and error handling
 """
 
 import os
 import logging
-import time
-import uuid
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # Configure logging
@@ -42,8 +22,8 @@ logger = logging.getLogger(__name__)
 try:
     from app.core.config import settings
     logger.info("✅ Config imported successfully")
-except Exception as config_error:
-    logger.error(f"❌ Failed to import config: {config_error}")
+except Exception as e:
+    logger.error(f"❌ Failed to import config: {e}")
     # Create minimal settings fallback
     class MinimalSettings:
         PROJECT_NAME = "RAG Application"
@@ -56,16 +36,16 @@ except Exception as config_error:
 try:
     from app.db.session import SessionLocal
     logger.info("✅ Database imported successfully")
-except Exception as db_error:
-    logger.error(f"❌ Failed to import database: {db_error}")
+except Exception as e:
+    logger.error(f"❌ Failed to import database: {e}")
     SessionLocal = None
 
-# Sample data
+# Sample data for testing
 sample_queries = [
     {
         "id": 1,
         "query": "What is VAST storage?",
-        "response": "VAST Data is a leading storage company that provides high-performance, scalable storage solutions for modern data centers.",
+        "response": "VAST Data is a leading storage company that provides high-performance, scalable storage solutions for modern data centers. Their Universal Storage platform combines the economics of object storage with the performance of file and block storage.",
         "department": "General",
         "timestamp": 1640995200,
         "model": "mistralai/Mistral-7B-Instruct-v0.2"
@@ -73,7 +53,7 @@ sample_queries = [
     {
         "id": 2,
         "query": "How does VAST handle data deduplication?",
-        "response": "VAST uses advanced global deduplication techniques that operate across the entire storage cluster.",
+        "response": "VAST uses advanced global deduplication techniques that operate across the entire storage cluster. This includes both inline and post-process deduplication to maximize storage efficiency while maintaining high performance.",
         "department": "Technical",
         "timestamp": 1640995800,
         "model": "mistralai/Mistral-7B-Instruct-v0.2"
@@ -81,7 +61,7 @@ sample_queries = [
     {
         "id": 3,
         "query": "What are the benefits of VAST architecture?",
-        "response": "VAST architecture provides unified storage, linear scalability, high performance, and simplified management.",
+        "response": "VAST architecture provides several key benefits: unified storage for file, block, and object workloads; linear scalability; high performance with NVMe; cost efficiency through deduplication; and simplified management through a single platform.",
         "department": "General",
         "timestamp": 1640996400,
         "model": "mistralai/Mistral-7B-Instruct-v0.2"
@@ -102,6 +82,14 @@ sample_documents = [
         "filename": "vast_technical_specifications.pdf",
         "size": 2048000,
         "upload_date": "2025-01-27T11:15:00Z",
+        "status": "processed",
+        "document_type": "PDF"
+    },
+    {
+        "id": 3,
+        "filename": "vast_architecture_whitepaper.pdf",
+        "size": 3072000,
+        "upload_date": "2025-01-27T12:00:00Z",
         "status": "processed",
         "document_type": "PDF"
     }
@@ -133,11 +121,12 @@ async def lifespan(app: FastAPI):
     
     # Startup
     try:
+        # Create upload directory
         upload_dir = "/app/uploads"
         os.makedirs(upload_dir, exist_ok=True)
         logger.info(f"✅ Upload directory created: {upload_dir}")
-    except Exception as startup_error:
-        logger.error(f"❌ Failed to create upload directory: {startup_error}")
+    except Exception as e:
+        logger.error(f"❌ Failed to create upload directory: {e}")
     
     yield
     
@@ -189,6 +178,7 @@ async def health_check():
 async def get_query_history(limit: int = 10, skip: int = 0):
     """Get query history"""
     try:
+        # Return sample data for now
         total = len(sample_queries)
         queries = sample_queries[skip:skip + limit]
         
@@ -199,14 +189,15 @@ async def get_query_history(limit: int = 10, skip: int = 0):
             "skip": skip,
             "message": "Query history retrieved successfully"
         }
-    except Exception as query_error:
-        logger.error(f"Error getting query history: {query_error}")
+    except Exception as e:
+        logger.error(f"Error getting query history: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve query history")
 
 @app.post(f"{settings.API_V1_STR}/queries/ask")
 async def submit_query(query_request: QueryRequest):
     """Submit a new query"""
     try:
+        # For now, return a sample response
         response = QueryResponse(
             response=f"Thank you for your question: '{query_request.query}'. The RAG system is now fully functional and can provide comprehensive responses. All backend API routes are working correctly and the system is ready for production use.",
             model="mistralai/Mistral-7B-Instruct-v0.2",
@@ -215,8 +206,8 @@ async def submit_query(query_request: QueryRequest):
         )
         
         return response
-    except Exception as submit_error:
-        logger.error(f"Error processing query: {submit_error}")
+    except Exception as e:
+        logger.error(f"Error processing query: {e}")
         raise HTTPException(status_code=500, detail="Failed to process query")
 
 # Document endpoints
@@ -234,8 +225,8 @@ async def get_documents(skip: int = 0, limit: int = 100):
             "skip": skip,
             "message": "Documents retrieved successfully"
         }
-    except Exception as doc_error:
-        logger.error(f"Error getting documents: {doc_error}")
+    except Exception as e:
+        logger.error(f"Error getting documents: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve documents")
 
 @app.post(f"{settings.API_V1_STR}/documents/")
@@ -257,6 +248,7 @@ async def upload_document(file: UploadFile = File(...)):
         file_size = len(content)
         
         # Generate unique filename
+        import uuid
         unique_id = str(uuid.uuid4())
         safe_filename = f"{unique_id}_{file.filename}"
         
@@ -279,11 +271,11 @@ async def upload_document(file: UploadFile = File(...)):
         
     except HTTPException:
         raise
-    except Exception as upload_error:
-        logger.error(f"Error uploading document: {upload_error}")
+    except Exception as e:
+        logger.error(f"Error uploading document: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload document")
 
-# Monitoring endpoint
+# WebSocket monitoring endpoint (basic)
 @app.get(f"{settings.API_V1_STR}/monitoring/status")
 async def get_monitoring_status():
     """Get monitoring status"""
@@ -319,48 +311,3 @@ async def internal_error_handler(request, exc):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-'''
-    
-    return main_content
-
-def main():
-    """Main execution function"""
-    print("🔧 Direct Main.py Fix")
-    print("=" * 30)
-    
-    # Paths
-    main_path = "/home/vastdata/rag-app-07/backend/app/main.py"
-    backup_path = f"{main_path}.broken-backup"
-    
-    try:
-        # Step 1: Backup current file
-        log_message("📁 Backing up current main.py...")
-        if os.path.exists(main_path):
-            shutil.copy2(main_path, backup_path)
-            log_message(f"✅ Backed up to {backup_path}")
-        
-        # Step 2: Create clean main.py
-        log_message("🔧 Creating clean main.py...")
-        clean_content = create_clean_main()
-        
-        with open(main_path, 'w') as f:
-            f.write(clean_content)
-        
-        log_message("✅ Clean main.py created successfully")
-        
-        print("\n🎉 Direct fix completed!")
-        print("✅ Clean main.py file created")
-        print("✅ All syntax errors should be resolved")
-        print("✅ Ready to restart backend container")
-        print("\nNext steps:")
-        print("1. cd /home/vastdata/rag-app-07")
-        print("2. docker-compose restart backend-07")
-        print("3. Test endpoints")
-        
-    except Exception as e:
-        log_message(f"❌ Failed to create main.py: {e}")
-        print("❌ Fix failed - check permissions and paths")
-
-if __name__ == "__main__":
-    main()
-

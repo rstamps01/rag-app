@@ -1,75 +1,80 @@
-"""
-WebSocket Routes for Pipeline Monitoring
-"""
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
+import json
+import asyncio
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
-from app.core.websocket_manager import websocket_manager
+from typing import Dict, List
+from app.core.websocket_manager import WebSocketManager
 
-logger = logging.getLogger(__name__)
 router = APIRouter()
+websocket_manager = WebSocketManager()
 
 @router.websocket("/ws/pipeline-monitoring")
-async def websocket_pipeline_monitoring(websocket: WebSocket):
-    """WebSocket endpoint for real-time pipeline monitoring"""
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for pipeline monitoring"""
     try:
         await websocket_manager.connect(websocket)
         
         # Send initial connection confirmation
-        await websocket.send_text('{"type": "connection_established", "status": "connected"}')
+        await websocket.send_text(json.dumps({
+            "type": "connection",
+            "status": "connected",
+            "message": "Pipeline monitoring connected"
+        }))
         
-        # Keep connection alive and handle incoming messages
+        # Start sending periodic updates
         while True:
             try:
-                # Wait for messages from client (ping/pong, etc.)
-                data = await websocket.receive_text()
-                logger.debug(f"Received WebSocket message: {data}")
+                # Get system metrics
+                metrics = await websocket_manager.get_system_metrics()
                 
-                # Echo back for ping/pong
-                if data == "ping":
-                    await websocket.send_text("pong")
-                    
+                # Send metrics to client
+                await websocket.send_text(json.dumps({
+                    "type": "metrics",
+                    "data": metrics,
+                    "timestamp": metrics.get("timestamp")
+                }))
+                
+                # Wait before next update
+                await asyncio.sleep(2)
+                
             except WebSocketDisconnect:
-                logger.info("WebSocket client disconnected")
                 break
             except Exception as e:
-                logger.error(f"Error in WebSocket communication: {e}")
+                logging.error(f"Error in WebSocket loop: {e}")
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "message": str(e)
+                }))
                 break
                 
     except Exception as e:
-        logger.error(f"WebSocket connection error: {e}")
+        logging.error(f"WebSocket connection error: {e}")
     finally:
-        websocket_manager.disconnect(websocket)
+        await websocket_manager.disconnect(websocket)
 
 @router.get("/monitoring/status")
 async def get_monitoring_status():
     """Get current monitoring status"""
     try:
-        metrics = await websocket_manager.collect_metrics()
+        metrics = await websocket_manager.get_system_metrics()
         return {
-            "status": "success",
-            "data": metrics,
-            "websocket_connections": len(websocket_manager.active_connections)
+            "status": "connected",
+            "active_connections": len(websocket_manager.active_connections),
+            "metrics": metrics
         }
     except Exception as e:
-        logger.error(f"Error getting monitoring status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "status": "error",
+            "message": str(e),
+            "active_connections": 0
+        }
 
-@router.post("/monitoring/test")
+@router.get("/monitoring/test")
 async def test_monitoring():
-    """Test endpoint for monitoring functionality"""
-    try:
-        # Send test message to all connected clients
-        await websocket_manager.broadcast({
-            "type": "test_message",
-            "message": "Monitoring system test successful",
-            "timestamp": "2025-01-27T12:00:00Z"
-        })
-        
-        return {
-            "status": "success",
-            "message": "Test message sent to all connected clients",
-            "connections": len(websocket_manager.active_connections)
-        }
-    except Exception as e:
-        logger.error(f"Error in monitoring test: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    """Test monitoring endpoint"""
+    return {
+        "status": "ok",
+        "message": "Monitoring endpoint is working",
+        "websocket_url": "/api/v1/ws/pipeline-monitoring"
+    }
