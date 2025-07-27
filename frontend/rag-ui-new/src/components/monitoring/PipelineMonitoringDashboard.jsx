@@ -1,53 +1,48 @@
-/**
- * Pipeline Monitoring Dashboard
- * Main component for the n8n.io-inspired visual pipeline monitoring interface
- */
-
-import React, { useState } from 'react';
-import { Activity, Settings, Maximize2, Minimize2, AlertTriangle, CheckCircle } from 'lucide-react';
-import PipelineFlowCanvas from './flow/PipelineFlowCanvas';
-import RealTimeMetricsPanel from './panels/RealTimeMetricsPanel';
-import NodeDetailsPanel from './panels/NodeDetailsPanel';
-import SystemHealthPanel from './panels/SystemHealthPanel';
-import usePipelineMonitoring from './hooks/usePipelineMonitoring';
+import React, { useState, useEffect } from 'react';
+import { Activity, Settings, Maximize2, Minimize2, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
+import useWebSocket from '../../hooks/useWebSocket';
 
 const PipelineMonitoringDashboard = () => {
     const [debugMode, setDebugMode] = useState(false);
-    const [isFullscreen, setIsFullscreen] = useState(false);
-    const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
-    const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+    const [selectedNode, setSelectedNode] = useState(null);
+    const [realTimeMetrics, setRealTimeMetrics] = useState({});
+    const [systemHealth, setSystemHealth] = useState({ status: 'Unknown' });
+    
+    // WebSocket connection
+    const { 
+        isConnected, 
+        lastMessage, 
+        connectionStatus, 
+        sendMessage 
+    } = useWebSocket('ws://localhost:8000/api/v1/ws/pipeline-monitoring');
 
-    const {
-        pipelineState,
-        realTimeMetrics,
-        selectedNode,
-        systemHealth,
-        connectionStatus,
-        isConnected,
-        handleNodeSelect,
-        clearNodeSelection,
-        requestPipelineState,
-        simulateEvent,
-        isHealthy,
-        hasErrors,
-        hasWarnings
-    } = usePipelineMonitoring();
-
-    const toggleDebugMode = () => {
-        setDebugMode(!debugMode);
-    };
-
-    const toggleFullscreen = () => {
-        if (!isFullscreen) {
-            document.documentElement.requestFullscreen?.();
-        } else {
-            document.exitFullscreen?.();
+    // Handle incoming WebSocket messages
+    useEffect(() => {
+        if (lastMessage) {
+            if (lastMessage.type === 'metrics_update') {
+                setRealTimeMetrics(lastMessage.data || {});
+                setSystemHealth(lastMessage.data?.system_health || { status: 'Unknown' });
+            }
         }
-        setIsFullscreen(!isFullscreen);
+    }, [lastMessage]);
+
+    // Send ping every 30 seconds to keep connection alive
+    useEffect(() => {
+        if (isConnected) {
+            const pingInterval = setInterval(() => {
+                sendMessage({ type: 'ping' });
+            }, 30000);
+            
+            return () => clearInterval(pingInterval);
+        }
+    }, [isConnected, sendMessage]);
+
+    const handleNodeSelect = (node) => {
+        setSelectedNode(node);
     };
 
-    const handleRefresh = () => {
-        requestPipelineState();
+    const clearNodeSelection = () => {
+        setSelectedNode(null);
     };
 
     const getConnectionStatusColor = () => {
@@ -63,9 +58,10 @@ const PipelineMonitoringDashboard = () => {
     };
 
     const getSystemHealthIcon = () => {
-        if (hasErrors) return <AlertTriangle className="w-4 h-4 text-red-400" />;
-        if (hasWarnings) return <AlertTriangle className="w-4 h-4 text-yellow-400" />;
-        return <CheckCircle className="w-4 h-4 text-green-400" />;
+        if (systemHealth.status === 'error') return <AlertTriangle className="w-4 h-4 text-red-400" />;
+        if (systemHealth.status === 'warning') return <AlertTriangle className="w-4 h-4 text-yellow-400" />;
+        if (systemHealth.status === 'healthy') return <CheckCircle className="w-4 h-4 text-green-400" />;
+        return <RefreshCw className="w-4 h-4 text-gray-400" />;
     };
 
     return (
@@ -98,180 +94,227 @@ const PipelineMonitoringDashboard = () => {
                         <div className={`w-2 h-2 rounded-full ${getConnectionStatusIcon()}`}></div>
                         <span className="text-sm">{connectionStatus}</span>
                     </div>
-                    
+
+                    {/* Debug Mode Toggle */}
+                    <button
+                        onClick={() => setDebugMode(!debugMode)}
+                        className={`px-3 py-1 rounded text-sm transition-colors ${
+                            debugMode ? 'bg-purple-600 hover:bg-purple-700' : 'bg-gray-600 hover:bg-gray-700'
+                        }`}
+                    >
+                        Debug
+                    </button>
+
                     {/* Quick Stats */}
-                    {realTimeMetrics.pipeline && (
-                        <div className="flex items-center space-x-4 text-sm">
-                            <div className="flex items-center space-x-1">
-                                <span className="text-gray-400">QPM:</span>
-                                <span className="text-green-400 font-medium">
-                                    {realTimeMetrics.pipeline.queries_per_minute || 0}
-                                </span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                                <span className="text-gray-400">Avg:</span>
-                                <span className="text-blue-400 font-medium">
-                                    {Math.round(realTimeMetrics.pipeline.avg_response_time || 0)}ms
-                                </span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                                <span className="text-gray-400">Success:</span>
-                                <span className="text-green-400 font-medium">
-                                    {Math.round(realTimeMetrics.pipeline.success_rate || 0)}%
-                                </span>
-                            </div>
+                    <div className="flex items-center space-x-4 text-sm">
+                        <div className="flex items-center space-x-1">
+                            <span className="text-green-400">
+                                {realTimeMetrics.pipeline_status?.queries_per_minute || 0}/min
+                            </span>
                         </div>
-                    )}
-                    
-                    {/* Control Buttons */}
-                    <div className="flex items-center space-x-2">
-                        <button 
-                            onClick={handleRefresh}
-                            className="p-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
-                            title="Refresh Pipeline State"
-                        >
-                            <Activity className="w-4 h-4" />
-                        </button>
-                        
-                        <button 
-                            onClick={toggleDebugMode}
-                            className={`px-3 py-1 rounded text-sm transition-colors ${
-                                debugMode ? 'bg-purple-600 hover:bg-purple-700' : 'bg-gray-600 hover:bg-gray-700'
-                            }`}
-                            title="Toggle Debug Mode"
-                        >
-                            Debug
-                        </button>
-                        
-                        <button 
-                            onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
-                            className="p-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
-                            title="Toggle Left Panel"
-                        >
-                            <Settings className="w-4 h-4" />
-                        </button>
-                        
-                        <button 
-                            onClick={toggleFullscreen}
-                            className="p-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
-                            title="Toggle Fullscreen"
-                        >
-                            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                        </button>
+                        <div className="flex items-center space-x-1">
+                            <span className="text-blue-400">
+                                {realTimeMetrics.pipeline_status?.avg_response_time || 0}ms
+                            </span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                            <span className="text-green-400">
+                                {realTimeMetrics.system_health?.cpu_percent || 0}% CPU
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
-            
+
             <div className="flex flex-1 overflow-hidden">
                 {/* Left Sidebar - Metrics Panel */}
-                {!leftPanelCollapsed && (
-                    <div className="w-80 bg-gray-800 border-r border-gray-700 flex flex-col">
-                        <div className="p-4 border-b border-gray-700">
-                            <h2 className="text-lg font-semibold text-white flex items-center">
-                                <Activity className="w-5 h-5 mr-2" />
-                                System Metrics
-                            </h2>
-                        </div>
-                        
-                        <div className="flex-1 overflow-y-auto">
-                            <div className="p-4 space-y-4">
-                                <RealTimeMetricsPanel metrics={realTimeMetrics} />
-                                <SystemHealthPanel 
-                                    health={systemHealth} 
-                                    connectionStatus={connectionStatus}
-                                    isConnected={isConnected}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )}
-                
+                <div className="w-80 bg-gray-800 border-r border-gray-700 p-4 overflow-y-auto">
+                    <RealTimeMetricsPanel metrics={realTimeMetrics} />
+                </div>
+
                 {/* Main Canvas */}
                 <div className="flex-1 relative">
-                    <PipelineFlowCanvas 
-                        pipelineState={pipelineState}
+                    <PipelineFlowCanvas
+                        realTimeMetrics={realTimeMetrics}
                         onNodeSelect={handleNodeSelect}
                         debugMode={debugMode}
                         isConnected={isConnected}
-                        simulateEvent={simulateEvent}
                     />
-                    
-                    {/* Canvas Overlay - Connection Status */}
-                    {!isConnected && (
-                        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg">
-                            <div className="flex items-center space-x-2">
-                                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                                <span className="text-sm font-medium">
-                                    {connectionStatus === 'Failed' ? 'Connection Failed' : connectionStatus}
-                                </span>
-                            </div>
-                        </div>
-                    )}
-                    
-                    {/* Canvas Overlay - Debug Info */}
-                    {debugMode && (
-                        <div className="absolute top-4 right-4 bg-purple-800 bg-opacity-90 text-white p-3 rounded-lg text-xs space-y-1">
-                            <div>Debug Mode: Active</div>
-                            <div>Stages: {pipelineState?.stages?.length || 0}</div>
-                            <div>Connections: {pipelineState?.connections?.length || 0}</div>
-                            <div>Last Update: {pipelineState?.lastUpdate ? 
-                                new Date(pipelineState.lastUpdate).toLocaleTimeString() : 'Never'}</div>
-                        </div>
-                    )}
                 </div>
-                
+
                 {/* Right Panel - Node Details */}
-                {selectedNode && !rightPanelCollapsed && (
-                    <div className="w-96 bg-gray-800 border-l border-gray-700 flex flex-col">
-                        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-                            <h2 className="text-lg font-semibold text-white">Stage Details</h2>
-                            <button 
-                                onClick={clearNodeSelection}
-                                className="p-1 hover:bg-gray-700 rounded transition-colors"
-                                title="Close Details Panel"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                        
-                        <div className="flex-1 overflow-y-auto">
-                            <NodeDetailsPanel 
-                                node={selectedNode}
-                                onClose={clearNodeSelection}
-                                debugMode={debugMode}
-                            />
-                        </div>
+                {selectedNode && (
+                    <div className="w-96 bg-gray-800 border-l border-gray-700 p-4 overflow-y-auto">
+                        <NodeDetailsPanel
+                            node={selectedNode}
+                            onClose={clearNodeSelection}
+                        />
                     </div>
                 )}
             </div>
+        </div>
+    );
+};
+
+// Real-time Metrics Panel Component
+const RealTimeMetricsPanel = ({ metrics }) => {
+    const systemHealth = metrics.system_health || {};
+    const gpuPerformance = metrics.gpu_performance || [];
+    const pipelineStatus = metrics.pipeline_status || {};
+    const connectionStatus = metrics.connection_status || {};
+
+    return (
+        <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
+                <Activity className="w-5 h-5 mr-2" />
+                Live Metrics
+            </h2>
             
-            {/* Status Bar */}
-            <div className="bg-gray-800 border-t border-gray-700 px-4 py-2 text-xs text-gray-400 flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                    <span>Pipeline Monitor v1.0</span>
-                    <span>•</span>
-                    <span>RTX 5090 Optimized</span>
-                    {pipelineState?.lastUpdate && (
-                        <>
-                            <span>•</span>
-                            <span>Last Update: {new Date(pipelineState.lastUpdate).toLocaleTimeString()}</span>
-                        </>
-                    )}
+            {/* System Health */}
+            <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                <h3 className="text-sm font-semibold text-white mb-3">System Health</h3>
+                <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">CPU Usage</span>
+                        <span className="text-green-400">{systemHealth.cpu_percent || 0}%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Memory</span>
+                        <span className="text-blue-400">{systemHealth.memory_percent || 0}%</span>
+                    </div>
+                    <div className="w-full bg-gray-600 rounded-full h-2">
+                        <div 
+                            className="bg-green-400 h-2 rounded-full transition-all duration-300" 
+                            style={{ width: `${systemHealth.cpu_percent || 0}%` }}
+                        ></div>
+                    </div>
                 </div>
-                
-                <div className="flex items-center space-x-4">
-                    {realTimeMetrics.pipeline && (
-                        <>
-                            <span>Active Connections: {realTimeMetrics.pipeline.active_connections || 0}</span>
-                            <span>•</span>
-                        </>
-                    )}
-                    <span className={getConnectionStatusColor()}>
-                        WebSocket: {connectionStatus}
-                    </span>
+            </div>
+
+            {/* GPU Performance */}
+            <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                <h3 className="text-sm font-semibold text-white mb-3">GPU Performance (RTX 5090)</h3>
+                {gpuPerformance.length > 0 ? (
+                    <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">Utilization</span>
+                            <span className="text-yellow-400">{gpuPerformance[0].utilization || 0}%</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">Memory</span>
+                            <span className="text-purple-400">
+                                {gpuPerformance[0].memory_used || 0}MB / {gpuPerformance[0].memory_total || 0}MB
+                            </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">Temperature</span>
+                            <span className="text-orange-400">{gpuPerformance[0].temperature || 0}°C</span>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-gray-400 text-sm">No GPU data available</div>
+                )}
+            </div>
+
+            {/* Pipeline Status */}
+            <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                <h3 className="text-sm font-semibold text-white mb-3">Query Performance</h3>
+                <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Queries/Min</span>
+                        <span className="text-green-400">{pipelineStatus.queries_per_minute || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Avg Response</span>
+                        <span className="text-blue-400">{pipelineStatus.avg_response_time || 0}ms</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Active Queries</span>
+                        <span className="text-purple-400">{pipelineStatus.active_queries || 0}</span>
+                    </div>
                 </div>
+            </div>
+
+            {/* Connection Status */}
+            <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                <h3 className="text-sm font-semibold text-white mb-3">Connection Status</h3>
+                <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">WebSocket</span>
+                        <span className="text-green-400">{connectionStatus.websocket_connections || 0} clients</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Backend</span>
+                        <span className="text-green-400">{connectionStatus.backend_status || 'unknown'}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Database</span>
+                        <span className="text-green-400">{connectionStatus.database_status || 'unknown'}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Vector DB</span>
+                        <span className="text-green-400">{connectionStatus.vector_db_status || 'unknown'}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Pipeline Flow Canvas Component
+const PipelineFlowCanvas = ({ realTimeMetrics, onNodeSelect, debugMode, isConnected }) => {
+    return (
+        <div className="relative w-full h-full bg-gray-900 overflow-hidden flex items-center justify-center">
+            {/* Grid Background */}
+            <div 
+                className="absolute inset-0 opacity-10"
+                style={{ 
+                    backgroundImage: 'radial-gradient(circle, #374151 1px, transparent 1px)', 
+                    backgroundSize: '20px 20px' 
+                }}
+            />
+            
+            {/* Connection Status Overlay */}
+            {!isConnected && (
+                <div className="absolute inset-0 bg-gray-900/80 flex items-center justify-center z-10">
+                    <div className="text-center">
+                        <div className="w-16 h-16 border-4 border-red-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <h3 className="text-xl font-semibold text-red-400 mb-2">Disconnected</h3>
+                        <p className="text-gray-400">Attempting to reconnect to pipeline monitoring...</p>
+                    </div>
+                </div>
+            )}
+            
+            {/* Connected State */}
+            {isConnected && (
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <h3 className="text-xl font-semibold text-green-400 mb-2">Loading pipeline state...</h3>
+                    <p className="text-gray-400">Real-time monitoring active</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Node Details Panel Component
+const NodeDetailsPanel = ({ node, onClose }) => {
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-white">{node?.name || 'Node Details'}</h2>
+                <button 
+                    onClick={onClose}
+                    className="p-1 hover:bg-gray-700 rounded transition-colors"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            
+            <div className="text-gray-400">
+                Select a pipeline node to view detailed information.
             </div>
         </div>
     );

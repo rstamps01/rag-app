@@ -1,503 +1,435 @@
-// File Path: frontend/rag-ui-new/src/components/pages/DocumentsPage.jsx
-// CORRECTED: Proper PDT timezone conversion using Intl.DateTimeFormat
-
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Calendar, HardDrive, AlertCircle, CheckCircle, Clock, X, RefreshCw, Download, Trash2 } from 'lucide-react';
+import { FileText, Upload, Trash2, Download, Eye, AlertCircle, CheckCircle, Clock, Database } from 'lucide-react';
 
 const DocumentsPage = () => {
-  const [documents, setDocuments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedDepartment, setSelectedDepartment] = useState('General');
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+    const [documents, setDocuments] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [dragOver, setDragOver] = useState(false);
+    const [error, setError] = useState(null);
+    const [uploadProgress, setUploadProgress] = useState({});
 
-  // Department options matching the backend
-  const departments = [
-    { value: 'General', label: 'General', color: 'bg-blue-100 text-blue-800' },
-    { value: 'IT', label: 'IT', color: 'bg-green-100 text-green-800' },
-    { value: 'HR', label: 'HR', color: 'bg-purple-100 text-purple-800' },
-    { value: 'Finance', label: 'Finance', color: 'bg-yellow-100 text-yellow-800' },
-    { value: 'Legal', label: 'Legal', color: 'bg-red-100 text-red-800' }
-  ];
-
-  const getDepartmentColor = (department) => {
-    const normalizedDept = (department || 'general').toLowerCase();
-    const dept = departments.find(d => d.value.toLowerCase() === normalizedDept);
-    return dept ? dept.color : 'bg-gray-100 text-gray-800';
-  };
-
-  // Remove duplicate documents (keep most recent)
-  const removeDuplicateDocuments = (documents) => {
-    const seen = new Map();
-    
-    // Sort by upload_date descending to keep most recent
-    const sorted = documents.sort((a, b) => 
-      new Date(b.upload_date || 0) - new Date(a.upload_date || 0)
-    );
-    
-    return sorted.filter(doc => {
-      const key = doc.filename || 'unknown';
-      if (seen.has(key)) {
-        return false; // Skip duplicate
-      }
-      seen.set(key, true);
-      return true;
-    });
-  };
-
-  // ENHANCED: Handle both flat array and nested structure from backend with debugging
-  const fetchDocuments = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/v1/documents/?skip=0&limit=100');
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // DEBUG: Log the actual API response
-      console.log('API Response:', data);
-      
-      // Handle both flat array and nested structure
-      const documentsArray = Array.isArray(data) ? data : (data.documents || []);
-      
-      // DEBUG: Log individual document sizes
-      documentsArray.forEach((doc, index) => {
-        console.log(`Document ${index}:`, {
-          filename: doc.filename,
-          size: doc.size,
-          sizeType: typeof doc.size,
-          upload_date: doc.upload_date
-        });
-      });
-      
-      // Filter out invalid documents
-      const validDocuments = documentsArray.filter(doc => 
-        doc && typeof doc === 'object' && doc.id
-      );
-      
-      // Remove duplicates
-      const uniqueDocuments = removeDuplicateDocuments(validDocuments);
-      
-      setDocuments(uniqueDocuments);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching documents:', err);
-      setError('Failed to fetch document list. Please try again.');
-      setDocuments([]); // Ensure we don't leave stale data
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDocuments();
-  }, []);
-
-  const handleFileSelect = (event) => {
-    const file = event.target.files[0];
-    setSelectedFile(file);
-    setError(null);
-    setSuccess(null);
-  };
-
-  const handleDepartmentChange = (event) => {
-    setSelectedDepartment(event.target.value);
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      setError('Please select a file to upload.');
-      return;
-    }
-
-    setUploading(true);
-    setUploadProgress(0);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('department', selectedDepartment);
-
-      const response = await fetch('/api/v1/documents/', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Upload failed with status ${response.status}`);
-      }
-
-      const result = await response.json();
-      setSuccess(`File "${selectedFile.name}" uploaded successfully to ${selectedDepartment} department!`);
-      setSelectedFile(null);
-      setSelectedDepartment('General');
-      
-      // Reset file input
-      const fileInput = document.getElementById('file-upload');
-      if (fileInput) fileInput.value = '';
-      
-      // Refresh document list
-      setTimeout(() => {
+    // Fetch documents on component mount
+    useEffect(() => {
         fetchDocuments();
-      }, 1000);
+    }, []);
 
-    } catch (err) {
-      console.error('Upload error:', err);
-      setError(`Upload failed: ${err.message}`);
-    } finally {
-      setUploading(false);
-      setUploadProgress(0);
-    }
-  };
+    const fetchDocuments = async () => {
+        setLoading(true);
+        setError(null);
+        
+        try {
+            const response = await fetch('/api/v1/documents/');
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (Array.isArray(data)) {
+                setDocuments(data);
+            } else if (data.documents) {
+                setDocuments(data.documents);
+            } else {
+                setDocuments([]);
+            }
+        } catch (err) {
+            console.error('Error fetching documents:', err);
+            setError(`Failed to load documents: ${err.message}`);
+            setDocuments([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  const handleDelete = async (documentId) => {
-    if (!window.confirm('Are you sure you want to delete this document?')) {
-      return;
-    }
+    const handleFileUpload = async (files) => {
+        if (!files || files.length === 0) return;
+        
+        setUploading(true);
+        setError(null);
+        
+        const uploadPromises = Array.from(files).map(async (file) => {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                // Update progress
+                setUploadProgress(prev => ({
+                    ...prev,
+                    [file.name]: { status: 'uploading', progress: 0 }
+                }));
+                
+                const response = await fetch('/api/v1/documents/', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    
+                    // Update progress
+                    setUploadProgress(prev => ({
+                        ...prev,
+                        [file.name]: { status: 'success', progress: 100 }
+                    }));
+                    
+                    return result;
+                } else {
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
+            } catch (error) {
+                console.error(`Upload failed for ${file.name}:`, error);
+                
+                // Update progress
+                setUploadProgress(prev => ({
+                    ...prev,
+                    [file.name]: { status: 'error', progress: 0, error: error.message }
+                }));
+                
+                return null;
+            }
+        });
+        
+        try {
+            const results = await Promise.all(uploadPromises);
+            const successfulUploads = results.filter(result => result !== null);
+            
+            if (successfulUploads.length > 0) {
+                // Refresh document list
+                await fetchDocuments();
+            }
+            
+            // Clear progress after 3 seconds
+            setTimeout(() => {
+                setUploadProgress({});
+            }, 3000);
+            
+        } catch (error) {
+            setError(`Upload failed: ${error.message}`);
+        } finally {
+            setUploading(false);
+        }
+    };
 
-    try {
-      const response = await fetch(`/api/v1/documents/${documentId}`, {
-        method: 'DELETE',
-      });
+    const handleDeleteDocument = async (documentId) => {
+        if (!confirm('Are you sure you want to delete this document?')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/v1/documents/${documentId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                // Remove document from list
+                setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+            } else {
+                throw new Error(`Delete failed: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('Delete failed:', error);
+            setError(`Failed to delete document: ${error.message}`);
+        }
+    };
 
-      if (!response.ok) {
-        throw new Error(`Delete failed with status ${response.status}`);
-      }
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        setDragOver(true);
+    };
 
-      setSuccess('Document deleted successfully!');
-      fetchDocuments();
-    } catch (err) {
-      console.error('Delete error:', err);
-      setError(`Delete failed: ${err.message}`);
-    }
-  };
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        setDragOver(false);
+    };
 
-  // ENHANCED: File size formatting with debugging and better handling
-  const formatFileSize = (bytes) => {
-    // Debug logging to see what we're receiving
-    console.log('formatFileSize received:', bytes, typeof bytes);
-    
-    // Handle various null/undefined cases
-    if (bytes === null || bytes === undefined) {
-      return 'Size Unknown';
-    }
-    
-    // Convert string numbers to actual numbers
-    if (typeof bytes === 'string') {
-      const parsed = parseInt(bytes, 10);
-      if (isNaN(parsed)) {
-        return 'Size Unknown';
-      }
-      bytes = parsed;
-    }
-    
-    // Handle zero or negative values
-    if (bytes <= 0) {
-      return '0 Bytes';
-    }
-    
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
-    // Ensure we don't exceed array bounds
-    const sizeIndex = Math.min(i, sizes.length - 1);
-    
-    return parseFloat((bytes / Math.pow(k, sizeIndex)).toFixed(2)) + ' ' + sizes[sizeIndex];
-  };
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setDragOver(false);
+        
+        const files = Array.from(e.dataTransfer.files);
+        const validFiles = files.filter(file => {
+            const validTypes = ['.pdf', '.txt', '.docx', '.md'];
+            const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+            return validTypes.includes(fileExtension);
+        });
+        
+        if (validFiles.length !== files.length) {
+            setError('Some files were skipped. Only PDF, TXT, DOCX, and MD files are supported.');
+        }
+        
+        if (validFiles.length > 0) {
+            handleFileUpload(validFiles);
+        }
+    };
 
-  // CORRECTED: Proper PDT timezone conversion using Intl.DateTimeFormat
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Unknown';
-    
-    try {
-      const date = new Date(dateString);
-      
-      // Use Intl.DateTimeFormat for proper timezone conversion
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/Los_Angeles',  // This will properly convert to PDT/PST
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        timeZoneName: 'short',
-        hour12: true
-      });
-      
-      return formatter.format(date);
-    } catch (e) {
-      console.error('Date formatting error:', e);
-      return 'Invalid Date';
-    }
-  };
+    const formatFileSize = (bytes) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
 
-  // Null-safe status handling
-  const getStatusIcon = (status) => {
-    const normalizedStatus = (status || 'unknown').toLowerCase();
-    switch (normalizedStatus) {
-      case 'completed':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'processing':
-        return <Clock className="w-5 h-5 text-yellow-500" />;
-      case 'failed':
-        return <AlertCircle className="w-5 h-5 text-red-500" />;
-      case 'uploaded':
-        return <Clock className="w-5 h-5 text-blue-500" />;
-      default:
-        return <Clock className="w-5 h-5 text-gray-500" />;
-    }
-  };
+    const formatTimestamp = (timestamp) => {
+        if (!timestamp) return 'Unknown';
+        const date = new Date(timestamp);
+        return date.toLocaleString();
+    };
 
-  const getStatusColor = (status) => {
-    const normalizedStatus = (status || 'unknown').toLowerCase();
-    switch (normalizedStatus) {
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'processing':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      case 'uploaded':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Document Management</h1>
-          <p className="text-gray-600">Upload, organize, and manage your documents by department</p>
-        </div>
-
-        {/* Upload Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-            <Upload className="w-5 h-5 mr-2" />
-            Upload Document
-          </h2>
-          
-          {/* Department Selection */}
-          <div className="mb-4">
-            <label htmlFor="department-select" className="block text-sm font-medium text-gray-700 mb-2">
-              Department
-            </label>
-            <select
-              id="department-select"
-              value={selectedDepartment}
-              onChange={handleDepartmentChange}
-              className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {departments.map((dept) => (
-                <option key={dept.value} value={dept.value}>
-                  {dept.label}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-sm text-gray-500">
-              Documents uploaded to "General" will be accessible to all departments
-            </p>
-          </div>
-
-          {/* File Selection */}
-          <div className="mb-4">
-            <label htmlFor="file-upload" className="block text-sm font-medium text-gray-700 mb-2">
-              Select File
-            </label>
-            <input
-              id="file-upload"
-              type="file"
-              onChange={handleFileSelect}
-              accept=".pdf,.txt,.docx,.doc"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <p className="mt-1 text-sm text-gray-500">
-              Supported formats: PDF, TXT, DOCX, DOC (Max size: 100MB)
-            </p>
-          </div>
-
-          {/* Upload Button */}
-          <button
-            onClick={handleUpload}
-            disabled={!selectedFile || uploading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-          >
-            {uploading ? (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Upload className="w-4 h-4 mr-2" />
-                Upload to {selectedDepartment}
-              </>
-            )}
-          </button>
-
-          {/* Progress Bar */}
-          {uploading && (
-            <div className="mt-4">
-              <div className="bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                ></div>
-              </div>
+    return (
+        <div className="documents-page bg-gray-900 min-h-screen text-white">
+            {/* Header */}
+            <div className="bg-gray-800 border-b border-gray-700 p-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                        <FileText className="w-6 h-6 text-blue-400" />
+                        <h1 className="text-xl font-bold">Document Management</h1>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2 text-sm text-gray-400">
+                        <Database className="w-4 h-4" />
+                        <span>{documents.length} documents</span>
+                    </div>
+                </div>
             </div>
-          )}
-        </div>
 
-        {/* Status Messages */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-            <div className="flex items-center">
-              <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-              <span className="text-red-700">{error}</span>
-            </div>
-          </div>
-        )}
-
-        {success && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
-            <div className="flex items-center">
-              <CheckCircle className="w-5 h-5 text-green-500 mr-2" />
-              <span className="text-green-700">{success}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Documents List */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-                <FileText className="w-5 h-5 mr-2" />
-                Uploaded Documents ({documents.length})
-              </h2>
-              <button
-                onClick={fetchDocuments}
-                disabled={loading}
-                className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 flex items-center"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="p-8 text-center">
-              <RefreshCw className="w-8 h-8 text-gray-400 animate-spin mx-auto mb-4" />
-              <p className="text-gray-500">Loading documents...</p>
-            </div>
-          ) : documents.length === 0 ? (
-            <div className="p-8 text-center">
-              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No documents uploaded yet</p>
-              <p className="text-sm text-gray-400">Upload your first document to get started</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Document
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Department
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Size
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Upload Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {documents.map((doc) => (
-                    <tr key={doc.id || Math.random()} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <FileText className="w-5 h-5 text-gray-400 mr-3" />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {doc.filename || 'Unknown File'}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {doc.content_type || 'Unknown Type'}
-                            </div>
-                          </div>
+            <div className="p-6 max-w-6xl mx-auto space-y-6">
+                {/* Upload Area */}
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+                    <h2 className="text-lg font-semibold mb-4 flex items-center">
+                        <Upload className="w-5 h-5 mr-2 text-blue-400" />
+                        Upload Documents
+                    </h2>
+                    
+                    <div
+                        className={`border-2 border-dashed rounded-lg p-8 transition-colors text-center ${
+                            dragOver 
+                                ? 'border-blue-400 bg-blue-400/10' 
+                                : 'border-gray-600 hover:border-gray-500'
+                        }`}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                    >
+                        <FileText className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                        <p className="text-lg mb-2">Drop files here or click to upload</p>
+                        <p className="text-sm text-gray-400 mb-4">
+                            Supports PDF, TXT, DOCX, MD files (max 10MB each)
+                        </p>
+                        
+                        <input
+                            type="file"
+                            multiple
+                            accept=".pdf,.txt,.docx,.md"
+                            onChange={(e) => handleFileUpload(e.target.files)}
+                            className="hidden"
+                            id="file-upload"
+                        />
+                        <label
+                            htmlFor="file-upload"
+                            className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer transition-colors"
+                        >
+                            <Upload className="w-4 h-4" />
+                            <span>Choose Files</span>
+                        </label>
+                    </div>
+                    
+                    {/* Upload Progress */}
+                    {Object.keys(uploadProgress).length > 0 && (
+                        <div className="mt-4 space-y-2">
+                            <h3 className="text-sm font-medium text-gray-300">Upload Progress:</h3>
+                            {Object.entries(uploadProgress).map(([filename, progress]) => (
+                                <div key={filename} className="bg-gray-700 rounded p-3">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm text-white">{filename}</span>
+                                        <div className="flex items-center space-x-2">
+                                            {progress.status === 'uploading' && (
+                                                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                                            )}
+                                            {progress.status === 'success' && (
+                                                <CheckCircle className="w-4 h-4 text-green-400" />
+                                            )}
+                                            {progress.status === 'error' && (
+                                                <AlertCircle className="w-4 h-4 text-red-400" />
+                                            )}
+                                            <span className={`text-sm ${
+                                                progress.status === 'success' ? 'text-green-400' :
+                                                progress.status === 'error' ? 'text-red-400' :
+                                                'text-blue-400'
+                                            }`}>
+                                                {progress.status === 'success' ? 'Complete' :
+                                                 progress.status === 'error' ? 'Failed' :
+                                                 'Uploading...'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {progress.status === 'error' && progress.error && (
+                                        <p className="text-xs text-red-400">{progress.error}</p>
+                                    )}
+                                </div>
+                            ))}
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getDepartmentColor(doc.department)}`}>
-                          {doc.department || 'General'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <HardDrive className="w-4 h-4 text-gray-400 mr-2" />
-                          {formatFileSize(doc.size)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          {getStatusIcon(doc.status)}
-                          <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(doc.status)}`}>
-                            {doc.status || 'pending'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 text-gray-400 mr-2" />
-                          {formatDate(doc.upload_date)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    )}
+                </div>
+
+                {/* Error Display */}
+                {error && (
+                    <div className="bg-red-900/20 border border-red-500 rounded-lg p-4">
                         <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => handleDelete(doc.id)}
-                            className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
-                            title="Delete document"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                            <AlertCircle className="w-4 h-4 text-red-400" />
+                            <span className="text-red-400 font-medium">Error</span>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <p className="text-red-300 mt-2">{error}</p>
+                    </div>
+                )}
+
+                {/* Documents List */}
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-semibold flex items-center">
+                            <FileText className="w-5 h-5 mr-2 text-blue-400" />
+                            Uploaded Documents
+                        </h2>
+                        
+                        <button
+                            onClick={fetchDocuments}
+                            disabled={loading}
+                            className="flex items-center space-x-2 px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded transition-colors"
+                        >
+                            <Database className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+
+                    {/* Loading State */}
+                    {loading && (
+                        <div className="text-center py-8">
+                            <div className="w-8 h-8 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                            <p className="text-gray-400">Loading documents...</p>
+                        </div>
+                    )}
+
+                    {/* Documents Grid */}
+                    {!loading && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {documents.length === 0 ? (
+                                <div className="col-span-full text-center py-8">
+                                    <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                                    <p className="text-gray-400">No documents uploaded yet</p>
+                                    <p className="text-sm text-gray-500 mt-2">
+                                        Upload your first document to get started
+                                    </p>
+                                </div>
+                            ) : (
+                                documents.map((document) => (
+                                    <DocumentCard
+                                        key={document.id}
+                                        document={document}
+                                        onDelete={handleDeleteDocument}
+                                        formatFileSize={formatFileSize}
+                                        formatTimestamp={formatTimestamp}
+                                    />
+                                ))
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
-          )}
         </div>
-      </div>
-    </div>
-  );
+    );
+};
+
+// Document Card Component
+const DocumentCard = ({ document, onDelete, formatFileSize, formatTimestamp }) => {
+    const getFileIcon = (filename) => {
+        const extension = filename.split('.').pop().toLowerCase();
+        switch (extension) {
+            case 'pdf':
+                return <FileText className="w-8 h-8 text-red-400" />;
+            case 'txt':
+            case 'md':
+                return <FileText className="w-8 h-8 text-blue-400" />;
+            case 'docx':
+                return <FileText className="w-8 h-8 text-blue-600" />;
+            default:
+                return <FileText className="w-8 h-8 text-gray-400" />;
+        }
+    };
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'processed':
+                return 'text-green-400';
+            case 'processing':
+                return 'text-yellow-400';
+            case 'error':
+                return 'text-red-400';
+            default:
+                return 'text-gray-400';
+        }
+    };
+
+    return (
+        <div className="bg-gray-700 border border-gray-600 rounded-lg p-4 hover:border-gray-500 transition-colors">
+            <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center space-x-3">
+                    {getFileIcon(document.filename || document.name || 'unknown')}
+                    <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-medium truncate">
+                            {document.filename || document.name || 'Untitled'}
+                        </h3>
+                        <p className="text-sm text-gray-400">
+                            {formatFileSize(document.size || 0)}
+                        </p>
+                    </div>
+                </div>
+                
+                <div className="flex items-center space-x-1">
+                    <button
+                        onClick={() => onDelete(document.id)}
+                        className="p-1 text-gray-400 hover:text-red-400 transition-colors"
+                        title="Delete document"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+            
+            <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Status:</span>
+                    <span className={`font-medium ${getStatusColor(document.status)}`}>
+                        {document.status || 'uploaded'}
+                    </span>
+                </div>
+                
+                <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Uploaded:</span>
+                    <span className="text-gray-300">
+                        {formatTimestamp(document.created_at || document.timestamp)}
+                    </span>
+                </div>
+                
+                {document.document_id && (
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-400">ID:</span>
+                        <span className="text-gray-300 font-mono text-xs">
+                            {document.document_id.substring(0, 8)}...
+                        </span>
+                    </div>
+                )}
+            </div>
+            
+            {document.processing_status === 'processing' && (
+                <div className="mt-3 flex items-center space-x-2 text-sm text-yellow-400">
+                    <Clock className="w-4 h-4 animate-spin" />
+                    <span>Processing for search...</span>
+                </div>
+            )}
+        </div>
+    );
 };
 
 export default DocumentsPage;

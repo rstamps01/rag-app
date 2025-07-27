@@ -1,485 +1,653 @@
 import React, { useState, useEffect } from 'react';
+import { MessageSquare, Clock, Search, Filter, RefreshCw, Send, History, User, Database } from 'lucide-react';
 
 const QueriesPage = () => {
-  // State management
-  const [queries, setQueries] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalQueries, setTotalQueries] = useState(0);
-  
-  // Filter states
-  const [searchTerm, setSearchTerm] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('all');
-  const [dateRange, setDateRange] = useState('all');
-  const [autoRefresh, setAutoRefresh] = useState(false);
-  
-  // Pagination settings
-  const queriesPerPage = 10;
-
-  // Fetch queries from API
-  const fetchQueries = async (page = 1, filters = {}) => {
-    setLoading(true);
-    setError(null);
+    // Tab management
+    const [activeTab, setActiveTab] = useState('submit');
     
-    try {
-      const params = new URLSearchParams({
-        limit: queriesPerPage.toString(),
-        skip: ((page - 1) * queriesPerPage).toString(),
-        ...filters
-      });
-
-      const response = await fetch(`/api/v1/queries/history?${params}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // Handle both array and object responses
-      if (Array.isArray(data)) {
-        setQueries(data);
-        setTotalQueries(data.length);
-        setTotalPages(Math.ceil(data.length / queriesPerPage));
-      } else if (data.queries) {
-        setQueries(data.queries);
-        setTotalQueries(data.total || data.queries.length);
-        setTotalPages(Math.ceil((data.total || data.queries.length) / queriesPerPage));
-      } else {
-        setQueries([]);
-        setTotalQueries(0);
-        setTotalPages(1);
-      }
-    } catch (err) {
-      console.error('Error fetching queries:', err);
-      setError(`Failed to load query history: ${err.message}`);
-      setQueries([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Initial load
-  useEffect(() => {
-    fetchQueries(currentPage, getFilters());
-  }, [currentPage]);
-
-  // Auto-refresh functionality
-  useEffect(() => {
-    if (!autoRefresh) return;
+    // Query submission state
+    const [query, setQuery] = useState('');
+    const [department, setDepartment] = useState('General');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [response, setResponse] = useState(null);
+    const [submissionError, setSubmissionError] = useState(null);
     
-    const interval = setInterval(() => {
-      fetchQueries(currentPage, getFilters());
-    }, 30000); // Refresh every 30 seconds
+    // Query history state
+    const [queries, setQueries] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalQueries, setTotalQueries] = useState(0);
     
-    return () => clearInterval(interval);
-  }, [autoRefresh, currentPage]);
-
-  // Get current filters
-  const getFilters = () => {
-    const filters = {};
+    // Filter states
+    const [searchTerm, setSearchTerm] = useState('');
+    const [departmentFilter, setDepartmentFilter] = useState('all');
+    const [dateRange, setDateRange] = useState('all');
+    const [autoRefresh, setAutoRefresh] = useState(false);
     
-    if (searchTerm.trim()) {
-      filters.search = searchTerm.trim();
-    }
-    
-    if (departmentFilter !== 'all') {
-      filters.department = departmentFilter;
-    }
-    
-    if (dateRange !== 'all') {
-      const now = new Date();
-      let startDate;
-      
-      switch (dateRange) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          break;
-        case 'week':
-          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          break;
-        case 'month':
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-          break;
-        default:
-          startDate = null;
-      }
-      
-      if (startDate) {
-        filters.start_date = startDate.toISOString();
-      }
-    }
-    
-    return filters;
-  };
+    const queriesPerPage = 10;
 
-  // Handle filter changes
-  const handleFilterChange = () => {
-    setCurrentPage(1);
-    fetchQueries(1, getFilters());
-  };
+    // Submit new query
+    const submitQuery = async () => {
+        if (!query.trim()) {
+            setSubmissionError('Please enter a query');
+            return;
+        }
 
-  // Handle search
-  const handleSearch = (e) => {
-    e.preventDefault();
-    handleFilterChange();
-  };
+        setIsSubmitting(true);
+        setSubmissionError(null);
+        setResponse(null);
 
-  // Export queries
-  const handleExport = async () => {
-    try {
-      const response = await fetch('/api/v1/queries/export');
-      if (!response.ok) throw new Error('Export failed');
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `query_history_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      console.error('Export failed:', err);
-      setError('Failed to export query history');
-    }
-  };
+        try {
+            const result = await fetch('/api/v1/queries/ask', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    query: query.trim(), 
+                    department: department 
+                })
+            });
 
-  // Format timestamp
-  const formatTimestamp = (timestamp) => {
-    try {
-      return new Date(timestamp).toLocaleString();
-    } catch {
-      return 'Invalid date';
-    }
-  };
+            if (!result.ok) {
+                throw new Error(`HTTP error! status: ${result.status}`);
+            }
 
-  // Format processing time
-  const formatProcessingTime = (time) => {
-    if (typeof time === 'number') {
-      return `${time.toFixed(2)}s`;
-    }
-    return 'N/A';
-  };
+            const data = await result.json();
+            setResponse(data);
+            
+            // Clear the query input after successful submission
+            setQuery('');
+            
+            // Refresh history if on history tab
+            if (activeTab === 'history') {
+                fetchQueries(currentPage, getFilters());
+            }
+            
+        } catch (error) {
+            console.error('Query submission failed:', error);
+            setSubmissionError(`Failed to submit query: ${error.message}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
-  // Get status badge color
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'success':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'error':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  return (
-    <div className="container mx-auto p-6 space-y-6 max-w-7xl">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Query History</h1>
-          <p className="text-gray-600 mt-1">
-            {totalQueries} total queries • Page {currentPage} of {totalPages}
-          </p>
-        </div>
+    // Fetch queries from API
+    const fetchQueries = async (page = 1, filters = {}) => {
+        setLoading(true);
+        setError(null);
         
-        <div className="flex gap-3">
-          <button
-            onClick={() => fetchQueries(currentPage, getFilters())}
-            disabled={loading}
-            className="flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-          >
-            <svg className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-          </button>
-          
-          <button
-            onClick={handleExport}
-            className="flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export
-          </button>
-        </div>
-      </div>
+        try {
+            const params = new URLSearchParams({
+                limit: queriesPerPage.toString(),
+                skip: ((page - 1) * queriesPerPage).toString(),
+                ...filters
+            });
 
-      {/* Filters */}
-      <div className="bg-white shadow rounded-lg border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center">
-            <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
-            </svg>
-            Filters
-          </h3>
-        </div>
-        <div className="p-6">
-          <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Search */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="Search queries..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
+            const response = await fetch(`/api/v1/queries/history?${params}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (Array.isArray(data)) {
+                setQueries(data);
+                setTotalQueries(data.length);
+                setTotalPages(Math.ceil(data.length / queriesPerPage));
+            } else if (data.queries) {
+                setQueries(data.queries);
+                setTotalQueries(data.total || data.queries.length);
+                setTotalPages(Math.ceil((data.total || data.queries.length) / queriesPerPage));
+            } else {
+                setQueries([]);
+                setTotalQueries(0);
+                setTotalPages(1);
+            }
+        } catch (err) {
+            console.error('Error fetching queries:', err);
+            setError(`Failed to load query history: ${err.message}`);
+            setQueries([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-            {/* Department Filter */}
-            <select
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Departments</option>
-              <option value="General">General</option>
-              <option value="IT">IT</option>
-              <option value="Sales">Sales</option>
-              <option value="Support">Support</option>
-              <option value="admin">Admin</option>
-            </select>
+    // Get current filters
+    const getFilters = () => {
+        const filters = {};
+        
+        if (searchTerm.trim()) {
+            filters.search = searchTerm.trim();
+        }
+        
+        if (departmentFilter !== 'all') {
+            filters.department = departmentFilter;
+        }
+        
+        if (dateRange !== 'all') {
+            const now = new Date();
+            let startDate;
+            
+            switch (dateRange) {
+                case 'today':
+                    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    break;
+                case 'week':
+                    startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    break;
+                case 'month':
+                    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                    break;
+                default:
+                    startDate = null;
+            }
+            
+            if (startDate) {
+                filters.start_date = startDate.toISOString();
+            }
+        }
+        
+        return filters;
+    };
 
-            {/* Date Range Filter */}
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Time</option>
-              <option value="today">Today</option>
-              <option value="week">Last Week</option>
-              <option value="month">Last Month</option>
-            </select>
+    // Load history when switching to history tab
+    useEffect(() => {
+        if (activeTab === 'history') {
+            fetchQueries(currentPage, getFilters());
+        }
+    }, [activeTab, currentPage]);
 
-            {/* Apply Filters Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {loading ? (
-                <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : (
-                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              )}
-              Apply Filters
-            </button>
-          </form>
+    // Auto-refresh functionality
+    useEffect(() => {
+        if (!autoRefresh || activeTab !== 'history') return;
+        
+        const interval = setInterval(() => {
+            fetchQueries(currentPage, getFilters());
+        }, 30000);
+        
+        return () => clearInterval(interval);
+    }, [autoRefresh, activeTab, currentPage]);
 
-          {/* Auto-refresh toggle */}
-          <div className="mt-4 flex items-center">
-            <input
-              type="checkbox"
-              id="autoRefresh"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <label htmlFor="autoRefresh" className="ml-2 block text-sm text-gray-600">
-              Auto-refresh every 30 seconds
-            </label>
-          </div>
-        </div>
-      </div>
+    const handleApplyFilters = () => {
+        setCurrentPage(1);
+        fetchQueries(1, getFilters());
+    };
 
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <svg className="h-5 w-5 text-red-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium text-red-800">Error:</span>
-            <span className="ml-1 text-red-700">{error}</span>
-          </div>
-        </div>
-      )}
+    const handleRefresh = () => {
+        fetchQueries(currentPage, getFilters());
+    };
 
-      {/* Queries List */}
-      <div className="space-y-4">
-        {loading && queries.length === 0 ? (
-          <div className="bg-white shadow rounded-lg border border-gray-200 p-8">
-            <div className="flex items-center justify-center">
-              <svg className="animate-spin h-8 w-8 text-gray-400 mr-3" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span className="text-gray-600">Loading query history...</span>
-            </div>
-          </div>
-        ) : queries.length === 0 ? (
-          <div className="bg-white shadow rounded-lg border border-gray-200 p-8">
-            <div className="text-center text-gray-500">
-              <svg className="h-12 w-12 mx-auto mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a4 4 0 118 0v4m-4 8a2 2 0 100-4 2 2 0 000 4zm0 0v4a2 2 0 002 2h6a2 2 0 002-2v-4" />
-              </svg>
-              <p className="text-lg font-medium">No queries found</p>
-              <p className="text-sm">Try adjusting your filters or submit a new query</p>
-            </div>
-          </div>
-        ) : (
-          queries.map((query) => (
-            <div key={query.id} className="bg-white shadow rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-              <div className="p-6 space-y-4">
-                {/* Query Header */}
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg text-gray-900 mb-2">
-                      {query.query_text || query.query || 'No query text'}
-                    </h3>
-                    <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
-                        {query.department || 'General'}
-                      </span>
-                      <span>•</span>
-                      <span>{formatTimestamp(query.query_timestamp || query.timestamp)}</span>
-                      <span>•</span>
-                      <span>Processing: {formatProcessingTime(query.processing_time)}</span>
-                      {query.gpu_accelerated && (
-                        <>
-                          <span>•</span>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
-                            GPU
-                          </span>
-                        </>
-                      )}
+    const formatTimestamp = (timestamp) => {
+        if (!timestamp) return 'Unknown';
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleString();
+    };
+
+    return (
+        <div className="queries-page bg-gray-900 min-h-screen text-white">
+            {/* Header */}
+            <div className="bg-gray-800 border-b border-gray-700 p-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                        <MessageSquare className="w-6 h-6 text-blue-400" />
+                        <h1 className="text-xl font-bold">Query Interface</h1>
                     </div>
-                  </div>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(query.status)}`}>
-                    {query.status || 'completed'}
-                  </span>
+                    
+                    <div className="flex items-center space-x-2 text-sm text-gray-400">
+                        <Database className="w-4 h-4" />
+                        <span>RAG AI Assistant</span>
+                    </div>
                 </div>
-
-                {/* Response */}
-                {query.response_text && (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-2">Response:</h4>
-                    <p className="text-gray-700 text-sm leading-relaxed">
-                      {query.response_text.length > 300 
-                        ? `${query.response_text.substring(0, 300)}...` 
-                        : query.response_text
-                      }
-                    </p>
-                  </div>
-                )}
-
-                {/* Sources */}
-                {query.sources && query.sources.length > 0 && (
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-2">
-                      Sources ({query.sources.length}):
-                    </h4>
-                    <div className="space-y-2">
-                      {query.sources.slice(0, 3).map((source, index) => (
-                        <div key={index} className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                          <div className="flex justify-between items-start">
-                            <span className="font-medium text-blue-900 text-sm">
-                              {source.document_name || source.filename || `Document ${index + 1}`}
-                            </span>
-                            {source.relevance_score && (
-                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                                {Math.round(source.relevance_score * 100)}% relevant
-                              </span>
-                            )}
-                          </div>
-                          {source.content_snippet && (
-                            <p className="text-blue-800 text-xs mt-1 leading-relaxed">
-                              {source.content_snippet.length > 150 
-                                ? `${source.content_snippet.substring(0, 150)}...` 
-                                : source.content_snippet
-                              }
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                      {query.sources.length > 3 && (
-                        <p className="text-gray-500 text-sm">
-                          ... and {query.sources.length - 3} more sources
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+                
+                {/* Tab Navigation */}
+                <div className="flex space-x-4 mt-4">
+                    <button 
+                        onClick={() => setActiveTab('submit')}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded transition-colors ${
+                            activeTab === 'submit' 
+                                ? 'bg-blue-600 text-white' 
+                                : 'bg-gray-600 text-gray-300 hover:bg-gray-700'
+                        }`}
+                    >
+                        <Send className="w-4 h-4" />
+                        <span>Submit Query</span>
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('history')}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded transition-colors ${
+                            activeTab === 'history' 
+                                ? 'bg-blue-600 text-white' 
+                                : 'bg-gray-600 text-gray-300 hover:bg-gray-700'
+                        }`}
+                    >
+                        <History className="w-4 h-4" />
+                        <span>Query History</span>
+                    </button>
+                </div>
             </div>
-          ))
-        )}
-      </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="bg-white shadow rounded-lg border border-gray-200 p-4">
-          <div className="flex justify-between items-center">
-            <div className="text-sm text-gray-600">
-              Showing {((currentPage - 1) * queriesPerPage) + 1} to {Math.min(currentPage * queriesPerPage, totalQueries)} of {totalQueries} queries
+            {/* Content */}
+            <div className="p-6">
+                {activeTab === 'submit' ? (
+                    <QuerySubmissionForm 
+                        query={query}
+                        setQuery={setQuery}
+                        department={department}
+                        setDepartment={setDepartment}
+                        onSubmit={submitQuery}
+                        isSubmitting={isSubmitting}
+                        response={response}
+                        error={submissionError}
+                    />
+                ) : (
+                    <QueryHistoryView 
+                        queries={queries}
+                        loading={loading}
+                        error={error}
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalQueries={totalQueries}
+                        searchTerm={searchTerm}
+                        setSearchTerm={setSearchTerm}
+                        departmentFilter={departmentFilter}
+                        setDepartmentFilter={setDepartmentFilter}
+                        dateRange={dateRange}
+                        setDateRange={setDateRange}
+                        autoRefresh={autoRefresh}
+                        setAutoRefresh={setAutoRefresh}
+                        onApplyFilters={handleApplyFilters}
+                        onRefresh={handleRefresh}
+                        onPageChange={setCurrentPage}
+                        formatTimestamp={formatTimestamp}
+                    />
+                )}
+            </div>
+        </div>
+    );
+};
+
+// Query Submission Form Component
+const QuerySubmissionForm = ({ 
+    query, 
+    setQuery, 
+    department, 
+    setDepartment, 
+    onSubmit, 
+    isSubmitting, 
+    response, 
+    error 
+}) => {
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            onSubmit();
+        }
+    };
+
+    return (
+        <div className="max-w-4xl mx-auto space-y-6">
+            {/* Query Input Section */}
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+                <h2 className="text-lg font-semibold mb-4 flex items-center">
+                    <Send className="w-5 h-5 mr-2 text-blue-400" />
+                    Submit New Query
+                </h2>
+                
+                <div className="space-y-4">
+                    {/* Department Selection */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Department
+                        </label>
+                        <select
+                            value={department}
+                            onChange={(e) => setDepartment(e.target.value)}
+                            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-blue-400 focus:outline-none"
+                        >
+                            <option value="General">General</option>
+                            <option value="Technical">Technical</option>
+                            <option value="Sales">Sales</option>
+                            <option value="Support">Support</option>
+                            <option value="Research">Research</option>
+                        </select>
+                    </div>
+                    
+                    {/* Query Input */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Your Query
+                        </label>
+                        <textarea
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            onKeyPress={handleKeyPress}
+                            placeholder="Ask me anything about VAST storage, data management, or related topics..."
+                            className="w-full h-32 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none resize-none"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">
+                            Press Ctrl+Enter to submit
+                        </p>
+                    </div>
+                    
+                    {/* Submit Button */}
+                    <div className="flex justify-end">
+                        <button
+                            onClick={onSubmit}
+                            disabled={isSubmitting || !query.trim()}
+                            className={`flex items-center space-x-2 px-6 py-2 rounded transition-colors ${
+                                isSubmitting || !query.trim()
+                                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                            }`}
+                        >
+                            {isSubmitting ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    <span>Processing...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Send className="w-4 h-4" />
+                                    <span>Submit Query</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
             </div>
             
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1 || loading}
-                className="px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                Previous
-              </button>
-              
-              <div className="flex items-center gap-1">
-                {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                  const pageNum = Math.max(1, currentPage - 2) + i;
-                  if (pageNum > totalPages) return null;
-                  
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                      disabled={loading}
-                      className={`px-3 py-1 text-sm font-medium rounded focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 ${
-                        pageNum === currentPage
-                          ? 'bg-blue-600 text-white border border-blue-600'
-                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-              </div>
-              
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages || loading}
-                className="px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+            {/* Error Display */}
+            {error && (
+                <div className="bg-red-900/20 border border-red-500 rounded-lg p-4">
+                    <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 bg-red-500 rounded-full"></div>
+                        <span className="text-red-400 font-medium">Error</span>
+                    </div>
+                    <p className="text-red-300 mt-2">{error}</p>
+                </div>
+            )}
+            
+            {/* Response Display */}
+            {response && (
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center">
+                        <MessageSquare className="w-5 h-5 mr-2 text-green-400" />
+                        AI Response
+                    </h3>
+                    
+                    <div className="space-y-4">
+                        <div className="bg-gray-700 rounded-lg p-4">
+                            <p className="text-white whitespace-pre-wrap">{response.response || response.answer}</p>
+                        </div>
+                        
+                        {response.sources && response.sources.length > 0 && (
+                            <div>
+                                <h4 className="text-sm font-medium text-gray-300 mb-2">Sources:</h4>
+                                <div className="space-y-2">
+                                    {response.sources.map((source, index) => (
+                                        <div key={index} className="bg-gray-700 rounded p-3 text-sm">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className="text-blue-400 font-medium">
+                                                    {source.document_name || source.filename || `Document ${index + 1}`}
+                                                </span>
+                                                <span className="text-gray-400">
+                                                    Score: {(source.relevance_score || source.score || 0).toFixed(2)}
+                                                </span>
+                                            </div>
+                                            <p className="text-gray-300">{source.content_snippet || source.content}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div className="flex justify-between text-sm text-gray-400">
+                            <span>Model: {response.model || 'Unknown'}</span>
+                            <span>Department: {response.department || department}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
+};
+
+// Query History View Component
+const QueryHistoryView = ({ 
+    queries, 
+    loading, 
+    error, 
+    currentPage, 
+    totalPages, 
+    totalQueries,
+    searchTerm, 
+    setSearchTerm, 
+    departmentFilter, 
+    setDepartmentFilter, 
+    dateRange, 
+    setDateRange,
+    autoRefresh, 
+    setAutoRefresh, 
+    onApplyFilters, 
+    onRefresh, 
+    onPageChange, 
+    formatTimestamp 
+}) => {
+    return (
+        <div className="max-w-6xl mx-auto space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-xl font-semibold">Query History</h2>
+                    <p className="text-gray-400 text-sm">
+                        {totalQueries} total queries • Page {currentPage} of {totalPages}
+                    </p>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                    <button
+                        onClick={onRefresh}
+                        disabled={loading}
+                        className="flex items-center space-x-2 px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded transition-colors"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        <span>Refresh</span>
+                    </button>
+                </div>
+            </div>
+            
+            {/* Filters */}
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                <div className="flex items-center space-x-2 mb-4">
+                    <Filter className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-medium">Filters</span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <input
+                            type="text"
+                            placeholder="Search queries..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none"
+                        />
+                    </div>
+                    
+                    <div>
+                        <select
+                            value={departmentFilter}
+                            onChange={(e) => setDepartmentFilter(e.target.value)}
+                            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-blue-400 focus:outline-none"
+                        >
+                            <option value="all">All Departments</option>
+                            <option value="General">General</option>
+                            <option value="Technical">Technical</option>
+                            <option value="Sales">Sales</option>
+                            <option value="Support">Support</option>
+                            <option value="Research">Research</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <select
+                            value={dateRange}
+                            onChange={(e) => setDateRange(e.target.value)}
+                            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-blue-400 focus:outline-none"
+                        >
+                            <option value="all">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <button
+                            onClick={onApplyFilters}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
+                        >
+                            Apply Filters
+                        </button>
+                    </div>
+                </div>
+                
+                <div className="flex items-center space-x-2 mt-4">
+                    <input
+                        type="checkbox"
+                        id="autoRefresh"
+                        checked={autoRefresh}
+                        onChange={(e) => setAutoRefresh(e.target.checked)}
+                        className="rounded"
+                    />
+                    <label htmlFor="autoRefresh" className="text-sm text-gray-300">
+                        Auto-refresh every 30 seconds
+                    </label>
+                </div>
+            </div>
+            
+            {/* Loading State */}
+            {loading && (
+                <div className="text-center py-8">
+                    <div className="w-8 h-8 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-400">Loading query history...</p>
+                </div>
+            )}
+            
+            {/* Error State */}
+            {error && (
+                <div className="bg-red-900/20 border border-red-500 rounded-lg p-4 text-center">
+                    <p className="text-red-400">{error}</p>
+                </div>
+            )}
+            
+            {/* Query List */}
+            {!loading && !error && (
+                <div className="space-y-4">
+                    {queries.length === 0 ? (
+                        <div className="text-center py-8">
+                            <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-400">No queries found</p>
+                        </div>
+                    ) : (
+                        queries.map((query, index) => (
+                            <QueryCard 
+                                key={query.id || index} 
+                                query={query} 
+                                formatTimestamp={formatTimestamp} 
+                            />
+                        ))
+                    )}
+                </div>
+            )}
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex justify-center space-x-2">
+                    <button
+                        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 rounded transition-colors"
+                    >
+                        Previous
+                    </button>
+                    
+                    <span className="px-3 py-2 bg-gray-700 rounded">
+                        Page {currentPage} of {totalPages}
+                    </span>
+                    
+                    <button
+                        onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 rounded transition-colors"
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Query Card Component
+const QueryCard = ({ query, formatTimestamp }) => {
+    const [expanded, setExpanded] = useState(false);
+    
+    return (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+            <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                    <User className="w-4 h-4 text-blue-400" />
+                    <span className="text-sm text-gray-400">
+                        {query.department || 'General'}
+                    </span>
+                </div>
+                <div className="flex items-center space-x-2 text-sm text-gray-400">
+                    <Clock className="w-4 h-4" />
+                    <span>{formatTimestamp(query.timestamp)}</span>
+                </div>
+            </div>
+            
+            <div className="mb-3">
+                <h3 className="text-white font-medium mb-2">Query:</h3>
+                <p className="text-gray-300 bg-gray-700 rounded p-3">
+                    {query.query}
+                </p>
+            </div>
+            
+            <div className="mb-3">
+                <h3 className="text-white font-medium mb-2">Response:</h3>
+                <div className="text-gray-300 bg-gray-700 rounded p-3">
+                    {expanded ? (
+                        <p className="whitespace-pre-wrap">{query.response || query.answer}</p>
+                    ) : (
+                        <p className="line-clamp-3">
+                            {(query.response || query.answer || '').substring(0, 200)}
+                            {(query.response || query.answer || '').length > 200 && '...'}
+                        </p>
+                    )}
+                </div>
+                
+                {(query.response || query.answer || '').length > 200 && (
+                    <button
+                        onClick={() => setExpanded(!expanded)}
+                        className="text-blue-400 hover:text-blue-300 text-sm mt-2"
+                    >
+                        {expanded ? 'Show less' : 'Show more'}
+                    </button>
+                )}
+            </div>
+            
+            <div className="flex justify-between items-center text-sm text-gray-400">
+                <span>Model: {query.model || 'Unknown'}</span>
+                <span>ID: {query.id || 'N/A'}</span>
+            </div>
+        </div>
+    );
 };
 
 export default QueriesPage;
