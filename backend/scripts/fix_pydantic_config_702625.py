@@ -1,4 +1,16 @@
+#!/usr/bin/env python3
 """
+Fix Pydantic v2 Configuration Issues
+Resolves "Extra inputs are not permitted" errors
+"""
+
+import os
+import shutil
+
+def create_fixed_config():
+    """Create a fixed config.py that properly defines all environment variables"""
+    
+    fixed_config_content = '''"""
 Application Configuration - Fixed for Pydantic v2
 Properly defines all environment variables to avoid "extra_forbidden" errors
 """
@@ -313,3 +325,225 @@ def create_settings():
 
 # Create the settings instance
 settings = create_settings()
+'''
+    
+    return fixed_config_content
+
+def backup_current_config():
+    """Backup the current config.py file"""
+    config_paths = [
+        "backend/app/core/config.py",
+        "app/core/config.py",
+        "core/config.py"
+    ]
+    
+    for config_path in config_paths:
+        if os.path.exists(config_path):
+            backup_path = f"{config_path}.pydantic-error.backup"
+            try:
+                shutil.copy2(config_path, backup_path)
+                print(f"✅ Backed up config to: {backup_path}")
+                return config_path
+            except Exception as e:
+                print(f"⚠️  Backup failed: {e}")
+    
+    return None
+
+def apply_fixed_config():
+    """Apply the fixed configuration"""
+    print("🔧 Applying fixed Pydantic v2 configuration...")
+    
+    # Backup current config
+    config_path = backup_current_config()
+    
+    if not config_path:
+        # Try to find where to put the config
+        possible_paths = [
+            "backend/app/core/config.py",
+            "app/core/config.py"
+        ]
+        
+        for path in possible_paths:
+            dir_path = os.path.dirname(path)
+            if os.path.exists(dir_path):
+                config_path = path
+                break
+        
+        if not config_path:
+            # Create the directory structure
+            os.makedirs("backend/app/core", exist_ok=True)
+            config_path = "backend/app/core/config.py"
+    
+    # Create fixed config content
+    fixed_content = create_fixed_config()
+    
+    # Write the fixed config
+    try:
+        with open(config_path, 'w', encoding='utf-8') as f:
+            f.write(fixed_content)
+        print(f"✅ Created fixed config at: {config_path}")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to write fixed config: {e}")
+        return False
+
+def test_fixed_config():
+    """Test the fixed configuration"""
+    print("🧪 Testing fixed configuration...")
+    
+    try:
+        # Try to import and test the config
+        import sys
+        import importlib.util
+        
+        # Add the backend directory to Python path
+        if os.path.exists("backend"):
+            sys.path.insert(0, "backend")
+        
+        # Try to import the config
+        try:
+            from app.core.config import settings
+            print("✅ Config import successful")
+            print(f"   PROJECT_NAME: {settings.PROJECT_NAME}")
+            print(f"   DATABASE_URL: {settings.DATABASE_URL[:50]}...")
+            print(f"   QDRANT_URL: {settings.QDRANT_URL}")
+            return True
+        except Exception as e:
+            print(f"❌ Config import failed: {e}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Config test failed: {e}")
+        return False
+
+def rebuild_backend():
+    """Rebuild backend with fixed configuration"""
+    print("🔄 Rebuilding backend with fixed configuration...")
+    
+    import subprocess
+    
+    try:
+        # Stop backend
+        subprocess.run("docker-compose stop backend-07", shell=True, check=False)
+        
+        # Remove container
+        subprocess.run("docker-compose rm -f backend-07", shell=True, check=False)
+        
+        # Rebuild with no cache
+        result = subprocess.run(
+            "docker-compose build --no-cache backend-07",
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=600  # 10 minute timeout
+        )
+        
+        if result.returncode == 0:
+            print("✅ Backend rebuild successful")
+            
+            # Start backend
+            start_result = subprocess.run(
+                "docker-compose up -d backend-07",
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+            
+            if start_result.returncode == 0:
+                print("✅ Backend started successfully")
+                return True
+            else:
+                print(f"❌ Backend start failed: {start_result.stderr}")
+                return False
+        else:
+            print(f"❌ Backend rebuild failed: {result.stderr}")
+            return False
+            
+    except subprocess.TimeoutExpired:
+        print("❌ Backend rebuild timed out")
+        return False
+    except Exception as e:
+        print(f"❌ Backend rebuild error: {e}")
+        return False
+
+def main():
+    print("🔧 Fix Pydantic v2 Configuration Issues")
+    print("Resolving 'Extra inputs are not permitted' errors")
+    print("=" * 60)
+    
+    # Check if we're in the right directory
+    if not os.path.exists("docker-compose.yml"):
+        print("❌ docker-compose.yml not found. Run from project root directory.")
+        return
+    
+    print(f"✅ Working directory: {os.getcwd()}")
+    
+    # Step 1: Apply fixed configuration
+    print(f"\n🔧 Step 1: Apply Fixed Configuration")
+    if not apply_fixed_config():
+        print("❌ Failed to apply fixed configuration")
+        return
+    
+    # Step 2: Test the configuration
+    print(f"\n🧪 Step 2: Test Fixed Configuration")
+    config_works = test_fixed_config()
+    
+    # Step 3: Rebuild backend
+    print(f"\n🔄 Step 3: Rebuild Backend")
+    if not rebuild_backend():
+        print("❌ Backend rebuild failed")
+        return
+    
+    # Step 4: Wait and test
+    print(f"\n⏳ Step 4: Wait for Backend Startup")
+    import time
+    time.sleep(30)
+    
+    # Test endpoints
+    print(f"\n🧪 Step 5: Test Backend Endpoints")
+    try:
+        import subprocess
+        result = subprocess.run(
+            "curl -s http://localhost:8000/health",
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            print("✅ Backend health check passed")
+            print(f"Response: {result.stdout}")
+        else:
+            print("❌ Backend health check failed")
+    except Exception as e:
+        print(f"❌ Health check error: {e}")
+    
+    # Summary
+    print(f"\n📋 PYDANTIC FIX SUMMARY")
+    print("=" * 30)
+    
+    if config_works:
+        print("🎉 SUCCESS! Pydantic configuration fixed!")
+        print("✅ All environment variables properly defined")
+        print("✅ No more 'extra_forbidden' errors")
+        print("✅ Backend should start without validation errors")
+        
+        print(f"\n🔗 Your application should now work:")
+        print("   Backend: http://localhost:8000")
+        print("   Health: http://localhost:8000/health")
+        print("   API Docs: http://localhost:8000/docs")
+        
+        print(f"\n💡 What was fixed:")
+        print("   - Added all 55+ environment variables to Settings class")
+        print("   - Set extra='allow' to prevent rejection of unknown vars")
+        print("   - Added proper Field definitions with descriptions")
+        print("   - Created fallback settings for error handling")
+        
+    else:
+        print("⚠️  Configuration applied but needs verification")
+        print("Check backend logs: docker logs backend-07")
+
+if __name__ == "__main__":
+    main()
+

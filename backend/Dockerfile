@@ -73,6 +73,7 @@ RUN pip install --no-cache-dir \
 # Copy requirements and install Python dependencies
 WORKDIR /app
 COPY requirements.txt .
+COPY .env* ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Create necessary directories with proper permissions
@@ -96,7 +97,7 @@ RUN if [ ! -f config/cache_config.json ]; then \
     fi
 
     # Validate configuration file
-RUN python -m json.tool /app/config/cache_config.json > /dev/null || (echo "ERROR: Invalid JSON in cache_config.json"; exit 1)
+RUN python3 -m json.tool /app/config/cache_config.json > /dev/null || (echo "ERROR: Invalid JSON in cache_config.json"; exit 1)
 
 # Set proper permissions
 RUN chmod +x /app/scripts/*.py
