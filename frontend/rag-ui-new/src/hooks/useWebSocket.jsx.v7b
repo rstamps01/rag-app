@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { transformBackendData } from '../utils/dataTransformation';
 
 export const useWebSocket = (url) => {
     const [socket, setSocket] = useState(null);
@@ -23,26 +22,8 @@ export const useWebSocket = (url) => {
             
             ws.onmessage = (event) => {
                 try {
-                    const rawData = JSON.parse(event.data);
-                    console.log('Raw WebSocket message:', rawData);
-                    
-                    // Transform data based on message type
-                    let transformedData = rawData;
-                    
-                    if (rawData.type === 'metrics_update' || rawData.type === 'monitoring_update') {
-                        transformedData = {
-                            type: 'metrics_update',
-                            data: transformBackendData(rawData)
-                        };
-                    } else if (rawData.type === 'initial_state') {
-                        transformedData = {
-                            type: 'metrics_update',
-                            data: transformBackendData(rawData)
-                        };
-                    }
-                    
-                    console.log('Transformed WebSocket message:', transformedData);
-                    setLastMessage(transformedData);
+                    const data = JSON.parse(event.data);
+                    setLastMessage(data);
                 } catch (error) {
                     console.error('Error parsing WebSocket message:', error);
                 }

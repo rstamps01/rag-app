@@ -1,16 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, Settings, Maximize2, Minimize2, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
-import useWebSocket from '../../hooks/useWebSocket';
+import useWebSocket from '../../hooks/useWebSocket.jsx.v7b';
 
 const PipelineMonitoringDashboard = () => {
     const [debugMode, setDebugMode] = useState(false);
     const [selectedNode, setSelectedNode] = useState(null);
-    const [realTimeMetrics, setRealTimeMetrics] = useState({
-        system_health: {},
-        gpu_performance: [],
-        pipeline_status: {},
-        connection_status: {}
-    });
+    const [realTimeMetrics, setRealTimeMetrics] = useState({});
     const [systemHealth, setSystemHealth] = useState({ status: 'Unknown' });
     
     // WebSocket connection
@@ -21,19 +16,11 @@ const PipelineMonitoringDashboard = () => {
         sendMessage 
     } = useWebSocket('ws://localhost:8000/api/v1/ws/pipeline-monitoring');
 
-    // Handle incoming WebSocket messages with improved logging
+    // Handle incoming WebSocket messages
     useEffect(() => {
         if (lastMessage) {
-            console.log('Processing WebSocket message:', lastMessage);
-            
             if (lastMessage.type === 'metrics_update') {
-                console.log('Setting real-time metrics:', lastMessage.data);
-                setRealTimeMetrics(lastMessage.data || {
-                    system_health: {},
-                    gpu_performance: [],
-                    pipeline_status: {},
-                    connection_status: {}
-                });
+                setRealTimeMetrics(lastMessage.data || {});
                 setSystemHealth(lastMessage.data?.system_health || { status: 'Unknown' });
             }
         }
@@ -169,14 +156,12 @@ const PipelineMonitoringDashboard = () => {
     );
 };
 
-// Updated Real-time Metrics Panel Component with proper data handling
+// Real-time Metrics Panel Component
 const RealTimeMetricsPanel = ({ metrics }) => {
     const systemHealth = metrics.system_health || {};
     const gpuPerformance = metrics.gpu_performance || [];
     const pipelineStatus = metrics.pipeline_status || {};
     const connectionStatus = metrics.connection_status || {};
-
-    console.log('RealTimeMetricsPanel received metrics:', metrics);
 
     return (
         <div className="space-y-4">
@@ -276,11 +261,8 @@ const RealTimeMetricsPanel = ({ metrics }) => {
     );
 };
 
-// Updated Pipeline Flow Canvas Component
+// Pipeline Flow Canvas Component
 const PipelineFlowCanvas = ({ realTimeMetrics, onNodeSelect, debugMode, isConnected }) => {
-    // Show actual pipeline visualization instead of loading state
-    const hasMetrics = realTimeMetrics && Object.keys(realTimeMetrics).length > 0;
-    
     return (
         <div className="relative w-full h-full bg-gray-900 overflow-hidden flex items-center justify-center">
             {/* Grid Background */}
@@ -303,33 +285,19 @@ const PipelineFlowCanvas = ({ realTimeMetrics, onNodeSelect, debugMode, isConnec
                 </div>
             )}
             
-            {/* Connected State with Metrics */}
-            {isConnected && hasMetrics && (
+            {/* Connected State */}
+            {isConnected && (
                 <div className="text-center">
                     <div className="w-16 h-16 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <h3 className="text-xl font-semibold text-green-400 mb-2">Pipeline Active</h3>
+                    <h3 className="text-xl font-semibold text-green-400 mb-2">Loading pipeline state...</h3>
                     <p className="text-gray-400">Real-time monitoring active</p>
-                    <div className="mt-4 text-sm text-gray-300">
-                        <p>CPU: {realTimeMetrics.system_health?.cpu_percent || 0}%</p>
-                        <p>Memory: {realTimeMetrics.system_health?.memory_percent || 0}%</p>
-                        <p>Queries/Min: {realTimeMetrics.pipeline_status?.queries_per_minute || 0}</p>
-                    </div>
-                </div>
-            )}
-            
-            {/* Connected but no metrics */}
-            {isConnected && !hasMetrics && (
-                <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <h3 className="text-xl font-semibold text-yellow-400 mb-2">Waiting for Data</h3>
-                    <p className="text-gray-400">Connected, waiting for metrics...</p>
                 </div>
             )}
         </div>
     );
 };
 
-// Node Details Panel Component (unchanged)
+// Node Details Panel Component
 const NodeDetailsPanel = ({ node, onClose }) => {
     return (
         <div className="space-y-4">
