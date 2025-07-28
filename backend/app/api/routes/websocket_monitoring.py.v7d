@@ -1,0 +1,356 @@
+"""
+Enhanced WebSocket Monitoring with Data Transformation
+Fixes frontend-backend communication by transforming data formats
+"""
+
+import asyncio
+import json
+import logging
+import psutil
+import time
+from datetime import datetime
+from typing import Dict, List, Optional, Any
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+class ConnectionManager:
+    """Manages WebSocket connections with proper lifecycle handling"""
+    
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self.connection_info: Dict[WebSocket, Dict] = {}
+        self.monitoring_task: Optional[asyncio.Task] = None
+        self.is_monitoring = False
+    
+    async def connect(self, websocket: WebSocket):
+        """Accept WebSocket connection and start monitoring if needed"""
+        try:
+            await websocket.accept()
+            self.active_connections.append(websocket)
+            
+            # Store connection info
+            self.connection_info[websocket] = {
+                "connected_at": datetime.now().isoformat(),
+                "client_id": id(websocket)
+            }
+            
+            logger.info(f"✅ WebSocket connected. Total connections: {len(self.active_connections)}")
+            
+            # Start monitoring task if this is the first connection
+            if len(self.active_connections) == 1 and not self.is_monitoring:
+                await self.start_monitoring()
+            
+            # Send initial state immediately
+            await self.send_initial_state(websocket)
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to connect WebSocket: {e}")
+            await self.disconnect(websocket)
+    
+    async def disconnect(self, websocket: WebSocket):
+        """Disconnect WebSocket and cleanup"""
+        try:
+            if websocket in self.active_connections:
+                self.active_connections.remove(websocket)
+            
+            if websocket in self.connection_info:
+                del self.connection_info[websocket]
+            
+            logger.info(f"🔌 WebSocket disconnected. Remaining connections: {len(self.active_connections)}")
+            
+            # Stop monitoring if no connections remain
+            if len(self.active_connections) == 0 and self.is_monitoring:
+                await self.stop_monitoring()
+                
+        except Exception as e:
+            logger.error(f"❌ Error during disconnect: {e}")
+    
+    async def start_monitoring(self):
+        """Start the monitoring task"""
+        if not self.is_monitoring:
+            self.is_monitoring = True
+            self.monitoring_task = asyncio.create_task(self.monitoring_loop())
+            logger.info("🚀 Started monitoring task")
+    
+    async def stop_monitoring(self):
+        """Stop the monitoring task"""
+        if self.is_monitoring and self.monitoring_task:
+            self.is_monitoring = False
+            self.monitoring_task.cancel()
+            try:
+                await self.monitoring_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("⏹️ Stopped monitoring task")
+    
+    async def send_initial_state(self, websocket: WebSocket):
+        """Send initial pipeline state to a specific connection"""
+        try:
+            initial_data = {
+                "type": "initial_state",
+                "data": {
+                    "stages": [
+                        {
+                            "id": "document_ingestion",
+                            "name": "Document Ingestion",
+                            "status": "active",
+                            "position": {"x": 100, "y": 100},
+                            "metrics": {"processed": 0, "success_rate": 100}
+                        },
+                        {
+                            "id": "text_extraction", 
+                            "name": "Text Extraction",
+                            "status": "idle",
+                            "position": {"x": 300, "y": 100},
+                            "metrics": {"processed": 0, "success_rate": 100}
+                        },
+                        {
+                            "id": "chunking",
+                            "name": "Text Chunking", 
+                            "status": "idle",
+                            "position": {"x": 500, "y": 100},
+                            "metrics": {"processed": 0, "success_rate": 100}
+                        },
+                        {
+                            "id": "embedding",
+                            "name": "Vector Embedding",
+                            "status": "idle", 
+                            "position": {"x": 700, "y": 100},
+                            "metrics": {"processed": 0, "success_rate": 100}
+                        },
+                        {
+                            "id": "vector_storage",
+                            "name": "Vector Storage",
+                            "status": "idle",
+                            "position": {"x": 900, "y": 100}, 
+                            "metrics": {"processed": 0, "success_rate": 100}
+                        }
+                    ],
+                    "connections": [
+                        {"from": "document_ingestion", "to": "text_extraction", "active": False},
+                        {"from": "text_extraction", "to": "chunking", "active": False},
+                        {"from": "chunking", "to": "embedding", "active": False},
+                        {"from": "embedding", "to": "vector_storage", "active": False}
+                    ],
+                    "lastUpdate": datetime.now().isoformat()
+                }
+            }
+            
+            await websocket.send_text(json.dumps(initial_data))
+            logger.info(f"📤 Sent initial state to connection {id(websocket)}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to send initial state: {e}")
+    
+    async def broadcast_metrics(self, metrics_data: Dict):
+        """Broadcast metrics to all connected clients with data transformation"""
+        if not self.active_connections:
+            return
+        
+        # Transform backend format to frontend format
+        transformed_data = self.transform_backend_to_frontend(metrics_data)
+        
+        message = {
+            "type": "metrics_update", 
+            "data": transformed_data
+        }
+        
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(json.dumps(message))
+            except Exception as e:
+                logger.error(f"❌ Failed to send to connection {id(connection)}: {e}")
+                disconnected.append(connection)
+        
+        # Clean up disconnected connections
+        for connection in disconnected:
+            await self.disconnect(connection)
+    
+    def transform_backend_to_frontend(self, backend_data: Dict) -> Dict:
+        """Transform backend data format to frontend expected format"""
+        if not backend_data:
+            return {}
+        
+        # Transform GPU data
+        gpu_data = {}
+        if "gpu_performance" in backend_data:
+            gpu = backend_data["gpu_performance"]
+            gpu_data = {
+                "gpu_utilization": gpu.get("utilization", 0),
+                "temperature": gpu.get("temperature", 0)
+            }
+            
+            # Parse memory string "1600MB / 3260MB" to number
+            memory_str = gpu.get("memory", "0MB / 0MB")
+            if "/" in memory_str:
+                used_memory = memory_str.split("/")[0].strip().replace("MB", "")
+                try:
+                    gpu_data["memory_usage"] = float(used_memory)
+                except:
+                    gpu_data["memory_usage"] = 0
+            else:
+                gpu_data["memory_usage"] = 0
+        
+        # Transform query data
+        queries_data = {}
+        if "query_performance" in backend_data:
+            query = backend_data["query_performance"]
+            queries_data = {
+                "queries_per_minute": query.get("queries_per_min", 0),
+                "active_queries": query.get("active_queries", 0),
+                "queue_depth": 0  # Default value
+            }
+            
+            # Parse response time string "0ms" to number
+            response_time_str = query.get("avg_response_time", "0ms")
+            try:
+                response_time = float(response_time_str.replace("ms", ""))
+                queries_data["avg_response_time"] = response_time
+            except:
+                queries_data["avg_response_time"] = 0
+        
+        # Transform pipeline data
+        pipeline_data = {}
+        if "connection_status" in backend_data:
+            conn = backend_data["connection_status"]
+            pipeline_data = {
+                "success_rate": 95,  # Default good value
+                "active_connections": conn.get("websocket", 0)
+            }
+        
+        # Transform timestamp
+        timestamp = backend_data.get("timestamp")
+        if timestamp:
+            try:
+                # Convert Unix timestamp to ISO format
+                dt = datetime.fromtimestamp(timestamp)
+                iso_timestamp = dt.isoformat() + "Z"
+            except:
+                iso_timestamp = datetime.now().isoformat() + "Z"
+        else:
+            iso_timestamp = datetime.now().isoformat() + "Z"
+        
+        return {
+            "gpu": gpu_data,
+            "queries": queries_data,
+            "pipeline": pipeline_data,
+            "lastUpdate": iso_timestamp
+        }
+    
+    async def monitoring_loop(self):
+        """Main monitoring loop that sends real-time data"""
+        logger.info("🔄 Starting monitoring loop")
+        
+        while self.is_monitoring:
+            try:
+                # Collect system metrics
+                metrics = self.get_system_metrics()
+                
+                # Broadcast to all connections
+                await self.broadcast_metrics(metrics)
+                
+                # Wait 2 seconds before next update
+                await asyncio.sleep(2)
+                
+            except asyncio.CancelledError:
+                logger.info("🛑 Monitoring loop cancelled")
+                break
+            except Exception as e:
+                logger.error(f"❌ Error in monitoring loop: {e}")
+                await asyncio.sleep(5)  # Wait longer on error
+    
+    def get_system_metrics(self) -> Dict:
+        """Get current system metrics"""
+        try:
+            # Get CPU and memory info
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
+            
+            # Mock GPU data (replace with actual GPU monitoring if available)
+            gpu_utilization = 5  # Mock value
+            gpu_memory = "1600MB / 3260MB"  # Mock value
+            gpu_temp = 41  # Mock value
+            
+            return {
+                "timestamp": time.time(),
+                "system_health": {
+                    "cpu_usage": cpu_percent,
+                    "memory_usage": memory.percent,
+                    "memory_available": f"{memory.available // (1024**3)}GB"
+                },
+                "gpu_performance": {
+                    "utilization": gpu_utilization,
+                    "memory": gpu_memory,
+                    "temperature": gpu_temp
+                },
+                "query_performance": {
+                    "queries_per_min": 0,  # Mock value
+                    "avg_response_time": "0ms",  # Mock value
+                    "active_queries": 0  # Mock value
+                },
+                "connection_status": {
+                    "websocket": len(self.active_connections),
+                    "backend": "connected",
+                    "database": "connected",
+                    "vector_db": "connected"
+                }
+            }
+        except Exception as e:
+            logger.error(f"❌ Error getting system metrics: {e}")
+            return {}
+
+# Global connection manager
+manager = ConnectionManager()
+
+@router.websocket("/ws/pipeline-monitoring")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for pipeline monitoring"""
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive and handle incoming messages
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            # Handle different message types
+            if message.get("type") == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+            elif message.get("type") == "request_pipeline_state":
+                await manager.send_initial_state(websocket)
+                
+    except WebSocketDisconnect:
+        await manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"❌ WebSocket error: {e}")
+        await manager.disconnect(websocket)
+
+@router.get("/ws/test")
+async def test_websocket():
+    """Test endpoint to verify WebSocket is ready"""
+    return {
+        "status": "WebSocket endpoint ready",
+        "active_connections": len(manager.active_connections),
+        "websocket_url": "/api/v1/ws/pipeline-monitoring"
+    }
+
+@router.get("/monitoring/status")
+async def get_monitoring_status():
+    """Get current monitoring status and metrics"""
+    try:
+        metrics = manager.get_system_metrics()
+        transformed = manager.transform_backend_to_frontend(metrics)
+        
+        return {
+            "status": "active",
+            "active_connections": len(manager.active_connections),
+            "metrics": metrics,
+            "transformed_metrics": transformed
+        }
+    except Exception as e:
+        logger.error(f"❌ Error getting monitoring status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
