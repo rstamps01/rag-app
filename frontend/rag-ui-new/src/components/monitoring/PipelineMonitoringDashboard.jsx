@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import useWebSocket from '../../hooks/useWebSocket';
+import useWebSocket from '../../hooks/useWebSocket'; // Adjust the import path as necessary
 
 const PipelineMonitoringDashboard = () => {
   const [debugMode, setDebugMode] = useState(false);
