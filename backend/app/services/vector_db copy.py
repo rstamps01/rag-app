@@ -109,32 +109,6 @@ class VectorDBService:
             points=points
         )
 
-############# Added 8/5/25 #############
-
-    async def delete_document(self, document_id: str):
-        """Delete document vectors from Qdrant collection"""
-        try:
-            delete_result = self.client.delete(
-                collection_name=self.collection_name,
-                points_selector=models.FilterSelector(
-                    filter=models.Filter(
-                        must=[
-                            models.FieldCondition(
-                                key="document_id",
-                                match=models.MatchValue(value=document_id)
-                            )
-                        ]
-                    )
-                )
-            )
-            return delete_result
-        except Exception as e:
-            logging.error(f"Error deleting vectors for document {document_id}: {e}")
-            raise
-
-############# Added 8/5/25 #############
-
-
 ####### Above Updated 7/22/25 #######
 
 ########

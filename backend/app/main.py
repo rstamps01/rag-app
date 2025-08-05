@@ -544,6 +544,56 @@ async def upload_document(
         logger.error(f"Upload error: {e}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
+############# Added 8/5/25 #############
+
+@app.delete("/api/v1/documents/{document_id}")
+async def delete_document(
+    document_id: str,
+    db: Session = Depends(get_db)
+):
+    """Delete a document from the database and file system"""
+    try:
+        # Find the document in the database
+        document = db.query(Document).filter(Document.id == document_id).first()
+        
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        filename = document.filename
+        file_path = document.path
+        
+        # Delete from vector database (Qdrant)
+        try:
+            if hasattr(vector_db_service, 'delete_document'):
+                vector_db_service.delete_document(document_id)
+        except Exception as e:
+            logging.warning(f"Failed to remove from vector database: {e}")
+        
+        # Delete physical file
+        try:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception as e:
+            logging.warning(f"Failed to delete physical file: {e}")
+        
+        # Delete from database
+        db.delete(document)
+        db.commit()
+        
+        return {
+            "message": "Document deleted successfully",
+            "document_id": document_id,
+            "filename": filename
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
+
+############# Added 8/5/25 #############
+
 # System status endpoint
 @app.get("/api/v1/status")
 async def get_system_status():
