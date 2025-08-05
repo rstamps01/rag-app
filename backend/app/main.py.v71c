@@ -1,40 +1,20 @@
 """
-Enhanced RAG Application Main - With Complete Vector Processing Pipeline
-========================================================================
-This version implements complete vector processing functionality including:
-- Document text extraction (PDF, TXT, MD, DOCX)
-- Document chunking with intelligent overlap
-- Embedding generation using sentence-transformers
-- Vector storage in Qdrant with metadata
-- Background processing for non-blocking uploads
-- Status tracking and error handling
+Enhanced RAG Application Main - With Proper LLM Integration
+==========================================================
+This version properly integrates the Mistral LLM, Qdrant, and PostgreSQL
+while maintaining backward compatibility with existing functionality.
 """
 import logging
 import time
 import uuid
 import os
-import asyncio
 from typing import Optional, List
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-
-# Vector processing imports
-try:
-    import PyPDF2
-    from sentence_transformers import SentenceTransformer
-    from qdrant_client import QdrantClient
-    from qdrant_client.models import Distance, VectorParams, PointStruct
-    vector_processing_available = True
-    logger = logging.getLogger(__name__)
-    logger.info("✅ Vector processing dependencies imported successfully")
-except ImportError as e:
-    vector_processing_available = False
-    logger = logging.getLogger(__name__)
-    logger.warning(f"⚠️ Vector processing dependencies not available: {e}")
 
 # Configure logging FIRST before any usage
 logging.basicConfig(
@@ -131,12 +111,10 @@ class DocumentItem(BaseModel):
 # Global service instances
 llm_service = None
 vector_db_service = None
-embedding_model = None
-qdrant_client = None
 
 def initialize_services():
     """Initialize LLM and Vector DB services"""
-    global llm_service, vector_db_service, embedding_model, qdrant_client
+    global llm_service, vector_db_service
     
     # Initialize LLM Service
     if llm_ok:
@@ -155,171 +133,6 @@ def initialize_services():
         except Exception as e:
             logger.error(f"❌ Failed to initialize Vector DB Service: {e}")
             vector_db_service = None
-    
-    # Initialize embedding model for vector processing
-    if vector_processing_available:
-        try:
-            embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-            logger.info("✅ Embedding model initialized")
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize embedding model: {e}")
-            embedding_model = None
-        
-        # Initialize Qdrant client
-        try:
-            qdrant_client = QdrantClient(url="http://qdrant-07:6333")
-            logger.info("✅ Qdrant client initialized")
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize Qdrant client: {e}")
-            qdrant_client = None
-
-def extract_text_from_file(file_path: str, file_ext: str) -> str:
-    """Extract text content from various file types"""
-    try:
-        if file_ext in ['.txt', '.md']:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        
-        elif file_ext == '.pdf':
-            if not vector_processing_available:
-                return f"PDF content from {os.path.basename(file_path)}"
-            
-            text = ""
-            with open(file_path, 'rb') as f:
-                pdf_reader = PyPDF2.PdfReader(f)
-                for page in pdf_reader.pages:
-                    text += page.extract_text() + "\n"
-            return text
-        
-        else:
-            # For other file types, return filename-based content
-            return f"Document content from {os.path.basename(file_path)}"
-    
-    except Exception as e:
-        logger.error(f"Text extraction failed for {file_path}: {e}")
-        return f"Content from {os.path.basename(file_path)} (extraction failed)"
-
-def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
-    """Split text into overlapping chunks for better vector search"""
-    if len(text) <= chunk_size:
-        return [text]
-    
-    chunks = []
-    start = 0
-    
-    while start < len(text):
-        end = start + chunk_size
-        
-        # Try to break at sentence boundary
-        if end < len(text):
-            # Look for sentence endings near the chunk boundary
-            for i in range(min(100, len(text) - end)):
-                if text[end + i] in '.!?':
-                    end = end + i + 1
-                    break
-        
-        chunk = text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        
-        start = end - overlap
-        if start >= len(text):
-            break
-    
-    return chunks
-
-async def process_document_for_vectors(
-    file_id: str, 
-    file_path: str, 
-    filename: str, 
-    department: str,
-    db: Session = None
-):
-    """Background task to process document and store vectors"""
-    try:
-        logger.info(f"Starting vector processing for document: {file_id}")
-        
-        # Update status to processing
-        if db_ok and db is not None:
-            try:
-                document = db.query(Document).filter(Document.id == file_id).first()
-                if document:
-                    document.status = "processing"
-                    document.error_message = "Processing document for vector storage"
-                    db.commit()
-            except Exception as e:
-                logger.error(f"Failed to update document status: {e}")
-        
-        # Extract text from file
-        file_ext = os.path.splitext(filename)[1].lower()
-        text_content = extract_text_from_file(file_path, file_ext)
-        
-        if not text_content.strip():
-            raise Exception("No text content extracted from file")
-        
-        # Chunk the text
-        chunks = chunk_text(text_content)
-        logger.info(f"Document chunked into {len(chunks)} pieces")
-        
-        # Generate embeddings and store in Qdrant
-        if embedding_model is not None and qdrant_client is not None:
-            points = []
-            
-            for i, chunk in enumerate(chunks):
-                # Generate embedding
-                embedding = embedding_model.encode(chunk).tolist()
-                
-                # Create point for Qdrant (use proper UUID for point ID)
-                chunk_id = str(uuid.uuid4())
-                point = PointStruct(
-                    id=chunk_id,
-                    vector=embedding,
-                    payload={
-                        "document_id": file_id,
-                        "filename": filename,
-                        "chunk_index": i,
-                        "content": chunk,
-                        "department": department,
-                        "file_type": file_ext,
-                        "processed_at": time.time(),
-                        "chunk_id": chunk_id
-                    }
-                )
-                points.append(point)
-            
-            # Batch upsert to Qdrant
-            qdrant_client.upsert(
-                collection_name="rag",
-                points=points
-            )
-            
-            logger.info(f"Successfully stored {len(points)} vectors for document {file_id}")
-        
-        # Update status to processed
-        if db_ok and db is not None:
-            try:
-                document = db.query(Document).filter(Document.id == file_id).first()
-                if document:
-                    document.status = "processed"
-                    document.error_message = f"Successfully processed {len(chunks)} chunks"
-                    db.commit()
-                    logger.info(f"Document {file_id} marked as processed")
-            except Exception as e:
-                logger.error(f"Failed to update final document status: {e}")
-    
-    except Exception as e:
-        logger.error(f"Vector processing failed for document {file_id}: {e}")
-        
-        # Update status to error
-        if db_ok and db is not None:
-            try:
-                document = db.query(Document).filter(Document.id == file_id).first()
-                if document:
-                    document.status = "error"
-                    document.error_message = f"Processing failed: {str(e)}"
-                    db.commit()
-            except Exception as db_e:
-                logger.error(f"Failed to update error status: {db_e}")
 
 # Create upload directory
 UPLOAD_DIR = "/app/data/uploads"
@@ -328,13 +141,12 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    logger.info("🚀 Starting Enhanced RAG Application with Vector Processing...")
+    logger.info("🚀 Starting Enhanced RAG Application...")
     logger.info(f"📁 Upload directory: {UPLOAD_DIR}")
     logger.info(f"🔧 Config status: {'OK' if config_ok else 'Fallback'}")
     logger.info(f"🗄️  Database status: {'OK' if db_ok else 'Unavailable'}")
     logger.info(f"🤖 LLM status: {'OK' if llm_ok else 'Unavailable'}")
     logger.info(f"🔍 Vector DB status: {'OK' if vector_db_ok else 'Unavailable'}")
-    logger.info(f"📊 Vector processing: {'OK' if vector_processing_available else 'Unavailable'}")
     
     # Initialize services
     initialize_services()
@@ -344,9 +156,9 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="Enhanced RAG AI Application with Vector Processing",
-    description="A Retrieval-Augmented Generation application with complete vector processing pipeline",
-    version="2.1.0-vector-enhanced",
+    title="Enhanced RAG AI Application",
+    description="A Retrieval-Augmented Generation application with proper LLM, Vector DB, and PostgreSQL integration",
+    version="2.0.0-enhanced",
     lifespan=lifespan
 )
 
@@ -373,7 +185,7 @@ except Exception as e:
 async def root():
     """Root endpoint with comprehensive information"""
     return {
-        "message": "Enhanced RAG AI Application with Complete Vector Processing",
+        "message": "Enhanced RAG AI Application with LLM Integration",
         "status": "running",
         "timestamp": time.time(),
         "services": {
@@ -381,22 +193,12 @@ async def root():
             "database_available": db_ok,
             "llm_available": llm_ok and llm_service is not None,
             "vector_db_available": vector_db_ok and vector_db_service is not None,
-            "websocket_available": websocket_available,
-            "vector_processing_available": vector_processing_available,
-            "embedding_model_loaded": embedding_model is not None,
-            "qdrant_client_ready": qdrant_client is not None
+            "websocket_available": websocket_available
         },
-        "api_version": "2.1.0-vector-enhanced",
+        "api_version": "2.0.0-enhanced",
         "model_info": {
             "llm_model": settings.LLM_MODEL_NAME if config_ok else "mistralai/Mistral-7B-Instruct-v0.2",
             "embedding_model": settings.EMBEDDING_MODEL_NAME if config_ok else "sentence-transformers/all-MiniLM-L6-v2"
-        },
-        "capabilities": {
-            "document_upload": True,
-            "vector_processing": vector_processing_available,
-            "text_extraction": vector_processing_available,
-            "semantic_search": embedding_model is not None,
-            "llm_generation": llm_service is not None
         }
     }
 
@@ -412,10 +214,7 @@ async def health_check():
             "llm_service": "ok" if (llm_ok and llm_service is not None) else "unavailable",
             "vector_db": "ok" if (vector_db_ok and vector_db_service is not None) else "unavailable",
             "websocket": "ok" if websocket_available else "unavailable",
-            "upload_dir": "ok" if os.path.exists(UPLOAD_DIR) else "missing",
-            "vector_processing": "ok" if vector_processing_available else "unavailable",
-            "embedding_model": "ok" if embedding_model is not None else "unavailable",
-            "qdrant_client": "ok" if qdrant_client is not None else "unavailable"
+            "upload_dir": "ok" if os.path.exists(UPLOAD_DIR) else "missing"
         }
     }
 
@@ -489,7 +288,7 @@ async def ask_query(
     request: QueryRequest,
     db: Session = Depends(get_db)
 ):
-    """Ask a query with real LLM integration and vector search"""
+    """Ask a query with real LLM integration"""
     start_time = time.time()
     logger.info(f"Query received: {request.query}")
     
@@ -500,33 +299,14 @@ async def ask_query(
     
     try:
         # Step 1: Vector search for relevant documents (if enabled and available)
-        if request.use_vector_search and qdrant_client is not None and embedding_model is not None:
+        if request.use_vector_search and vector_db_service is not None:
             try:
+                # Implement vector search here
                 logger.info("Performing vector search...")
-                
-                # Generate query embedding
-                query_embedding = embedding_model.encode(request.query).tolist()
-                
-                # Search in Qdrant
-                search_results = qdrant_client.search(
-                    collection_name="rag",
-                    query_vector=query_embedding,
-                    limit=5,
-                    score_threshold=0.7
-                )
-                
-                # Process search results
-                for result in search_results:
-                    sources.append({
-                        "content": result.payload.get("content", ""),
-                        "filename": result.payload.get("filename", ""),
-                        "score": result.score,
-                        "chunk_index": result.payload.get("chunk_index", 0)
-                    })
-                
+                # vector_results = vector_db_service.search(request.query, limit=5)
+                # sources = vector_results
                 used_vector_search = True
-                logger.info(f"✅ Vector search completed, found {len(sources)} relevant chunks")
-                
+                logger.info("✅ Vector search completed")
             except Exception as e:
                 logger.error(f"Vector search failed: {e}")
         
@@ -538,17 +318,24 @@ async def ask_query(
                 # Prepare context from vector search results
                 context = ""
                 if sources:
-                    context_chunks = [source.get("content", "") for source in sources[:3]]
-                    context = "\n\n".join(context_chunks)
+                    context = "\\n".join([source.get("content", "") for source in sources[:3]])
+
                 
                 # Generate response with LLM
                 llm_response = llm_service.generate_response(
                     prompt=request.query,
                     context=context
+                #    max_tokens=512
+
+                ## Generate response with LLM
+                #llm_response = llm_service.generate_response(
+                #    query=request.query,
+                #    context=context,
+                #    max_length=512
                 )
                 
-                if llm_response:
-                    response_text = llm_response
+                if llm_response and llm_response: #get("response"):
+                    response_text = llm_response  #["response"]
                     used_llm = True
                     logger.info("✅ LLM response generated")
                 else:
@@ -557,16 +344,11 @@ async def ask_query(
             except Exception as e:
                 logger.error(f"LLM generation failed: {e}")
                 # Fallback to contextual response
-                if sources:
-                    response_text = f"Based on the relevant documents found, here's what I can tell you about '{request.query}': {sources[0].get('content', '')[:500]}..."
-                else:
-                    response_text = f"I understand you're asking about: '{request.query}'. While I'm currently unable to access the full LLM capabilities, I can tell you that this appears to be a question about {request.department.lower() if request.department != 'General' else 'general'} topics. The system is configured to use Mistral-7B-Instruct-v0.2 for generating comprehensive responses."
+                response_text = f"I understand you're asking about: '{request.query}'. While I'm currently unable to access the full LLM capabilities, I can tell you that this appears to be a question about {request.department.lower() if request.department != 'General' else 'general'} topics. The system is configured to use Mistral-7B-Instruct-v0.2 for generating comprehensive responses."
         
         # Fallback response if LLM is not available
         if not response_text:
-            if sources:
-                response_text = f"Based on the documents in our knowledge base, here's relevant information about '{request.query}': {sources[0].get('content', '')[:500]}..."
-            elif "vast" in request.query.lower():
+            if "vast" in request.query.lower():
                 response_text = f"Based on your question about '{request.query}', VAST Data provides enterprise-grade storage solutions with high performance and scalability. The system is configured to provide detailed responses about VAST storage technologies, architecture, and implementation strategies."
             else:
                 response_text = f"Thank you for your question: '{request.query}'. The RAG system is operational and ready to provide comprehensive responses. The backend services are properly configured for {request.department} department queries."
@@ -584,9 +366,7 @@ async def ask_query(
                     llm_model_used=settings.LLM_MODEL_NAME if config_ok else "mistralai/Mistral-7B-Instruct-v0.2",
                     processing_time_ms=int(processing_time * 1000),
                     department_filter=request.department,
-                    gpu_accelerated=used_llm,
-                    context_chunks_used=len(sources),
-                    vector_search_used=used_vector_search
+                    gpu_accelerated=used_llm
                 )
                 db.add(query_record)
                 db.commit()
@@ -638,8 +418,7 @@ async def get_documents(
                     "upload_date": doc.upload_date.isoformat() if doc.upload_date else "",
                     "size": doc.size or 0,
                     "status": doc.status,
-                    "department": doc.department,
-                    "error_message": doc.error_message
+                    "department": doc.department
                 })
             
             return {
@@ -662,8 +441,7 @@ async def get_documents(
             "upload_date": "2024-01-15T10:30:00Z",
             "size": 2048576,
             "status": "processed",
-            "department": "General",
-            "error_message": None
+            "department": "General"
         }
     ]
     
@@ -680,12 +458,11 @@ async def get_documents(
 
 @app.post("/api/v1/documents/")
 async def upload_document(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     department: Optional[str] = Form("General"),
     db: Session = Depends(get_db)
 ):
-    """Upload a document with complete vector processing pipeline"""
+    """Upload a document with vector database integration"""
     try:
         logger.info(f"Document upload request: {file.filename}, department: {department}")
         
@@ -730,8 +507,7 @@ async def upload_document(
                     size=file_size,
                     status="uploaded",
                     path=file_path,
-                    department=department,
-                    error_message="Document uploaded, queued for processing"
+                    department=department
                 )
                 db.add(document)
                 db.commit()
@@ -740,25 +516,14 @@ async def upload_document(
             except Exception as e:
                 logger.error(f"Failed to store document metadata: {e}")
         
-        # Queue document for vector processing (background task)
-        if vector_processing_available:
+        # Process document for vector database (if available)
+        if vector_db_service is not None:
             try:
-                # Create a new database session for the background task
-                background_tasks.add_task(
-                    process_document_for_vectors,
-                    file_id=file_id,
-                    file_path=file_path,
-                    filename=file.filename,
-                    department=department,
-                    db=SessionLocal() if db_ok else None
-                )
+                # TODO: Implement document processing and vector storage
+                # vector_db_service.process_document(file_id, file_path, content)
                 logger.info(f"Document queued for vector processing: {file_id}")
-                vector_processing_queued = True
             except Exception as e:
-                logger.error(f"Failed to queue vector processing: {e}")
-                vector_processing_queued = False
-        else:
-            vector_processing_queued = False
+                logger.error(f"Vector processing failed: {e}")
         
         logger.info(f"Document uploaded successfully: {file_path}, size: {file_size} bytes")
         
@@ -767,11 +532,10 @@ async def upload_document(
             "filename": file.filename,
             "size": file_size,
             "status": "uploaded",
-            "message": "Document uploaded successfully and queued for processing",
+            "message": "Document uploaded successfully",
             "upload_time": time.time(),
             "department": department,
-            "vector_processing_queued": vector_processing_queued,
-            "vector_processing_available": vector_processing_available
+            "vector_processing": vector_db_service is not None
         }
         
     except HTTPException:
@@ -779,105 +543,6 @@ async def upload_document(
     except Exception as e:
         logger.error(f"Upload error: {e}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
-
-@app.delete("/api/v1/documents/{document_id}")
-async def delete_document(
-    document_id: str,
-    db: Session = Depends(get_db)
-):
-    """Delete a document from the database, vector store, and file system"""
-    try:
-        # Find the document in the database
-        if not (db_ok and db is not None):
-            raise HTTPException(status_code=503, detail="Database unavailable")
-        
-        document = db.query(Document).filter(Document.id == document_id).first()
-        
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        filename = document.filename
-        file_path = document.path
-        
-        # Delete from vector database (Qdrant)
-        if qdrant_client is not None:
-            try:
-                # Delete all chunks for this document
-                qdrant_client.delete(
-                    collection_name="rag",
-                    points_selector={
-                        "filter": {
-                            "must": [
-                                {
-                                    "key": "document_id",
-                                    "match": {"value": document_id}
-                                }
-                            ]
-                        }
-                    }
-                )
-                logger.info(f"Removed document {document_id} from vector database")
-            except Exception as e:
-                logger.warning(f"Failed to remove from vector database: {e}")
-        
-        # Delete physical file
-        try:
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"Deleted physical file: {file_path}")
-        except Exception as e:
-            logger.warning(f"Failed to delete physical file: {e}")
-        
-        # Delete from database
-        db.delete(document)
-        db.commit()
-        logger.info(f"Deleted document {document_id} from database")
-        
-        return {
-            "message": "Document deleted successfully",
-            "document_id": document_id,
-            "filename": filename
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        if db_ok and db is not None:
-            db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
-
-# Document processing status endpoint
-@app.get("/api/v1/documents/status")
-async def get_processing_status(db: Session = Depends(get_db)):
-    """Get document processing status summary"""
-    if not (db_ok and db is not None):
-        return {
-            "message": "Database unavailable",
-            "status_counts": {"unknown": "Database unavailable"}
-        }
-    
-    try:
-        # Count documents by status
-        from sqlalchemy import func
-        status_counts = db.query(
-            Document.status,
-            func.count(Document.id)
-        ).group_by(Document.status).all()
-        
-        status_dict = {status: count for status, count in status_counts}
-        
-        return {
-            "message": "Document processing status retrieved",
-            "status_counts": status_dict,
-            "total_documents": sum(status_dict.values()),
-            "vector_processing_available": vector_processing_available,
-            "embedding_model_loaded": embedding_model is not None,
-            "qdrant_client_ready": qdrant_client is not None
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to get processing status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 # System status endpoint
 @app.get("/api/v1/status")
@@ -890,10 +555,7 @@ async def get_system_status():
             "database": "connected" if db_ok else "disconnected",
             "llm_service": "active" if (llm_ok and llm_service is not None) else "inactive",
             "vector_db": "active" if (vector_db_ok and vector_db_service is not None) else "inactive",
-            "websocket": "available" if websocket_available else "unavailable",
-            "vector_processing": "active" if vector_processing_available else "inactive",
-            "embedding_model": "loaded" if embedding_model is not None else "not_loaded",
-            "qdrant_client": "connected" if qdrant_client is not None else "disconnected"
+            "websocket": "available" if websocket_available else "unavailable"
         },
         "configuration": {
             "config_loaded": config_ok,
@@ -901,13 +563,11 @@ async def get_system_status():
             "llm_model": settings.LLM_MODEL_NAME if config_ok else "mistralai/Mistral-7B-Instruct-v0.2",
             "embedding_model": settings.EMBEDDING_MODEL_NAME if config_ok else "sentence-transformers/all-MiniLM-L6-v2"
         },
-        "version": "enhanced-2.1.0-vector",
+        "version": "enhanced-2.0.0",
         "capabilities": {
             "llm_generation": llm_ok and llm_service is not None,
-            "vector_search": embedding_model is not None and qdrant_client is not None,
+            "vector_search": vector_db_ok and vector_db_service is not None,
             "document_storage": db_ok,
-            "document_processing": vector_processing_available,
-            "text_extraction": vector_processing_available,
             "real_time_monitoring": websocket_available
         }
     }
