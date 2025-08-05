@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Button, Alert } from '../ui';
 
 const DocumentsPage = () => {
@@ -6,7 +6,6 @@ const DocumentsPage = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [error, setError] = useState(null);
-  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -62,34 +61,6 @@ const DocumentsPage = () => {
     }
   };
 
-  const handleChooseFiles = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleDragOver = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
-  const handleDrop = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    const files = event.dataTransfer.files;
-    if (files.length > 0) {
-      // Create a synthetic event object for handleFileUpload
-      const syntheticEvent = {
-        target: {
-          files: files,
-          value: ''
-        }
-      };
-      handleFileUpload(syntheticEvent);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <div className="max-w-6xl mx-auto py-8 px-4">
@@ -123,11 +94,7 @@ const DocumentsPage = () => {
               <h2 className="text-lg font-semibold text-white">Upload Documents</h2>
             </div>
             
-            <div 
-              className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-blue-500 transition-colors"
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-            >
+            <div className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-blue-500 transition-colors">
               <div className="flex flex-col items-center space-y-4">
                 <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
                   <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,19 +105,18 @@ const DocumentsPage = () => {
                   <p className="text-lg text-gray-300 mb-2">Drop files here or click to upload</p>
                   <p className="text-sm text-gray-500">Supports PDF, TXT, DOCX, MD files (max 10MB each)</p>
                 </div>
-                <div>
+                <label className="cursor-pointer">
+                  <Button disabled={uploading}>
+                    {uploading ? 'Uploading...' : 'Choose Files'}
+                  </Button>
                   <input
-                    ref={fileInputRef}
                     type="file"
                     className="hidden"
                     accept=".pdf,.txt,.docx,.md"
                     onChange={handleFileUpload}
                     disabled={uploading}
                   />
-                  <Button disabled={uploading} onClick={handleChooseFiles}>
-                    {uploading ? 'Uploading...' : 'Choose Files'}
-                  </Button>
-                </div>
+                </label>
               </div>
             </div>
 
@@ -198,7 +164,7 @@ const DocumentsPage = () => {
                       <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0">
                         <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+                        </svg>
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="text-sm font-medium text-white truncate" title={doc.filename}>
@@ -227,4 +193,3 @@ const DocumentsPage = () => {
 };
 
 export default DocumentsPage;
-
