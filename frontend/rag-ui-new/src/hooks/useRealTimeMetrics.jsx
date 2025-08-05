@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import useWebSocket from './useWebSocket';
+import useWebSocket from './useWebSocket.jsx';
 
 const usePipelineMonitoring = () => {
     const [pipelineState, setPipelineState] = useState(null);
