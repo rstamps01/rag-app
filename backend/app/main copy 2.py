@@ -320,22 +320,15 @@ async def ask_query(
                 if sources:
                     context = "\\n".join([source.get("content", "") for source in sources[:3]])
 
-                
                 # Generate response with LLM
                 llm_response = llm_service.generate_response(
-                    prompt=request.query,
-                    context=context
-                #    max_tokens=512
-
-                ## Generate response with LLM
-                #llm_response = llm_service.generate_response(
-                #    query=request.query,
-                #    context=context,
-                #    max_length=512
+                    query=request.query,
+                    context=context,
+                    max_length=512
                 )
                 
-                if llm_response and llm_response: #get("response"):
-                    response_text = llm_response  #["response"]
+                if llm_response and llm_response.get("response"):
+                    response_text = llm_response["response"]
                     used_llm = True
                     logger.info("✅ LLM response generated")
                 else:
