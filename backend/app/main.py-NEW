@@ -1,0 +1,731 @@
+"""
+Enhanced RAG Application Main - Document-Focused with Increased File Limits
+==========================================================================
+Simple near-term enhancement that:
+1. Defaults to document-only responses (no training data fallbacks)
+2. Increases file size limit from 100MB to 1GB
+3. Maintains all existing functionality with minimal changes
+4. Provides clear "no documents found" responses when appropriate
+"""
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
+import os
+import time
+import uuid
+import logging
+import asyncio
+import json
+from datetime import datetime
+import traceback
+
+# Database and vector imports
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text, Float, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.sql import func
+import psycopg2
+
+# Vector processing imports
+try:
+    from sentence_transformers import SentenceTransformer
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import Distance, VectorParams, PointStruct
+    VECTOR_PROCESSING_AVAILABLE = True
+except ImportError as e:
+    print(f"Vector processing dependencies not available: {e}")
+    VECTOR_PROCESSING_AVAILABLE = False
+
+# Document processing imports
+try:
+    import PyPDF2
+    PDF_PROCESSING_AVAILABLE = True
+except ImportError:
+    PDF_PROCESSING_AVAILABLE = False
+
+# LLM service imports
+import requests
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Configuration
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rag:rag@postgres-07:5432/rag")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant-07:6333")
+LLM_API_URL = os.getenv("LLM_API_URL", "http://host.docker.internal:11434")
+UPLOAD_DIR = "/app/data/uploads"
+DOCUMENT_ONLY_MODE = True  # Default to document-only responses
+INCREASED_FILE_LIMIT_GB = 1  # 1GB file size limit
+
+# Ensure upload directory exists
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Database setup
+Base = declarative_base()
+
+class Document(Base):
+    __tablename__ = "documents"
+    
+    id = Column(String, primary_key=True)
+    filename = Column(String, nullable=False)
+    content_type = Column(String)
+    size = Column(Integer)
+    path = Column(String)
+    upload_date = Column(DateTime, default=func.now())
+    department = Column(String, default="General")
+    status = Column(String, default="uploaded")
+    error_message = Column(Text)
+
+class QueryHistory(Base):
+    __tablename__ = "query_history"
+    
+    id = Column(String, primary_key=True)
+    query = Column(Text, nullable=False)
+    response = Column(Text)
+    model = Column(String)
+    timestamp = Column(DateTime, default=func.now())
+    processing_time = Column(Float)
+    department = Column(String, default="General")
+    sources_used = Column(Text)
+
+# Database connection
+try:
+    engine = create_engine(DATABASE_URL)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+    logger.info("✅ Database connected successfully")
+    DB_AVAILABLE = True
+except Exception as e:
+    logger.error(f"❌ Database connection failed: {e}")
+    DB_AVAILABLE = False
+
+def get_db():
+    if not DB_AVAILABLE:
+        return None
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Vector processing setup
+if VECTOR_PROCESSING_AVAILABLE:
+    try:
+        embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+        qdrant_client = QdrantClient(url=QDRANT_URL)
+        
+        # Ensure collection exists
+        try:
+            qdrant_client.get_collection("rag")
+            logger.info("✅ Qdrant collection 'rag' found")
+        except:
+            qdrant_client.create_collection(
+                collection_name="rag",
+                vectors_config=VectorParams(size=384, distance=Distance.COSINE)
+            )
+            logger.info("✅ Qdrant collection 'rag' created")
+        
+        VECTOR_DB_AVAILABLE = True
+        logger.info("✅ Vector processing initialized")
+    except Exception as e:
+        logger.error(f"❌ Vector processing initialization failed: {e}")
+        VECTOR_DB_AVAILABLE = False
+else:
+    VECTOR_DB_AVAILABLE = False
+
+# LLM Service
+class LLMService:
+    def __init__(self):
+        self.api_url = LLM_API_URL
+        self.model_name = "mistralai/Mistral-7B-Instruct-v0.2"
+        
+    def generate_response(self, prompt: str, context: str = "", max_tokens: int = 512) -> str:
+        """Generate response with document-focused prompting"""
+        try:
+            # Document-focused prompt that explicitly restricts to provided context
+            if context.strip():
+                system_prompt = """You are a helpful assistant that ONLY uses information from the provided documents to answer questions. 
+
+IMPORTANT RULES:
+1. ONLY use information explicitly stated in the provided documents
+2. If the documents don't contain relevant information, say "I don't have relevant information in the uploaded documents to answer this question"
+3. Never use your training data or general knowledge
+4. Always cite which document or section your information comes from
+5. Be specific and detailed when the documents contain relevant information
+
+Provided Documents:
+{context}
+
+Question: {prompt}
+
+Answer based ONLY on the provided documents:"""
+                
+                full_prompt = system_prompt.format(context=context, prompt=prompt)
+            else:
+                # No documents available - clear response
+                return "I don't have any relevant documents uploaded to answer this question. Please upload documents related to your query first."
+            
+            payload = {
+                "model": self.model_name,
+                "prompt": full_prompt,
+                "max_tokens": max_tokens,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "stream": False
+            }
+            
+            response = requests.post(
+                f"{self.api_url}/api/generate",
+                json=payload,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("response", "").strip()
+            else:
+                logger.error(f"LLM API error: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"LLM generation error: {e}")
+            return None
+
+# Initialize LLM service
+llm_service = LLMService()
+
+# FastAPI app
+app = FastAPI(
+    title="Enhanced RAG API - Document Focused",
+    description="RAG application with document-only responses and increased file limits",
+    version="2.0.0"
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Pydantic models
+class QueryRequest(BaseModel):
+    query: str = Field(..., description="User query")
+    department: str = Field("General", description="Department context")
+    use_llm: bool = Field(True, description="Use LLM for response generation")
+    use_vector_search: bool = Field(True, description="Use vector search for context")
+    max_tokens: int = Field(1024, description="Maximum tokens for response")
+
+class QueryResponse(BaseModel):
+    response: str
+    model: str
+    timestamp: float
+    query_id: str
+    processing_time: float
+    sources: List[Dict[str, Any]]
+    used_llm: bool
+    used_vector_search: bool
+    document_only_mode: bool = True
+
+# Helper functions
+def extract_text_from_file(file_path: str, filename: str) -> str:
+    """Extract text from various file formats"""
+    try:
+        file_ext = os.path.splitext(filename)[1].lower()
+        
+        if file_ext == '.txt':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        
+        elif file_ext == '.md':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        
+        elif file_ext == '.pdf' and PDF_PROCESSING_AVAILABLE:
+            text = ""
+            with open(file_path, 'rb') as f:
+                pdf_reader = PyPDF2.PdfReader(f)
+                for page in pdf_reader.pages:
+                    text += page.extract_text() + "\n"
+            return text
+        
+        else:
+            # Try to read as text file
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                return f.read()
+                
+    except Exception as e:
+        logger.error(f"Text extraction failed for {filename}: {e}")
+        return ""
+
+def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
+    """Split text into overlapping chunks"""
+    if len(text) <= chunk_size:
+        return [text]
+    
+    chunks = []
+    start = 0
+    
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        
+        # Try to break at sentence boundary
+        if end < len(text):
+            last_period = chunk.rfind('.')
+            last_newline = chunk.rfind('\n')
+            break_point = max(last_period, last_newline)
+            
+            if break_point > start + chunk_size // 2:
+                chunk = text[start:start + break_point + 1]
+                end = start + break_point + 1
+        
+        chunks.append(chunk.strip())
+        start = end - overlap
+        
+        if start >= len(text):
+            break
+    
+    return chunks
+
+async def process_document_vectors(file_id: str, file_path: str, filename: str):
+    """Background task to process document vectors"""
+    if not VECTOR_DB_AVAILABLE:
+        logger.warning("Vector processing not available")
+        return
+    
+    try:
+        logger.info(f"Starting vector processing for {filename}")
+        
+        # Extract text
+        text_content = extract_text_from_file(file_path, filename)
+        if not text_content.strip():
+            raise Exception("No text content extracted from file")
+        
+        # Chunk text
+        chunks = chunk_text(text_content)
+        logger.info(f"Created {len(chunks)} chunks for {filename}")
+        
+        # Generate embeddings
+        embeddings = embedding_model.encode(chunks, show_progress_bar=True)
+        
+        # Prepare points for Qdrant
+        points = []
+        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            point_id = str(uuid.uuid4())  # Use UUID for point ID
+            points.append(
+                PointStruct(
+                    id=point_id,
+                    vector=embedding.tolist(),
+                    payload={
+                        "document_id": file_id,
+                        "filename": filename,
+                        "chunk_index": i,
+                        "content": chunk,
+                        "chunk_id": f"{file_id}_chunk_{i}"
+                    }
+                )
+            )
+        
+        # Store in Qdrant
+        qdrant_client.upsert(
+            collection_name="rag",
+            points=points,
+            wait=True
+        )
+        
+        logger.info(f"Successfully stored {len(points)} vectors for document {file_id}")
+        
+        # Update document status in database
+        if DB_AVAILABLE:
+            db = SessionLocal()
+            try:
+                document = db.query(Document).filter(Document.id == file_id).first()
+                if document:
+                    document.status = "processed"
+                    document.error_message = f"Successfully processed {len(chunks)} chunks"
+                    db.commit()
+                    logger.info(f"Document {file_id} marked as processed")
+            except Exception as e:
+                logger.error(f"Failed to update document status: {e}")
+            finally:
+                db.close()
+        
+    except Exception as e:
+        logger.error(f"Background processing failed for {filename}: {e}")
+        
+        # Update document status to error
+        if DB_AVAILABLE:
+            db = SessionLocal()
+            try:
+                document = db.query(Document).filter(Document.id == file_id).first()
+                if document:
+                    document.status = "error"
+                    document.error_message = str(e)
+                    db.commit()
+            except Exception as db_error:
+                logger.error(f"Failed to update error status: {db_error}")
+            finally:
+                db.close()
+
+def search_similar_documents(query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """Search for similar documents using vector similarity"""
+    if not VECTOR_DB_AVAILABLE:
+        return []
+    
+    try:
+        # Generate query embedding
+        query_embedding = embedding_model.encode([query])[0]
+        
+        # Search in Qdrant
+        search_results = qdrant_client.search(
+            collection_name="rag",
+            query_vector=query_embedding.tolist(),
+            limit=limit,
+            score_threshold=0.7  # Only return relevant results
+        )
+        
+        # Format results
+        sources = []
+        for result in search_results:
+            sources.append({
+                "content": result.payload.get("content", ""),
+                "filename": result.payload.get("filename", ""),
+                "score": float(result.score),
+                "chunk_index": result.payload.get("chunk_index", 0)
+            })
+        
+        logger.info(f"✅ Vector search completed, found {len(sources)} relevant chunks")
+        return sources
+        
+    except Exception as e:
+        logger.error(f"Vector search failed: {e}")
+        return []
+
+# API Endpoints
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Enhanced RAG API - Document Focused Mode",
+        "version": "2.0.0",
+        "document_only_mode": DOCUMENT_ONLY_MODE,
+        "max_file_size_gb": INCREASED_FILE_LIMIT_GB,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/health")
+async def health_check():
+    """Enhanced health check with component status"""
+    components = {
+        "database": "ok" if DB_AVAILABLE else "unavailable",
+        "vector_db": "ok" if VECTOR_DB_AVAILABLE else "unavailable",
+        "llm_service": "ok",  # Assume OK, will be tested on first use
+        "upload_dir": "ok" if os.path.exists(UPLOAD_DIR) else "error",
+        "vector_processing": "ok" if VECTOR_PROCESSING_AVAILABLE else "unavailable"
+    }
+    
+    # Test LLM service
+    try:
+        test_response = requests.get(f"{LLM_API_URL}/api/tags", timeout=5)
+        if test_response.status_code != 200:
+            components["llm_service"] = "error"
+    except:
+        components["llm_service"] = "error"
+    
+    overall_status = "healthy" if all(
+        status in ["ok", "unavailable"] for status in components.values()
+    ) else "degraded"
+    
+    return {
+        "status": overall_status,
+        "timestamp": time.time(),
+        "components": components,
+        "mode": "document_only" if DOCUMENT_ONLY_MODE else "hybrid",
+        "max_file_size_gb": INCREASED_FILE_LIMIT_GB
+    }
+
+@app.post("/api/v1/documents/", response_model=Dict[str, Any])
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    department: str = Form("General"),
+    db: Session = Depends(get_db)
+):
+    """Upload document with increased file size limit (1GB)"""
+    try:
+        # Validate file type
+        allowed_extensions = {'.txt', '.md', '.pdf', '.docx', '.doc'}
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        
+        if file_ext not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {file_ext}. Supported: {', '.join(allowed_extensions)}"
+            )
+        
+        # Read file content
+        content = await file.read()
+        file_size = len(content)
+        
+        # Check file size (1GB limit instead of 100MB)
+        max_size = INCREASED_FILE_LIMIT_GB * 1024 * 1024 * 1024  # 1GB in bytes
+        if file_size > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File size ({file_size // (1024*1024)}MB) exceeds limit ({INCREASED_FILE_LIMIT_GB}GB)"
+            )
+        
+        # Generate unique filename and ID
+        file_id = str(uuid.uuid4())
+        unique_filename = f"{file_id}{file_ext}"
+        file_path = os.path.join(UPLOAD_DIR, unique_filename)
+        
+        # Save file
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        # Store document metadata in database
+        if db is not None:
+            document = Document(
+                id=file_id,
+                filename=file.filename,
+                content_type=file.content_type,
+                size=file_size,
+                path=file_path,
+                department=department,
+                status="uploaded"
+            )
+            db.add(document)
+            db.commit()
+            db.refresh(document)
+        
+        # Queue background vector processing
+        if VECTOR_PROCESSING_AVAILABLE:
+            background_tasks.add_task(
+                process_document_vectors,
+                file_id,
+                file_path,
+                file.filename
+            )
+            vector_processing_queued = True
+        else:
+            vector_processing_queued = False
+        
+        return {
+            "id": file_id,
+            "filename": file.filename,
+            "size": file_size,
+            "status": "uploaded",
+            "message": "Document uploaded successfully and queued for processing" if vector_processing_queued else "Document uploaded successfully",
+            "upload_time": time.time(),
+            "department": department,
+            "vector_processing_queued": vector_processing_queued,
+            "vector_processing_available": VECTOR_PROCESSING_AVAILABLE,
+            "max_file_size_gb": INCREASED_FILE_LIMIT_GB
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Document upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@app.post("/api/v1/queries/ask", response_model=QueryResponse)
+async def ask_query(
+    request: QueryRequest,
+    db: Session = Depends(get_db)
+):
+    """Process query with document-only focus"""
+    start_time = time.time()
+    response_text = ""
+    sources = []
+    used_llm = False
+    used_vector_search = False
+    
+    try:
+        logger.info(f"Query received: {request.query}")
+        
+        # Always attempt vector search first in document-only mode
+        if request.use_vector_search and VECTOR_DB_AVAILABLE:
+            logger.info("Performing vector search...")
+            sources = search_similar_documents(request.query, limit=5)
+            used_vector_search = True
+            
+            if sources:
+                logger.info(f"✅ Vector search found {len(sources)} relevant chunks")
+            else:
+                logger.info("❌ No relevant documents found in vector search")
+        
+        # Generate response based on document-only mode
+        if DOCUMENT_ONLY_MODE:
+            if sources:
+                # Use LLM with document context
+                if request.use_llm:
+                    try:
+                        # Prepare context from top sources
+                        context_chunks = [source.get("content", "") for source in sources[:3]]
+                        context = "\n\n".join(context_chunks)
+                        
+                        # Generate response with LLM
+                        llm_response = llm_service.generate_response(
+                            prompt=request.query,
+                            context=context,
+                            max_tokens=request.max_tokens
+                        )
+                        
+                        if llm_response:
+                            response_text = llm_response
+                            used_llm = True
+                            logger.info("✅ LLM response generated using document context")
+                        else:
+                            # Fallback to document summary if LLM fails
+                            response_text = f"Based on the uploaded documents, here's relevant information about '{request.query}':\n\n{context[:800]}..."
+                            
+                    except Exception as e:
+                        logger.error(f"LLM generation failed: {e}")
+                        # Fallback to document content
+                        context = "\n\n".join([source.get("content", "") for source in sources[:2]])
+                        response_text = f"Based on the uploaded documents, here's relevant information about '{request.query}':\n\n{context[:800]}..."
+                else:
+                    # Direct document content response
+                    context = "\n\n".join([source.get("content", "") for source in sources[:2]])
+                    response_text = f"Based on the uploaded documents:\n\n{context[:800]}..."
+            else:
+                # No documents found - clear message
+                response_text = f"I don't have any relevant documents uploaded to answer your question about '{request.query}'. Please upload documents related to your query first, then ask again."
+        
+        # Ensure we have a response
+        if not response_text:
+            response_text = "I apologize, but I'm unable to generate a response at this time. Please ensure you have uploaded relevant documents and try again."
+        
+        # Calculate processing time
+        processing_time = time.time() - start_time
+        
+        # Store query in database if available
+        query_id = f"query-{int(time.time())}"
+        if db is not None:
+            try:
+                query_record = QueryHistory(
+                    id=query_id,
+                    query=request.query,
+                    response=response_text,
+                    model=llm_service.model_name,
+                    processing_time=processing_time,
+                    department=request.department,
+                    sources_used=json.dumps([s.get("filename", "") for s in sources])
+                )
+                db.add(query_record)
+                db.commit()
+            except Exception as e:
+                logger.error(f"Failed to store query in database: {e}")
+        
+        return QueryResponse(
+            response=response_text,
+            model=llm_service.model_name,
+            timestamp=time.time(),
+            query_id=query_id,
+            processing_time=processing_time,
+            sources=sources,
+            used_llm=used_llm,
+            used_vector_search=used_vector_search,
+            document_only_mode=DOCUMENT_ONLY_MODE
+        )
+        
+    except Exception as e:
+        logger.error(f"Query processing failed: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Query processing failed: {str(e)}")
+
+@app.get("/api/v1/documents/")
+async def list_documents(
+    department: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    """List uploaded documents with filtering"""
+    if db is None:
+        return {"documents": [], "message": "Database not available"}
+    
+    try:
+        query = db.query(Document)
+        
+        if department:
+            query = query.filter(Document.department == department)
+        
+        if status:
+            query = query.filter(Document.status == status)
+        
+        documents = query.order_by(Document.upload_date.desc()).limit(limit).all()
+        
+        return {
+            "documents": [
+                {
+                    "id": doc.id,
+                    "filename": doc.filename,
+                    "size": doc.size,
+                    "department": doc.department,
+                    "status": doc.status,
+                    "upload_date": doc.upload_date.isoformat() if doc.upload_date else None,
+                    "error_message": doc.error_message
+                }
+                for doc in documents
+            ],
+            "total_count": len(documents),
+            "document_only_mode": DOCUMENT_ONLY_MODE
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to list documents: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve documents: {str(e)}")
+
+@app.get("/api/v1/queries/history")
+async def get_query_history(
+    limit: int = 20,
+    department: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get query history"""
+    if db is None:
+        return {"queries": [], "message": "Database not available"}
+    
+    try:
+        query = db.query(QueryHistory)
+        
+        if department:
+            query = query.filter(QueryHistory.department == department)
+        
+        queries = query.order_by(QueryHistory.timestamp.desc()).limit(limit).all()
+        
+        return {
+            "queries": [
+                {
+                    "id": q.id,
+                    "query": q.query,
+                    "response": q.response[:200] + "..." if len(q.response) > 200 else q.response,
+                    "model": q.model,
+                    "timestamp": q.timestamp.isoformat() if q.timestamp else None,
+                    "processing_time": q.processing_time,
+                    "department": q.department
+                }
+                for q in queries
+            ],
+            "total_count": len(queries),
+            "document_only_mode": DOCUMENT_ONLY_MODE
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get query history: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve query history: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
