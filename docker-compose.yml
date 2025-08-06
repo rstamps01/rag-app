@@ -1,9 +1,11 @@
 
 services:
+  #webap:
+  #  build: https://rstamps01/rag-app:v1.2.0-stable-release
   backend-07:
     env_file:
       - .env
-    build:
+    build: 
       context: ./backend
       dockerfile: Dockerfile
     container_name: backend-07
@@ -131,11 +133,11 @@ services:
     - network-07
 
   frontend-07:
-    build:
+    build: #image: rag-frontend:latest
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - BUILDKIT_INLINE_CACHE=1
+      - BUILDKIT_INLINE_CACHE=1
     container_name: frontend-07
     environment:
       # FIXED: Use localhost for browser-based requests (React runs in browser)
@@ -165,10 +167,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.cache-init
       args:
-        - BUILDKIT_INLINE_CACHE=1
-    
+        - BUILDKIT_INLINE_CACHE=1 
     container_name: cache-init-07
-    
     environment:
       # Authentication
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}

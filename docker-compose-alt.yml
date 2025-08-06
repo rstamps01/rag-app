@@ -1,0 +1,384 @@
+
+services:
+  # Backend service optimized for RTX 5090
+  backend-gpu:
+    env_file:
+      - .env
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend-gpu
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    # GPU Support for RTX 5090
+    deploy:
+      resources:
+        limits:
+          memory: 16G # Increased memory limit for large file processing
+          cpus: '8'
+        reservations:
+          memory: 8G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+       
+    volumes:
+      - ./backend/models_cache:/app/models_cache:rw
+      - "backend_logs-07:/app/data/logs:rw"
+      - "uploaded_documents-07:/app/data/uploads:rw"
+      - ./cache:/app/cache  # Shared cache directory
+      - /tmp/cuda_cache:/tmp/cuda_cache  # CUDA cache
+    #  - ./backend/app:/app
+    #  - ./data/uploads:/app/data/uploads
+    
+    environment:
+      # Cache configuration
+      - HF_HOME=/app/models_cache
+      - HF_HUB_CACHE=/app/models_cache/hub
+      - MODELS_CACHE_DIR=/app/models_cache
+      - TRANSFORMERS_CACHE=/app/models_cache/transformers
+      - SENTENCE_TRANSFORMERS_HOME=/app/models_cache/sentence_transformers
+
+      # Python path fix
+      - PYTHONPATH=/app
+
+      # Application Settings
+      - DATABASE_URL=postgresql://rag:rag@postgres-07:5432/rag
+      - POSTGRES_USER=rag
+      - POSTGRES_PASSWORD=rag
+      - POSTGRES_DB=rag
+      - QDRANT_URL=http://qdrant-07:6333
+      - QDRANT_COLLECTION_NAME=rag
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=HS256
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - DEBUG=false
+      
+      # Model-specific settings for Mistral-7B-Instruct-v0.2
+      - EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+      - LLM_MODEL_NAME=mistralai/Mistral-7B-Instruct-v0.2
+      - LLM_TORCH_DTYPE=bfloat16  # Optimal for RTX 5090
+      - LLM_DEVICE_MAP=auto
+      - LLM_USE_FLASH_ATTENTION_2=true
+      - LLM_USE_CACHE=true
+      - LLM_MAX_MEMORY_ALLOCATION=0.85  # Use 85% of 32GB
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - TOKENIZERS_PARALLELISM=true
+      - TRANSFORMERS_OFFLINE=0
+      - HF_HUB_DISABLE_PROGRESS_BARS=1
+      #- LLM_API_URL=http://ollama-07:11434
+
+      # Generation defaults optimized for RAG
+      - LLM_TEMPERATURE=0.7
+      - LLM_TOP_P=0.9
+      - LLM_TOP_K=50
+      - LLM_REPETITION_PENALTY=1.1
+
+      # Performance Tuning
+      - MAX_BATCH_SIZE=32
+      - MAX_CONTEXT_LENGTH=4096
+      - DEFAULT_MAX_TOKENS=1024
+      - MAX_CONCURRENT_REQUESTS=4
+      
+      # Optimized batch sizes for 32GB VRAM
+      - SENTENCE_TRANSFORMERS_BATCH_SIZE=64
+      - SENTENCE_TRANSFORMERS_MAX_SEQ_LENGTH=512
+      - LLM_MAX_BATCH_SIZE=8
+      - LLM_MAX_SEQUENCE_LENGTH=4096
+      - LLM_MAX_NEW_TOKENS=2048
+
+      # Document processing
+      - MAX_CHUNK_SIZE=1000
+      - CHUNK_OVERLAP=200
+      - MAX_CHUNKS_PER_DOCUMENT=500
+      - VECTOR_DIMENSION=384
+
+      # RTX 5090 - Blackwell Architecture
+      - TORCH_CUDA_ARCH_LIST=9.0
+
+      # RTX 5090 Optimized Settings
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:2048,garbage_collection_threshold:0.8,expandable_segments:True
+      
+      # CUDA Runtime Optimizations
+      - CUDA_VISIBLE_DEVICES=0
+      - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      - CUDA_CACHE_PATH=/tmp/cuda_cache
+      - CUDA_CACHE_MAXSIZE=4294967296
+      - NVIDIA_TF32_OVERRIDE=1
+      - NVIDIA_VISIBLE_DEVICES=0
+      
+      # PyTorch Performance
+      - TORCH_CUDNN_V8_API_ENABLED=1
+      - TORCH_CUDNN_V8_API_LRU_CACHE_LIMIT=10000
+      - TORCH_SHOW_CPP_STACKTRACES=1
+      - TORCH_ALLOW_TF32_CUBLAS_OVERRIDE=1
+      
+      # Memory Management
+      - PYTHONMALLOC=malloc
+      - MALLOC_ARENA_MAX=2
+      - PYTHONGC=1
+      - PYTHON_GIL_DISABLED=0
+      
+      # Monitoring
+      - MONITOR_GPU_USAGE=1
+      - GPU_MEMORY_WARNING_THRESHOLD=0.9
+      - GPU_UTILIZATION_LOG_INTERVAL=300
+
+      # Performance tracking
+      - TRACK_INFERENCE_TIME=1
+      - TRACK_MEMORY_USAGE=1
+      - TRACK_THROUGHPUT=1
+      
+      # Debug settings (set to 1 for troubleshooting)
+      - DEBUG_GPU_MEMORY=0
+      - VERBOSE_CUDA_LOGS=0
+      - PROFILE_PERFORMANCE=0
+
+      # =================================================================
+      # PRODUCTION OPTIMIZATIONS
+      # =================================================================
+      
+      - PRODUCTION_MODE=1
+      - ENABLE_CUDA_GRAPHS=1
+      - ENABLE_MIXED_PRECISION=1
+      - ENABLE_MODEL_COMPILATION=1
+
+    depends_on:
+      postgres-07:
+        condition: service_healthy
+      qdrant-07:
+        condition: service_healthy
+           
+    networks:
+      - network-07
+    
+    # Wait for cache initialization before starting
+    command: >
+      sh -c "
+        echo 'Waiting for cache initialization...' &&
+        while [ ! -f /app/models_cache/.initialization_complete ]; do
+          echo 'Cache not ready, waiting...'
+          sleep 2
+        done &&
+        echo 'Cache initialization detected, starting backend...' &&
+        cd /app &&
+        PYTHONPATH=/app python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+
+
+  # Ollama service optimized for RTX 5090
+  #ollama-07:
+  #  image: ollama/ollama:latest
+  #  container_name: rag-ollama-07-rtx5090
+  #  ports:
+  #    - "11434:11434"
+  #  volumes:
+  #    - ./ollama_data:/root/.ollama
+  #    - ./cache/ollama:/app/cache  # Shared cache
+  #  environment:
+  #    # RTX 5090 Optimized Ollama Settings
+  #    - OLLAMA_GPU_MEMORY_FRACTION=0.7  # Use 70% of 32GB = 22.4GB
+  #    - OLLAMA_NUM_PARALLEL=2
+  #    - OLLAMA_MAX_LOADED_MODELS=2
+  #    - OLLAMA_FLASH_ATTENTION=1
+  #    - OLLAMA_KEEP_ALIVE=5m
+  #    - OLLAMA_HOST=0.0.0.0:11434
+  #    
+  #    # CUDA Settings for Ollama
+  #    - CUDA_VISIBLE_DEVICES=0
+  #    - NVIDIA_VISIBLE_DEVICES=0
+  #    - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+  #    
+  #    # Memory optimization
+  #    - OLLAMA_MEMORY_LIMIT=24G
+  #    - OLLAMA_CONCURRENT_REQUESTS=4
+  #    
+  #  restart: unless-stopped
+  #  deploy:
+  #    resources:
+  #      reservations:
+  #        devices:
+  #          - driver: nvidia
+  #            count: 1
+  #            capabilities: [gpu]
+  #      limits:
+  #        memory: 26G  # Generous memory for model loading
+  #  networks:
+  #    - network-07
+
+  # PostgreSQL with optimized settings
+  postgres-07:
+    image: postgres:15
+    container_name: postgres-07
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4'
+    volumes:
+      - postgres_data_07:/var/lib/postgresql/data
+      - ./init_scripts:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_DB=rag
+      - POSTGRES_USER=rag
+      - POSTGRES_PASSWORD=rag
+      # PostgreSQL performance tuning for high-throughput RAG
+      - POSTGRES_SHARED_BUFFERS=4GB
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=12GB
+      - POSTGRES_MAINTENANCE_WORK_MEM=1GB
+      - POSTGRES_CHECKPOINT_COMPLETION_TARGET=0.9
+      - POSTGRES_WAL_BUFFERS=128MB
+      - POSTGRES_DEFAULT_STATISTICS_TARGET=100
+      - POSTGRES_RANDOM_PAGE_COST=1.1
+      - POSTGRES_EFFECTIVE_IO_CONCURRENCY=200
+    
+    networks:
+      - network-07
+   
+    command: >
+      postgres
+      -c shared_buffers=4GB
+      -c effective_cache_size=12GB
+      -c maintenance_work_mem=1GB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=128MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c max_connections=200
+      -c work_mem=64MB
+
+  # Qdrant with optimized settings
+  qdrant-07:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-07
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    healthcheck:
+      test: ["CMD", "sh", "-c", "grep -q ':18BD ' /proc/net/tcp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4'
+    volumes:
+      - qdrant_data_07:/qdrant/storage
+      - ./qdrant_config:/qdrant/config
+    environment:
+      - QDRANT_URL=http://qdrant-07:6333
+      - QDRANT_HOST=qdrant-07
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION_NAME=rag
+
+      # Qdrant performance optimization
+      #- QDRANT__SERVICE__HTTP_PORT=6333
+      #- QDRANT__SERVICE__GRPC_PORT=6334
+      #- QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS=8
+      #- QDRANT__STORAGE__PERFORMANCE__MAX_OPTIMIZATION_THREADS=4
+      #- QDRANT__STORAGE__MEMORY_THRESHOLD=0.8
+      #- QDRANT__STORAGE__INDEXING_THRESHOLD=20000
+      
+      # Memory settings
+      #- QDRANT__STORAGE__QUANTIZATION__ALWAYS_RAM=true
+      #- QDRANT__STORAGE__HNSW_CONFIG__M=16
+      #- QDRANT__STORAGE__HNSW_CONFIG__EF_CONSTRUCT=100
+
+    networks:
+    - network-07  
+
+  # Frontend (unchanged but with resource limits)
+  frontend-gpu:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: frontend-gpu
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+    networks:
+      - network-07
+
+  # GPU monitoring service (optional)
+  monitor-gpu:
+    image: nvidia/cuda:12.8-runtime-ubuntu22.04
+    container_name: monitor-gpu
+    restart: unless-stopped
+    
+    volumes:
+      - ./monitoring:/app/monitoring
+    command: >
+      bash -c "
+      while true; do
+        nvidia-smi --query-gpu=timestamp,name,pci.bus_id,driver_version,pstate,pcie.link.gen.max,pcie.link.gen.current,temperature.gpu,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used --format=csv >> /app/monitoring/gpu_usage.log;
+        sleep 60;
+      done"
+    
+    depends_on:
+      - backend-gpu
+    
+    networks:
+      - network-07
+
+volumes:
+  postgres_data-07:
+    driver: local
+    name: postgres_data-07
+
+  qdrant_data-07:
+    driver: local
+    name: qdrant_data-07
+
+  backend_logs-07:
+    driver: local
+    name: backend_logs-07
+
+  uploaded_documents-07:
+    driver: local
+    name: uploaded_documents-07
+
+  cache_init_logs:
+    driver: local
+    name: cache_init_logs_07
+
+networks:
+  network-07:
+    driver: bridge
+    name: network-07
+    #ipam:
+    #  config:
+    #    - subnet: 172.20.0.0/16
