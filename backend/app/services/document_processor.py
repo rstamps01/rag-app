@@ -16,7 +16,7 @@ class DocumentProcessor:
     def __init__(self):
         self.embedding_model = None
         self.db_pool = None
-        self.qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+        self.qdrant_url = os.getenv("QDRANT_URL", "http://qdrant-07:6333")
         self.collection_name = os.getenv("QDRANT_COLLECTION_NAME", "documents")
         
     async def initialize(self):

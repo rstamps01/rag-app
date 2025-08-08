@@ -59,9 +59,9 @@ services:
       #- JWT_SECRET=d7cab90ed8cbc61dcc3170aa5c3ccb5a9d689474af3d8163e9bc93fa722fbd4f
       - JWT_ALGORITHM=HS256
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - ENVIRONMENT=production
-      - LOG_LEVEL=INFO
-      - DEBUG=false
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - DEBUG=true
       - POSTGRES_USER=rag
       - POSTGRES_PASSWORD=rag
       - POSTGRES_DB=rag

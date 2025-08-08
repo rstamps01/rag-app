@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "mistralai/Mistral-7B-Instruct-v0.2"
     
     # Vector Database Configuration
-    QDRANT_URL: str = os.getenv("QDRANT_URL", "http://localhost:6333")
+    QDRANT_URL: str = os.getenv("QDRANT_URL", "http://qdrant-07:6333")
     QDRANT_COLLECTION: str = "rag"
     
     # GPU Configuration

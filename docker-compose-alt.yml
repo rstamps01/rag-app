@@ -55,7 +55,7 @@ services:
       - POSTGRES_USER=rag
       - POSTGRES_PASSWORD=rag
       - POSTGRES_DB=rag
-      - QDRANT_URL=http://localhost:6333
+      - QDRANT_URL=http://qdrant-07:6333
       - QDRANT_COLLECTION_NAME=rag
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ALGORITHM=HS256
@@ -288,7 +288,7 @@ services:
       - qdrant_data_07:/qdrant/storage
       - ./qdrant_config:/qdrant/config
     environment:
-      - QDRANT_URL=http://localhost:6333
+      - QDRANT_URL=http://qdrant-07:6333
       - QDRANT_HOST=qdrant-07
       - QDRANT_PORT=6333
       - QDRANT_COLLECTION_NAME=rag
