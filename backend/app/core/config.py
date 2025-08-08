@@ -191,7 +191,7 @@ class Settings(BaseSettings):
     
     # CORS Configuration
     CORS_ORIGINS: str = Field(
-        default="http://localhost:3000,http://localhost:8000,http://localhost:5432,http://qdrant-07:6333,",
+        default="http://localhost:3000,http://frontend-07:3000,http://localhost:8000,http://backend-07:8000,http://localhost:5432,http://postgres-07:5432,http://localhost:6333,http://qdrant-07:6333",
         description="CORS origins"
     )
     CORS_METHODS: str = Field(
@@ -298,7 +298,7 @@ def create_settings():
             
             @property
             def CORS_ORIGINS_LIST(self):
-                return ["http://localhost:3000", "http://localhost:8000"]
+                return ["http://localhost:3000,http://frontend-07:3000,http://localhost:8000,http://backend-07:8000,http://localhost:5432,http://postgres-07:5432,http://localhost:6333,http://qdrant-07:6333"]
             
             @property
             def CORS_METHODS_LIST(self):
