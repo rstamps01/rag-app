@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     
     # Vector Database Configuration
     QDRANT_URL: str = Field(
-        default="http://qdrant-07:6333",
+        default="http://localhost:6333",
         description="Qdrant vector database URL"
     )
     QDRANT_COLLECTION_NAME: str = Field(
@@ -191,7 +191,7 @@ class Settings(BaseSettings):
     
     # CORS Configuration
     CORS_ORIGINS: str = Field(
-        default="http://localhost:3000,http://localhost:8000,http://backend-07:8000,http://qdrant-07:6333,",
+        default="http://localhost:3000,http://localhost:8000,http://localhost:5432,http://localhost:6333,",
         description="CORS origins"
     )
     CORS_METHODS: str = Field(
@@ -288,7 +288,7 @@ def create_settings():
             PROJECT_NAME = "RAG Application"
             API_V1_STR = "/api/v1"
             DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rag:rag@postgres-07:5432/rag")
-            QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant-07:6333")
+            QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
             LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "mistralai/Mistral-7B-Instruct-v0.2")
             EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
             

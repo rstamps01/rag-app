@@ -1,13 +1,13 @@
 """
 Enhanced Pipeline Monitor with Real-time WebSocket Broadcasting
-Extends the base pipeline monitor to broadcast events to connected clients
+Extends the existing pipeline monitor to broadcast events to connected clients
 """
 
 import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
-from app.core.base_pipeline_monitor import PipelineMonitor
+from app.core.pipeline_monitor import PipelineMonitor
 from app.core.websocket_manager import websocket_manager
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class EnhancedPipelineMonitor(PipelineMonitor):
     """
     Enhanced pipeline monitor that broadcasts real-time events via WebSocket
-    Extends the base PipelineMonitor with real-time capabilities
+    Extends the existing PipelineMonitor with real-time capabilities
     """
     
     def __init__(self):
@@ -333,7 +333,3 @@ class EnhancedPipelineMonitor(PipelineMonitor):
 
 # Global enhanced pipeline monitor instance
 enhanced_pipeline_monitor = EnhancedPipelineMonitor()
-
-# Also export the base pipeline_monitor for backward compatibility
-from app.core.base_pipeline_monitor import pipeline_monitor
-

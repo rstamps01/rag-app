@@ -1,13 +1,14 @@
 """
-Enhanced RAG Application Main - Complete Version with All Features
-================================================================
-This version includes:
-- Fixed database field errors (context_chunks_used → sources_retrieved)
-- Complete validation checks (file type, department handling)
-- All endpoints (delete, status, processing status)
-- Comprehensive exception handling
-- Removed 100MB file size limit (as requested)
-- Restored optional department parameter
+Enhanced RAG Application Main - With Complete Vector Processing Pipeline
+========================================================================
+This version implements complete vector processing functionality including:
+- Document text extraction (PDF, TXT, MD, DOCX)
+- Document chunking with intelligent overlap
+- Embedding generation using sentence-transformers
+- Vector storage in Qdrant with metadata
+- Background processing for non-blocking uploads
+- Status tracking and error handling
+- Fixed database field errors and comprehensive exception handling
 """
 import logging
 import time
@@ -61,7 +62,7 @@ except Exception as e:
         PROJECT_NAME = "RAG Application"
         API_V1_STR = "/api/v1"
         DATABASE_URL = "postgresql://rag:rag@postgres-07:5432/rag"
-        QDRANT_URL = "http://localhost:6333"
+        QDRANT_URL = "http://qdrant-07:6333"
         QDRANT_COLLECTION_NAME = "rag"
         LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"
         EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
@@ -167,7 +168,7 @@ def initialize_services():
         
         # Initialize Qdrant client
         try:
-            qdrant_client = QdrantClient(url="http://localhost:6333")
+            qdrant_client = QdrantClient(url="http://qdrant-07:6333")
             logger.info("✅ Qdrant client initialized")
         except Exception as e:
             logger.error(f"❌ Failed to initialize Qdrant client: {e}")
@@ -364,7 +365,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Enhanced RAG AI Application with Vector Processing",
     description="A Retrieval-Augmented Generation application with complete vector processing pipeline",
-    version="2.1.0-vector-enhanced-complete",
+    version="2.1.0-vector-enhanced",
     lifespan=lifespan
 )
 
@@ -416,20 +417,17 @@ async def root():
             "embedding_model_loaded": embedding_model is not None,
             "qdrant_client_ready": qdrant_client is not None
         },
-        "api_version": "2.1.0-vector-enhanced-complete",
+        "api_version": "2.1.0-vector-enhanced",
         "model_info": {
             "llm_model": settings.LLM_MODEL_NAME if config_ok else "mistralai/Mistral-7B-Instruct-v0.2",
             "embedding_model": settings.EMBEDDING_MODEL_NAME if config_ok else "sentence-transformers/all-MiniLM-L6-v2"
         },
         "capabilities": {
             "document_upload": True,
-            "document_delete": True,
             "vector_processing": vector_processing_available,
             "text_extraction": vector_processing_available,
             "semantic_search": embedding_model is not None,
-            "llm_generation": llm_service is not None,
-            "file_validation": True,
-            "processing_status": True
+            "llm_generation": llm_service is not None
         }
     }
 
@@ -716,20 +714,19 @@ async def get_documents(
         "message": "Documents retrieved from mock data (database unavailable)"
     }
 
-# Document upload endpoint with RESTORED validation checks
-@app.post("/api/v1/documents")
+# Document upload endpoint with comprehensive error handling
+@app.post("/api/v1/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    department: Optional[str] = Form("General"),  # RESTORED: Optional parameter
+    department: str = Form("General"),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db)
 ):
-    """Upload and process a document with comprehensive validation and pipeline logging"""
+    """Upload and process a document with comprehensive pipeline logging"""
     file_id = str(uuid.uuid4())
     
     try:
-        # RESTORED: Enhanced logging with department
-        logger.info(f"Document upload request: {file.filename}, department: {department}")
+        logger.info(f"Document upload started: {file.filename}")
         
         # Import pipeline monitor with error handling
         try:
@@ -738,32 +735,12 @@ async def upload_document(
             logger.error("Pipeline monitor not available")
             pipeline_monitor = None
         
-        # RESTORED: Validate file type
-        allowed_extensions = {".pdf", ".txt", ".docx", ".md", ".doc"}
-        file_ext = os.path.splitext(file.filename)[1].lower()
-        
-        if file_ext not in allowed_extensions:
-            logger.warning(f"Invalid file type attempted: {file_ext} for file: {file.filename}")
-            raise HTTPException(
-                status_code=400,
-                detail=f"File type {file_ext} not allowed. Allowed: {', '.join(allowed_extensions)}"
-            )
-        
-        # Read file content
-        content = await file.read()
-        file_size = len(content)
-        
-        # NOTE: 100MB limit removed as requested
-        # Log file size for monitoring
-        logger.info(f"File size: {file_size // (1024*1024)}MB for {file.filename}")
-        
         # Log upload start
         if pipeline_monitor:
             pipeline_monitor.record_event(file_id, "Document Upload Start", {
                 "filename": file.filename,
                 "department": department,
-                "file_size": file_size,
-                "file_type": file_ext
+                "file_size": getattr(file, 'size', 0)
             })
         
         # Ensure upload directory exists
@@ -777,6 +754,7 @@ async def upload_document(
         file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
         try:
             with open(file_path, "wb") as buffer:
+                content = await file.read()
                 buffer.write(content)
         except Exception as e:
             logger.error(f"Failed to save file: {e}")
@@ -789,7 +767,7 @@ async def upload_document(
                     id=file_id,
                     filename=file.filename,
                     content_type=file.content_type,
-                    size=file_size,
+                    size=len(content),
                     status="uploaded",
                     path=file_path,
                     department=department
@@ -805,8 +783,7 @@ async def upload_document(
             pipeline_monitor.record_event(file_id, "Document Upload Complete", {
                 "status": "success",
                 "file_path": file_path,
-                "file_size": file_size,
-                "file_type": file_ext
+                "file_size": len(content)
             })
         
         # Queue background processing if available
@@ -832,8 +809,6 @@ async def upload_document(
             "filename": file.filename,
             "department": department,
             "status": "uploaded",
-            "file_type": file_ext,
-            "file_size": file_size,
             "processing_queued": vector_processing_available
         }
         
@@ -851,166 +826,13 @@ async def upload_document(
         logger.error(f"Document upload failed: {e}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-# RESTORED: Document delete endpoint
-@app.delete("/api/v1/documents/{document_id}")
-async def delete_document(
-    document_id: str,
-    db: Session = Depends(get_db)
-):
-    """Delete a document from the database, vector store, and file system"""
-    try:
-        logger.info(f"Document deletion requested: {document_id}")
-        
-        # Find the document in the database
-        if not (db_ok and db is not None):
-            raise HTTPException(status_code=503, detail="Database unavailable")
-        
-        document = db.query(Document).filter(Document.id == document_id).first()
-        
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        filename = document.filename
-        file_path = document.path
-        
-        # Delete from vector database (Qdrant)
-        if qdrant_client is not None:
-            try:
-                # Delete all chunks for this document
-                qdrant_client.delete(
-                    collection_name="rag",
-                    points_selector={
-                        "filter": {
-                            "must": [
-                                {
-                                    "key": "document_id",
-                                    "match": {"value": document_id}
-                                }
-                            ]
-                        }
-                    }
-                )
-                logger.info(f"Removed document {document_id} from vector database")
-            except Exception as e:
-                logger.warning(f"Failed to remove from vector database: {e}")
-        
-        # Delete physical file
-        try:
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"Deleted physical file: {file_path}")
-        except Exception as e:
-            logger.warning(f"Failed to delete physical file: {e}")
-        
-        # Delete from database
-        db.delete(document)
-        db.commit()
-        logger.info(f"Deleted document {document_id} from database")
-        
-        return {
-            "message": "Document deleted successfully",
-            "document_id": document_id,
-            "filename": filename
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        if db_ok and db is not None:
-            db.rollback()
-        logger.error(f"Document deletion failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
-
-# RESTORED: Document processing status endpoint
-@app.get("/api/v1/documents/status")
-async def get_processing_status(db: Session = Depends(get_db)):
-    """Get document processing status summary"""
-    if not (db_ok and db is not None):
-        return {
-            "message": "Database unavailable",
-            "status_counts": {"unknown": "Database unavailable"}
-        }
-    
-    try:
-        # Count documents by status
-        from sqlalchemy import func
-        status_counts = db.query(
-            Document.status,
-            func.count(Document.id)
-        ).group_by(Document.status).all()
-        
-        status_dict = {status: count for status, count in status_counts}
-        
-        return {
-            "message": "Document processing status retrieved",
-            "status_counts": status_dict,
-            "total_documents": sum(status_dict.values()),
-            "vector_processing_available": vector_processing_available,
-            "embedding_model_loaded": embedding_model is not None,
-            "qdrant_client_ready": qdrant_client is not None
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to get processing status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
-
-# RESTORED: Enhanced system status endpoint
-@app.get("/api/v1/status")
-async def get_system_status():
-    """Enhanced system status endpoint"""
-    return {
-        "system": "operational",
-        "timestamp": time.time(),
-        "services": {
-            "database": "connected" if db_ok else "disconnected",
-            "llm_service": "active" if (llm_ok and llm_service is not None) else "inactive",
-            "vector_db": "active" if (vector_db_ok and vector_db_service is not None) else "inactive",
-            "websocket": "available" if websocket_available else "unavailable",
-            "monitoring": "available" if monitoring_available else "unavailable",
-            "vector_processing": "active" if vector_processing_available else "inactive",
-            "embedding_model": "loaded" if embedding_model is not None else "not_loaded",
-            "qdrant_client": "connected" if qdrant_client is not None else "disconnected"
-        },
-        "configuration": {
-            "config_loaded": config_ok,
-            "upload_dir_exists": os.path.exists(UPLOAD_DIR),
-            "llm_model": settings.LLM_MODEL_NAME if config_ok else "mistralai/Mistral-7B-Instruct-v0.2",
-            "embedding_model": settings.EMBEDDING_MODEL_NAME if config_ok else "sentence-transformers/all-MiniLM-L6-v2"
-        },
-        "validation": {
-            "file_type_validation": True,
-            "allowed_extensions": [".pdf", ".txt", ".docx", ".md", ".doc"],
-            "size_limit_removed": True,
-            "department_optional": True
-        },
-        "version": "enhanced-2.1.0-vector-complete",
-        "capabilities": {
-            "llm_generation": llm_ok and llm_service is not None,
-            "vector_search": embedding_model is not None and qdrant_client is not None,
-            "document_storage": db_ok,
-            "document_processing": vector_processing_available,
-            "document_deletion": True,
-            "text_extraction": vector_processing_available,
-            "real_time_monitoring": websocket_available,
-            "processing_status": True,
-            "file_validation": True
-        }
-    }
-
 # Include WebSocket router if available
 if websocket_available:
-    try:
-        app.include_router(websocket_router, prefix="/api/v1", tags=["websocket"])
-        logger.info("✅ WebSocket router included successfully")
-    except Exception as e:
-        logger.error(f"❌ Error including WebSocket router: {e}")
+    logger.info("✅ WebSocket monitoring enabled")
 
 # Include monitoring router if available  
 if monitoring_available:
     logger.info("✅ HTTP monitoring API enabled")
 
-logger.info("🎉 Enhanced RAG Application with Complete Features - Ready!")
+logger.info("🎉 Enhanced RAG Application with Vector Processing - Ready!")
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)

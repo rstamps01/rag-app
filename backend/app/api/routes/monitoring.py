@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
-from app.core.pipeline_monitor import pipeline_monitor
+from app.core.base_pipeline_monitor import pipeline_monitor
 import os
 import json
 from datetime import datetime, timedelta

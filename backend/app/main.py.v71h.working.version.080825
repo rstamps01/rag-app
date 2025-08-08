@@ -1,13 +1,13 @@
 """
-Enhanced RAG Application Main - Complete Version with All Features
-================================================================
-This version includes:
-- Fixed database field errors (context_chunks_used → sources_retrieved)
-- Complete validation checks (file type, department handling)
-- All endpoints (delete, status, processing status)
-- Comprehensive exception handling
-- Removed 100MB file size limit (as requested)
-- Restored optional department parameter
+Enhanced RAG Application Main - With Complete Vector Processing Pipeline
+========================================================================
+This version implements complete vector processing functionality including:
+- Document text extraction (PDF, TXT, MD, DOCX)
+- Document chunking with intelligent overlap
+- Embedding generation using sentence-transformers
+- Vector storage in Qdrant with metadata
+- Background processing for non-blocking uploads
+- Status tracking and error handling
 """
 import logging
 import time
@@ -135,7 +135,7 @@ embedding_model = None
 qdrant_client = None
 
 def initialize_services():
-    """Initialize LLM and Vector DB services with comprehensive error handling"""
+    """Initialize LLM and Vector DB services"""
     global llm_service, vector_db_service, embedding_model, qdrant_client
     
     # Initialize LLM Service
@@ -174,7 +174,7 @@ def initialize_services():
             qdrant_client = None
 
 def extract_text_from_file(file_path: str, file_ext: str) -> str:
-    """Extract text content from various file types with error handling"""
+    """Extract text content from various file types"""
     try:
         if file_ext in ['.txt', '.md']:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -201,37 +201,32 @@ def extract_text_from_file(file_path: str, file_ext: str) -> str:
 
 def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
     """Split text into overlapping chunks for better vector search"""
-    try:
-        if len(text) <= chunk_size:
-            return [text]
-        
-        chunks = []
-        start = 0
-        
-        while start < len(text):
-            end = start + chunk_size
-            
-            # Try to break at sentence boundary
-            if end < len(text):
-                # Look for sentence endings near the chunk boundary
-                for i in range(min(100, len(text) - end)):
-                    if text[end + i] in '.!?':
-                        end = end + i + 1
-                        break
-            
-            chunk = text[start:end].strip()
-            if chunk:
-                chunks.append(chunk)
-            
-            start = end - overlap
-            if start >= len(text):
-                break
-        
-        return chunks
+    if len(text) <= chunk_size:
+        return [text]
     
-    except Exception as e:
-        logger.error(f"Text chunking failed: {e}")
-        return [text]  # Return original text as single chunk
+    chunks = []
+    start = 0
+    
+    while start < len(text):
+        end = start + chunk_size
+        
+        # Try to break at sentence boundary
+        if end < len(text):
+            # Look for sentence endings near the chunk boundary
+            for i in range(min(100, len(text) - end)):
+                if text[end + i] in '.!?':
+                    end = end + i + 1
+                    break
+        
+        chunk = text[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        
+        start = end - overlap
+        if start >= len(text):
+            break
+    
+    return chunks
 
 async def process_document_for_vectors(
     file_id: str, 
@@ -240,7 +235,7 @@ async def process_document_for_vectors(
     department: str,
     db: Session = None
 ):
-    """Background task to process document and store vectors with comprehensive error handling"""
+    """Background task to process document and store vectors"""
     try:
         logger.info(f"Starting vector processing for document: {file_id}")
         
@@ -268,42 +263,37 @@ async def process_document_for_vectors(
         
         # Generate embeddings and store in Qdrant
         if embedding_model is not None and qdrant_client is not None:
-            try:
-                points = []
-                
-                for i, chunk in enumerate(chunks):
-                    # Generate embedding
-                    embedding = embedding_model.encode(chunk).tolist()
-                    
-                    # Create point for Qdrant (use proper UUID for point ID)
-                    chunk_id = str(uuid.uuid4())
-                    point = PointStruct(
-                        id=chunk_id,
-                        vector=embedding,
-                        payload={
-                            "document_id": file_id,
-                            "filename": filename,
-                            "chunk_index": i,
-                            "content": chunk,
-                            "department": department,
-                            "file_type": file_ext,
-                            "processed_at": time.time(),
-                            "chunk_id": chunk_id
-                        }
-                    )
-                    points.append(point)
-                
-                # Batch upsert to Qdrant
-                qdrant_client.upsert(
-                    collection_name="rag",
-                    points=points
-                )
-                
-                logger.info(f"Successfully stored {len(points)} vectors for document {file_id}")
+            points = []
             
-            except Exception as e:
-                logger.error(f"Vector storage failed: {e}")
-                raise e
+            for i, chunk in enumerate(chunks):
+                # Generate embedding
+                embedding = embedding_model.encode(chunk).tolist()
+                
+                # Create point for Qdrant (use proper UUID for point ID)
+                chunk_id = str(uuid.uuid4())
+                point = PointStruct(
+                    id=chunk_id,
+                    vector=embedding,
+                    payload={
+                        "document_id": file_id,
+                        "filename": filename,
+                        "chunk_index": i,
+                        "content": chunk,
+                        "department": department,
+                        "file_type": file_ext,
+                        "processed_at": time.time(),
+                        "chunk_id": chunk_id
+                    }
+                )
+                points.append(point)
+            
+            # Batch upsert to Qdrant
+            qdrant_client.upsert(
+                collection_name="rag",
+                points=points
+            )
+            
+            logger.info(f"Successfully stored {len(points)} vectors for document {file_id}")
         
         # Update status to processed
         if db_ok and db is not None:
@@ -333,11 +323,7 @@ async def process_document_for_vectors(
 
 # Create upload directory
 UPLOAD_DIR = "/app/data/uploads"
-try:
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    logger.info(f"✅ Upload directory created: {UPLOAD_DIR}")
-except Exception as e:
-    logger.error(f"❌ Failed to create upload directory: {e}")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -351,11 +337,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"📊 Vector processing: {'OK' if vector_processing_available else 'Unavailable'}")
     
     # Initialize services
-    try:
-        initialize_services()
-        logger.info("✅ Services initialization completed")
-    except Exception as e:
-        logger.error(f"❌ Services initialization failed: {e}")
+    initialize_services()
     
     yield
     logger.info("🛑 Shutting down Enhanced RAG Application...")
@@ -364,7 +346,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Enhanced RAG AI Application with Vector Processing",
     description="A Retrieval-Augmented Generation application with complete vector processing pipeline",
-    version="2.1.0-vector-enhanced-complete",
+    version="2.1.0-vector-enhanced",
     lifespan=lifespan
 )
 
@@ -380,22 +362,11 @@ app.add_middleware(
 # WebSocket imports with proper error handling
 try:
     from app.api.routes.websocket_monitoring import router as websocket_router
-    app.include_router(websocket_router, prefix="/api/v1", tags=["websocket"])
     websocket_available = True
-    logger.info("✅ WebSocket router imported and registered successfully")
+    logger.info("✅ WebSocket router imported successfully")
 except Exception as e:
     logger.error(f"⚠️  WebSocket router import failed: {e}")
     websocket_available = False
-
-# Monitoring routes imports with proper error handling
-try:
-    from app.api.routes.monitoring import router as monitoring_router
-    app.include_router(monitoring_router, prefix="/api/v1/monitoring", tags=["monitoring"])
-    monitoring_available = True
-    logger.info("✅ Monitoring router imported and registered successfully")
-except Exception as e:
-    logger.error(f"⚠️  Monitoring router import failed: {e}")
-    monitoring_available = False
 
 # Root endpoints
 @app.get("/")
@@ -411,25 +382,21 @@ async def root():
             "llm_available": llm_ok and llm_service is not None,
             "vector_db_available": vector_db_ok and vector_db_service is not None,
             "websocket_available": websocket_available,
-            "monitoring_available": monitoring_available,
             "vector_processing_available": vector_processing_available,
             "embedding_model_loaded": embedding_model is not None,
             "qdrant_client_ready": qdrant_client is not None
         },
-        "api_version": "2.1.0-vector-enhanced-complete",
+        "api_version": "2.1.0-vector-enhanced",
         "model_info": {
             "llm_model": settings.LLM_MODEL_NAME if config_ok else "mistralai/Mistral-7B-Instruct-v0.2",
             "embedding_model": settings.EMBEDDING_MODEL_NAME if config_ok else "sentence-transformers/all-MiniLM-L6-v2"
         },
         "capabilities": {
             "document_upload": True,
-            "document_delete": True,
             "vector_processing": vector_processing_available,
             "text_extraction": vector_processing_available,
             "semantic_search": embedding_model is not None,
-            "llm_generation": llm_service is not None,
-            "file_validation": True,
-            "processing_status": True
+            "llm_generation": llm_service is not None
         }
     }
 
@@ -445,7 +412,6 @@ async def health_check():
             "llm_service": "ok" if (llm_ok and llm_service is not None) else "unavailable",
             "vector_db": "ok" if (vector_db_ok and vector_db_service is not None) else "unavailable",
             "websocket": "ok" if websocket_available else "unavailable",
-            "monitoring": "ok" if monitoring_available else "unavailable",
             "upload_dir": "ok" if os.path.exists(UPLOAD_DIR) else "missing",
             "vector_processing": "ok" if vector_processing_available else "unavailable",
             "embedding_model": "ok" if embedding_model is not None else "unavailable",
@@ -608,7 +574,7 @@ async def ask_query(
         # Calculate processing time
         processing_time = time.time() - start_time
         
-        # Store query in database if available (FIXED: Use correct field names)
+        # Store query in database if available
         query_id = f"query-{int(time.time())}"
         if db_ok and db is not None:
             try:
@@ -619,11 +585,8 @@ async def ask_query(
                     processing_time_ms=int(processing_time * 1000),
                     department_filter=request.department,
                     gpu_accelerated=used_llm,
-                    sources_retrieved={
-                        "context_chunks_used": len(sources),
-                        "vector_search_used": used_vector_search,
-                        "sources": sources[:3] if sources else []  # Store first 3 sources
-                    }
+                    context_chunks_used=len(sources),
+                    vector_search_used=used_vector_search
                 )
                 db.add(query_record)
                 db.commit()
@@ -690,60 +653,47 @@ async def get_documents(
             
         except Exception as e:
             logger.error(f"Database query failed: {e}")
-            # Fall back to mock data
     
     # Fallback to mock data
-    sample_docs = [
+    sample_documents = [
         {
-            "id": "doc-sample-1",
-            "filename": "sample_document.pdf",
-            "upload_date": "2024-08-08T12:00:00",
-            "size": 1024,
+            "id": "1",
+            "filename": "vast_storage_overview.pdf",
+            "upload_date": "2024-01-15T10:30:00Z",
+            "size": 2048576,
             "status": "processed",
             "department": "General",
             "error_message": None
         }
     ]
     
-    paginated_docs = sample_docs[skip:skip + limit]
+    paginated_docs = sample_documents[skip:skip + limit]
     
     return {
         "documents": paginated_docs,
-        "total": len(sample_docs),
+        "total": len(sample_documents),
         "skip": skip,
         "limit": limit,
         "source": "mock",
         "message": "Documents retrieved from mock data (database unavailable)"
     }
 
-# Document upload endpoint with RESTORED validation checks
-@app.post("/api/v1/documents")
+@app.post("/api/v1/documents/")
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    department: Optional[str] = Form("General"),  # RESTORED: Optional parameter
-    background_tasks: BackgroundTasks = BackgroundTasks(),
+    department: Optional[str] = Form("General"),
     db: Session = Depends(get_db)
 ):
-    """Upload and process a document with comprehensive validation and pipeline logging"""
-    file_id = str(uuid.uuid4())
-    
+    """Upload a document with complete vector processing pipeline"""
     try:
-        # RESTORED: Enhanced logging with department
         logger.info(f"Document upload request: {file.filename}, department: {department}")
         
-        # Import pipeline monitor with error handling
-        try:
-            from app.core.base_pipeline_monitor import pipeline_monitor
-        except ImportError:
-            logger.error("Pipeline monitor not available")
-            pipeline_monitor = None
-        
-        # RESTORED: Validate file type
+        # Validate file type
         allowed_extensions = {".pdf", ".txt", ".docx", ".md", ".doc"}
         file_ext = os.path.splitext(file.filename)[1].lower()
         
         if file_ext not in allowed_extensions:
-            logger.warning(f"Invalid file type attempted: {file_ext} for file: {file.filename}")
             raise HTTPException(
                 status_code=400,
                 detail=f"File type {file_ext} not allowed. Allowed: {', '.join(allowed_extensions)}"
@@ -753,36 +703,24 @@ async def upload_document(
         content = await file.read()
         file_size = len(content)
         
-        # NOTE: 100MB limit removed as requested
-        # Log file size for monitoring
-        logger.info(f"File size: {file_size // (1024*1024)}MB for {file.filename}")
+        # Check file size (100MB limit)
+        max_size = 100 * 1024 * 1024
+        if file_size > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File size ({file_size // (1024*1024)}MB) exceeds limit (100MB)"
+            )
         
-        # Log upload start
-        if pipeline_monitor:
-            pipeline_monitor.record_event(file_id, "Document Upload Start", {
-                "filename": file.filename,
-                "department": department,
-                "file_size": file_size,
-                "file_type": file_ext
-            })
-        
-        # Ensure upload directory exists
-        try:
-            os.makedirs(UPLOAD_DIR, exist_ok=True)
-        except Exception as e:
-            logger.error(f"Failed to create upload directory: {e}")
-            raise HTTPException(status_code=500, detail="Upload directory unavailable")
+        # Generate unique filename and ID
+        file_id = str(uuid.uuid4())
+        unique_filename = f"{file_id}{file_ext}"
+        file_path = os.path.join(UPLOAD_DIR, unique_filename)
         
         # Save file
-        file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
-        try:
-            with open(file_path, "wb") as buffer:
-                buffer.write(content)
-        except Exception as e:
-            logger.error(f"Failed to save file: {e}")
-            raise HTTPException(status_code=500, detail="File save failed")
+        with open(file_path, "wb") as f:
+            f.write(content)
         
-        # Store document record in database
+        # Store document metadata in database
         if db_ok and db is not None:
             try:
                 document = Document(
@@ -792,66 +730,56 @@ async def upload_document(
                     size=file_size,
                     status="uploaded",
                     path=file_path,
-                    department=department
+                    department=department,
+                    error_message="Document uploaded, queued for processing"
                 )
                 db.add(document)
                 db.commit()
-                logger.info(f"Document record created in database: {file_id}")
+                db.refresh(document)
+                logger.info(f"Document metadata stored in database: {file_id}")
             except Exception as e:
-                logger.error(f"Failed to store document record: {e}")
+                logger.error(f"Failed to store document metadata: {e}")
         
-        # Log upload complete
-        if pipeline_monitor:
-            pipeline_monitor.record_event(file_id, "Document Upload Complete", {
-                "status": "success",
-                "file_path": file_path,
-                "file_size": file_size,
-                "file_type": file_ext
-            })
-        
-        # Queue background processing if available
+        # Queue document for vector processing (background task)
         if vector_processing_available:
             try:
+                # Create a new database session for the background task
                 background_tasks.add_task(
                     process_document_for_vectors,
-                    file_id, file_path, file.filename, department, db
+                    file_id=file_id,
+                    file_path=file_path,
+                    filename=file.filename,
+                    department=department,
+                    db=SessionLocal() if db_ok else None
                 )
-                
-                if pipeline_monitor:
-                    pipeline_monitor.record_event(file_id, "Background Processing Queued", {
-                        "status": "queued"
-                    })
-                
-                logger.info(f"Background processing queued for document: {file_id}")
+                logger.info(f"Document queued for vector processing: {file_id}")
+                vector_processing_queued = True
             except Exception as e:
-                logger.error(f"Failed to queue background processing: {e}")
+                logger.error(f"Failed to queue vector processing: {e}")
+                vector_processing_queued = False
+        else:
+            vector_processing_queued = False
+        
+        logger.info(f"Document uploaded successfully: {file_path}, size: {file_size} bytes")
         
         return {
-            "message": "Document uploaded successfully", 
-            "document_id": file_id,
+            "id": file_id,
             "filename": file.filename,
-            "department": department,
+            "size": file_size,
             "status": "uploaded",
-            "file_type": file_ext,
-            "file_size": file_size,
-            "processing_queued": vector_processing_available
+            "message": "Document uploaded successfully and queued for processing",
+            "upload_time": time.time(),
+            "department": department,
+            "vector_processing_queued": vector_processing_queued,
+            "vector_processing_available": vector_processing_available
         }
         
     except HTTPException:
-        # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        # Log error
-        if 'pipeline_monitor' in locals() and pipeline_monitor:
-            pipeline_monitor.record_event(file_id, "Document Upload Error", {
-                "status": "error",
-                "error": str(e)
-            })
-        
-        logger.error(f"Document upload failed: {e}")
+        logger.error(f"Upload error: {e}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-# RESTORED: Document delete endpoint
 @app.delete("/api/v1/documents/{document_id}")
 async def delete_document(
     document_id: str,
@@ -859,8 +787,6 @@ async def delete_document(
 ):
     """Delete a document from the database, vector store, and file system"""
     try:
-        logger.info(f"Document deletion requested: {document_id}")
-        
         # Find the document in the database
         if not (db_ok and db is not None):
             raise HTTPException(status_code=503, detail="Database unavailable")
@@ -918,10 +844,9 @@ async def delete_document(
     except Exception as e:
         if db_ok and db is not None:
             db.rollback()
-        logger.error(f"Document deletion failed: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
 
-# RESTORED: Document processing status endpoint
+# Document processing status endpoint
 @app.get("/api/v1/documents/status")
 async def get_processing_status(db: Session = Depends(get_db)):
     """Get document processing status summary"""
@@ -954,7 +879,7 @@ async def get_processing_status(db: Session = Depends(get_db)):
         logger.error(f"Failed to get processing status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
-# RESTORED: Enhanced system status endpoint
+# System status endpoint
 @app.get("/api/v1/status")
 async def get_system_status():
     """Enhanced system status endpoint"""
@@ -966,7 +891,6 @@ async def get_system_status():
             "llm_service": "active" if (llm_ok and llm_service is not None) else "inactive",
             "vector_db": "active" if (vector_db_ok and vector_db_service is not None) else "inactive",
             "websocket": "available" if websocket_available else "unavailable",
-            "monitoring": "available" if monitoring_available else "unavailable",
             "vector_processing": "active" if vector_processing_available else "inactive",
             "embedding_model": "loaded" if embedding_model is not None else "not_loaded",
             "qdrant_client": "connected" if qdrant_client is not None else "disconnected"
@@ -977,23 +901,14 @@ async def get_system_status():
             "llm_model": settings.LLM_MODEL_NAME if config_ok else "mistralai/Mistral-7B-Instruct-v0.2",
             "embedding_model": settings.EMBEDDING_MODEL_NAME if config_ok else "sentence-transformers/all-MiniLM-L6-v2"
         },
-        "validation": {
-            "file_type_validation": True,
-            "allowed_extensions": [".pdf", ".txt", ".docx", ".md", ".doc"],
-            "size_limit_removed": True,
-            "department_optional": True
-        },
-        "version": "enhanced-2.1.0-vector-complete",
+        "version": "enhanced-2.1.0-vector",
         "capabilities": {
             "llm_generation": llm_ok and llm_service is not None,
             "vector_search": embedding_model is not None and qdrant_client is not None,
             "document_storage": db_ok,
             "document_processing": vector_processing_available,
-            "document_deletion": True,
             "text_extraction": vector_processing_available,
-            "real_time_monitoring": websocket_available,
-            "processing_status": True,
-            "file_validation": True
+            "real_time_monitoring": websocket_available
         }
     }
 
@@ -1005,12 +920,7 @@ if websocket_available:
     except Exception as e:
         logger.error(f"❌ Error including WebSocket router: {e}")
 
-# Include monitoring router if available  
-if monitoring_available:
-    logger.info("✅ HTTP monitoring API enabled")
-
-logger.info("🎉 Enhanced RAG Application with Complete Features - Ready!")
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

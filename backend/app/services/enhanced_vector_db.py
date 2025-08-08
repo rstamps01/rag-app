@@ -30,7 +30,7 @@ class EnhancedVectorDBService:
         try:
             # Get configuration
             from app.core.config import settings
-            qdrant_url = getattr(settings, 'QDRANT_URL', 'http://qdrant-07:6333')
+            qdrant_url = getattr(settings, 'QDRANT_URL', 'http://localhost:6333')
             self.collection_name = getattr(settings, 'QDRANT_COLLECTION_NAME', 'rag')
             embedding_model_name = getattr(settings, 'EMBEDDING_MODEL_NAME', 'sentence-transformers/all-MiniLM-L6-v2')
             

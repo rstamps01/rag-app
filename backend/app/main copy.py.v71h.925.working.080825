@@ -61,7 +61,7 @@ except Exception as e:
         PROJECT_NAME = "RAG Application"
         API_V1_STR = "/api/v1"
         DATABASE_URL = "postgresql://rag:rag@postgres-07:5432/rag"
-        QDRANT_URL = "http://qdrant-07:6333"
+        QDRANT_URL = "http://localhost:6333"
         QDRANT_COLLECTION_NAME = "rag"
         LLM_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"
         EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
@@ -167,7 +167,7 @@ def initialize_services():
         
         # Initialize Qdrant client
         try:
-            qdrant_client = QdrantClient(url="http://qdrant-07:6333")
+            qdrant_client = QdrantClient(url="http://localhost:6333")
             logger.info("✅ Qdrant client initialized")
         except Exception as e:
             logger.error(f"❌ Failed to initialize Qdrant client: {e}")
