@@ -186,7 +186,7 @@ async def root():
             "/docs",
             "/api/v1/queries/history",
             "/api/v1/queries/ask", 
-            "/api/v1/documents/",
+            "/api/v1/documents",
             "/api/v1/documents/upload",
             "/api/v1/status"
         ]
@@ -247,7 +247,7 @@ async def ask_query(request: QueryRequest):
     )
 
 # RESTORED: Documents API endpoints
-@app.get("/api/v1/documents/")
+@app.get("/api/v1/documents")
 async def get_documents(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000)
@@ -298,7 +298,7 @@ async def get_documents(
         "message": "Documents retrieved successfully"
     }
 
-@app.post("/api/v1/documents/")
+@app.post("/api/v1/documents")
 async def upload_document(
     file: UploadFile = File(...),
     department: Optional[str] = Form("General")
@@ -484,7 +484,7 @@ async def not_found_handler(request, exc):
                 "/api/v1/queries/history",
                 "/api/v1/queries/ask",
                 "/api/v1/queries/submit",
-                "/api/v1/documents/",
+                "/api/v1/documents",
                 "/api/v1/documents/upload",
                 "/api/v1/status"
             ],

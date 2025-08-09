@@ -652,7 +652,7 @@ async def ask_query(
         )
 
 # Enhanced Documents API endpoints
-@app.get("/api/v1/documents/")
+@app.get("/api/v1/documents")
 async def get_documents(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),

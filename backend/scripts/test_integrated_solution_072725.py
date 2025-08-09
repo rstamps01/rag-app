@@ -72,7 +72,7 @@ def test_api_endpoints():
         ("GET", "http://localhost:8000/health", "Health check"),
         ("GET", "http://localhost:8000/api/v1/status", "System status"),
         ("GET", "http://localhost:8000/api/v1/queries/history", "Query history"),
-        ("GET", "http://localhost:8000/api/v1/documents/", "Documents list"),
+        ("GET", "http://localhost:8000/api/v1/documents", "Documents list"),
         ("GET", "http://localhost:8000/api/v1/ws/test", "WebSocket test"),
         ("GET", "http://localhost:8000/api/v1/monitoring/status", "Monitoring status")
     ]

@@ -1,24 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import useWebSocket from '../../hooks/useWebSocket.jsx.v7c';
-// Import the interactive pipeline graph component.  Adjust the import
-// path based on your project structure.  This assumes the file lives
-// in frontend/rag-ui-new/src/components/PipelineGraph.jsx as noted in
-// the file header.
-//import PipelineGraph from '<div styleName={} />../components/PipelineGraph';
-import PipelineGraph from '../../components/PipelineGraph';
-/**
- * This is a modified version of the PipelineMonitoringDashboard.  It
- * integrates the PipelineGraph component to visualise the flow of
- * documents and queries through your RAG pipeline.  When the
- * WebSocket connection is established, the graph is displayed in the
- * main content area.  You can click on any stage to view details or
- * extend this component to show a side panel.
- */
 
 const PipelineMonitoringDashboard = () => {
   const [debugMode, setDebugMode] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
-
+  
   // WebSocket connection
   const {
     connectionStatus,
@@ -26,7 +12,7 @@ const PipelineMonitoringDashboard = () => {
     messageHistory,
     metrics,
     pipelineState,
-    reconnect,
+    reconnect
   } = useWebSocket('ws://localhost:8000/api/v1/ws/pipeline-monitoring');
 
   // Update last update time when metrics change
@@ -95,46 +81,6 @@ const PipelineMonitoringDashboard = () => {
     }
   };
 
-  /**
-   * Build stages and edges for the pipeline graph.  You can customise
-   * this mapping to reflect the actual stages and their statuses
-   * reported by your backend.  For demonstration purposes, the stages
-   * are derived from the pipelineState if available or default to
-   * static statuses.
-   */
-  const { stages, edges } = useMemo(() => {
-    // Example stage names – adjust these to your actual pipeline
-    const stageNames = ['Upload', 'Chunk', 'Embed', 'Upsert', 'Search', 'Generate'];
-    const ids = ['upload', 'chunk', 'embed', 'upsert', 'search', 'generate'];
-    // Map each stage to a status.  If pipelineState exposes per-stage
-    // statuses (e.g. pipelineState.stages[stageId].status), use that
-    // here.  Otherwise default to 'idle' until metrics provide more
-    // information.
-    const mappedStages = ids.map((id, idx) => {
-      let status = 'idle';
-      if (pipelineState && pipelineState.stages && pipelineState.stages[id]) {
-        status = pipelineState.stages[id].status || 'idle';
-      } else if (metrics && metrics.pipelineStatus) {
-        // Fallback: mark the first stage as processing when activeQueries > 0
-        if (idx === 0 && metrics.pipelineStatus.activeQueries > 0) {
-          status = 'processing';
-        }
-      }
-      return {
-        id,
-        label: stageNames[idx],
-        status,
-      };
-    });
-
-    // Create edges between consecutive stages
-    const mappedEdges = [];
-    for (let i = 0; i < ids.length - 1; i++) {
-      mappedEdges.push({ id: `e-${ids[i]}-${ids[i + 1]}`, source: ids[i], target: ids[i + 1] });
-    }
-    return { stages: mappedStages, edges: mappedEdges };
-  }, [pipelineState, metrics]);
-
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       {/* Header */}
@@ -202,10 +148,7 @@ const PipelineMonitoringDashboard = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-400">Memory</span>
                   <span className="text-blue-400">
-                    {formatMemory(
-                      metrics.gpuPerformance[0].memory_used,
-                      metrics.gpuPerformance[0].memory_total
-                    )}
+                    {formatMemory(metrics.gpuPerformance[0].memory_used, metrics.gpuPerformance[0].memory_total)}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -257,25 +200,19 @@ const PipelineMonitoringDashboard = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">Backend</span>
-                <span
-                  className={metrics ? getStatusColor(metrics.connectionStatus.backendStatus) : 'text-gray-400'}
-                >
+                <span className={metrics ? getStatusColor(metrics.connectionStatus.backendStatus) : 'text-gray-400'}>
                   {metrics ? metrics.connectionStatus.backendStatus : 'unknown'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">Database</span>
-                <span
-                  className={metrics ? getStatusColor(metrics.connectionStatus.databaseStatus) : 'text-gray-400'}
-                >
+                <span className={metrics ? getStatusColor(metrics.connectionStatus.databaseStatus) : 'text-gray-400'}>
                   {metrics ? metrics.connectionStatus.databaseStatus : 'unknown'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-400">Vector DB</span>
-                <span
-                  className={metrics ? getStatusColor(metrics.connectionStatus.vectorDbStatus) : 'text-gray-400'}
-                >
+                <span className={metrics ? getStatusColor(metrics.connectionStatus.vectorDbStatus) : 'text-gray-400'}>
                   {metrics ? metrics.connectionStatus.vectorDbStatus : 'unknown'}
                 </span>
               </div>
@@ -287,23 +224,12 @@ const PipelineMonitoringDashboard = () => {
         <div className="lg:col-span-3">
           <div className="bg-gray-800 rounded-lg p-8 h-full flex flex-col items-center justify-center">
             {connectionStatus === 'Connected' ? (
-              <div className="w-full h-full">
-                {/* Render the interactive pipeline graph.  The container height ensures
-                    the graph fills the area and can scroll if necessary. */}
-                <div style={{ height: '400px', width: '100%' }}>
-                  <PipelineGraph
-                    stages={stages}
-                    edges={edges}
-                    onNodeClick={(stage) => {
-                      // For demonstration, log the clicked stage.  In a real app,
-                      // you might open a side panel or modal with details.
-                      console.log('Clicked stage:', stage);
-                    }}
-                  />
-                </div>
-                {/* Below the graph, show simple summary metrics */}
+              <div className="text-center">
+                <div className="w-16 h-16 border-4 border-green-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <h2 className="text-2xl font-bold text-green-400 mb-2">Pipeline Active</h2>
+                <p className="text-gray-400 mb-4">Real-time monitoring active</p>
                 {metrics && (
-                  <div className="mt-4 space-y-2 text-sm text-center">
+                  <div className="space-y-2 text-sm">
                     <div>CPU: {formatPercentage(metrics.systemHealth.cpuUsage)}</div>
                     <div>Memory: {formatPercentage(metrics.systemHealth.memoryUsage)}</div>
                     <div>Queries/Min: {metrics.pipelineStatus.queriesPerMinute}</div>
@@ -320,8 +246,8 @@ const PipelineMonitoringDashboard = () => {
                   {connectionStatus === 'Connecting' ? 'Connecting...' : 'Disconnected'}
                 </h2>
                 <p className="text-gray-400 mb-4">
-                  {connectionStatus === 'Connecting'
-                    ? 'Attempting to connect to pipeline monitoring...'
+                  {connectionStatus === 'Connecting' 
+                    ? 'Attempting to connect to pipeline monitoring...' 
                     : 'Pipeline monitoring connection lost'}
                 </p>
                 {connectionStatus !== 'Connecting' && (

@@ -388,7 +388,7 @@ async def ask_query(
         )
 
 # Enhanced Documents API endpoints
-@app.get("/api/v1/documents/")
+@app.get("/api/v1/documents")
 async def get_documents(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -449,7 +449,7 @@ async def get_documents(
         "message": "Documents retrieved from mock data (database unavailable)"
     }
 
-@app.post("/api/v1/documents/")
+@app.post("/api/v1/documents")
 async def upload_document(
     file: UploadFile = File(...),
     department: Optional[str] = Form("General"),

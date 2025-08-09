@@ -290,7 +290,7 @@ def test_local_build():
     endpoints = [
         ("http://localhost:8000/", "Root endpoint"),
         ("http://localhost:8000/api/v1/queries/history", "Query history API"),
-        ("http://localhost:8000/api/v1/documents/", "Documents API")
+        ("http://localhost:8000/api/v1/documents", "Documents API")
     ]
     
     working = 0

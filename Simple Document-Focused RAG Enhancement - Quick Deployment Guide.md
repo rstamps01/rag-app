@@ -106,7 +106,7 @@ dd if=/dev/zero of=large_test_file.txt bs=1M count=200  # 200MB file
 
 # Upload the large file
 curl -X POST -F "file=@large_test_file.txt" -F "department=Testing" \
-  "http://localhost:8000/api/v1/documents/" | jq '.'
+  "http://localhost:8000/api/v1/documents" | jq '.'
 
 # Should succeed with status "uploaded"
 ```
@@ -120,7 +120,7 @@ Test that responses use uploaded document content:
 echo "VAST Data provides enterprise AI storage solutions with high performance and scalability for modern data workloads." > test_content.txt
 
 curl -X POST -F "file=@test_content.txt" -F "department=IT" \
-  "http://localhost:8000/api/v1/documents/"
+  "http://localhost:8000/api/v1/documents"
 
 # Wait for processing
 sleep 30

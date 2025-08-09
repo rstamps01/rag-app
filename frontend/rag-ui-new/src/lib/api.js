@@ -20,7 +20,7 @@ const api = axios.create({
 // ✅ CORRECTED: API endpoints based on actual backend routes
 const endpoints = {
   // Document endpoints - based on actual backend routes
-  documents: '/api/v1/documents/',
+  documents: '/api/v1/documents',
   documentById: (id) => `/api/v1/documents/${id}`,
   
   // ✅ CORRECTED: Query endpoints - based on actual backend routes  

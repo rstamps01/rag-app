@@ -6,11 +6,11 @@ curl -s http://localhost:8000/health | jq .
 
 echo -e "\n2. Testing document upload..."
 echo "Test content" > test.txt
-curl -s -X POST "http://localhost:8000/api/v1/documents/" \
+curl -s -X POST "http://localhost:8000/api/v1/documents" \
   -F "file=@test.txt" -F "department=Test" | jq .
 
 echo -e "\n3. Testing document listing..."
-curl -s "http://localhost:8000/api/v1/documents/" | jq .
+curl -s "http://localhost:8000/api/v1/documents" | jq .
 
 echo -e "\n4. Testing query processing..."
 curl -s -X POST "http://localhost:8000/api/v1/queries/ask" \

@@ -33,7 +33,7 @@ def check_current_main():
         
         # Check if it has the API routes
         has_queries_history = "/api/v1/queries/history" in content
-        has_documents = "/api/v1/documents/" in content
+        has_documents = "/api/v1/documents" in content
         has_ask_query = "/api/v1/queries/ask" in content
         
         print(f"Current main.py analysis:")
@@ -151,13 +151,8 @@ async def root():
             "/docs",
             "/api/v1/queries/history",
             "/api/v1/queries/ask", 
-            "/api/v1/documents/",
-            "/api/v1/status"
-        ]
-    }
-
-@app.get("/health")
-async def health():
+            "/api/v1/documents",
+            "/api/v1/status" def health():
     """Health check endpoint"""
     return {
         "status": "healthy",
@@ -236,7 +231,7 @@ async def ask_query(request: QueryRequest):
     )
 
 # Documents API endpoints - THESE WERE ALSO MISSING
-@app.get("/api/v1/documents/")
+@app.get("/api/v1/documents")
 async def get_documents(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000)
@@ -325,7 +320,7 @@ async def not_found_handler(request, exc):
                 "/docs",
                 "/api/v1/queries/history",
                 "/api/v1/queries/ask",
-                "/api/v1/documents/",
+                "/api/v1/documents",
                 "/api/v1/documents/upload",
                 "/api/v1/status"
             ],
@@ -401,7 +396,7 @@ def wait_and_test_backend():
         ("http://localhost:8000/", "Root endpoint"),
         ("http://localhost:8000/health", "Health check"),
         ("http://localhost:8000/api/v1/queries/history", "Query history"),
-        ("http://localhost:8000/api/v1/documents/", "Documents list"),
+        ("http://localhost:8000/api/v1/documents", "Documents list"),
         ("http://localhost:8000/api/v1/status", "System status"),
         ("http://localhost:8000/docs", "API documentation")
     ]
@@ -500,7 +495,7 @@ def main():
         print("   Frontend UI: http://localhost:3000")
         print("   Backend API: http://localhost:8000")
         print("   Query History: http://localhost:8000/api/v1/queries/history")
-        print("   Documents: http://localhost:8000/api/v1/documents/")
+        print("   Documents: http://localhost:8000/api/v1/documents")
         print("   API Docs: http://localhost:8000/docs")
         
         print(f"\n🧪 Final Test:")

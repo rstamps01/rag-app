@@ -186,7 +186,7 @@ async def get_query_history(limit: int = 10, skip: int = 0):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Document endpoints
-@app.get("/api/v1/documents/")
+@app.get("/api/v1/documents")
 async def get_documents(skip: int = 0, limit: int = 100):
     """Get documents list"""
     try:
@@ -204,7 +204,7 @@ async def get_documents(skip: int = 0, limit: int = 100):
         logger.error(f"Error getting documents: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/v1/documents/")
+@app.post("/api/v1/documents")
 async def upload_document(file: UploadFile = File(...)):
     """Upload a document"""
     try:

@@ -332,14 +332,14 @@ def update_main_py_with_upload():
             content = f.read()
         
         # Check if document upload is already included
-        if "POST /api/v1/documents/" in content or "upload_document" in content:
+        if "POST /api/v1/documents" in content or "upload_document" in content:
             print("✅ Document upload already included in main.py")
             return True
         
         # Add document upload functionality
         upload_code = '''
 # Document Upload Endpoints
-@app.post("/api/v1/documents/", response_model=dict)
+@app.post("/api/v1/documents", response_model=dict)
 async def upload_document(file: UploadFile = File(...)):
     """Upload a document for processing"""
     try:
@@ -505,7 +505,7 @@ def test_upload_endpoint():
         
         # Test POST endpoint exists
         result = subprocess.run(
-            "curl -s -X POST http://localhost:8000/api/v1/documents/ -H 'Content-Type: multipart/form-data'",
+            "curl -s -X POST http://localhost:8000/api/v1/documents -H 'Content-Type: multipart/form-data'",
             shell=True,
             capture_output=True,
             text=True,
@@ -616,13 +616,13 @@ def main():
     
     if upload_works:
         print("🎉 SUCCESS! Document upload functionality fixed!")
-        print("✅ POST /api/v1/documents/ endpoint added")
+        print("✅ POST /api/v1/documents endpoint added")
         print("✅ File upload handling implemented")
         print("✅ No more 405 Method Not Allowed errors")
         
         print(f"\n🔗 Upload functionality now available:")
         print("   Frontend: Can now upload documents")
-        print("   Backend: Handles POST /api/v1/documents/")
+        print("   Backend: Handles POST /api/v1/documents")
         print("   File Storage: /app/uploads directory")
         print("   Supported: PDF, TXT, DOCX, MD files")
         
@@ -638,7 +638,7 @@ def main():
         print("Check backend logs: docker logs backend-07")
         
         print(f"\n🔧 Manual verification:")
-        print("curl -X POST http://localhost:8000/api/v1/documents/ \\")
+        print("curl -X POST http://localhost:8000/api/v1/documents \\")
         print("  -F 'file=@test.txt' \\")
         print("  -H 'Content-Type: multipart/form-data'")
 

@@ -14,7 +14,7 @@ const DocumentsPage = () => {
 
   const fetchDocuments = async () => {
     try {
-      const response = await fetch('/api/v1/documents/');
+      const response = await fetch('/api/v1/documents');
       if (response.ok) {
         const data = await response.json();
         setDocuments(data.documents || []);
@@ -37,7 +37,7 @@ const DocumentsPage = () => {
       formData.append('file', file);
       formData.append('department', 'General');
 
-      const response = await fetch('/api/v1/documents/', {
+      const response = await fetch('/api/v1/documents', {
         method: 'POST',
         body: formData,
       });

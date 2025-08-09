@@ -410,7 +410,7 @@ def test_endpoints():
         ("http://localhost:8000/", "Root"),
         ("http://localhost:8000/health", "Health"),
         ("http://localhost:8000/api/v1/queries/history", "Query History"),
-        ("http://localhost:8000/api/v1/documents/", "Documents")
+        ("http://localhost:8000/api/v1/documents", "Documents")
     ]
     
     log_message("🧪 Testing endpoints...")

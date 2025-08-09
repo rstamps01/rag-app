@@ -1187,7 +1187,7 @@ const DocumentsPage = () => {
         setError(null);
         
         try {
-            const response = await fetch('/api/v1/documents/');
+            const response = await fetch('/api/v1/documents');
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -1228,7 +1228,7 @@ const DocumentsPage = () => {
                     [file.name]: { status: 'uploading', progress: 0 }
                 }));
                 
-                const response = await fetch('/api/v1/documents/', {
+                const response = await fetch('/api/v1/documents', {
                     method: 'POST',
                     body: formData
                 });
@@ -1933,7 +1933,7 @@ def test_backend_endpoints():
         "/",
         "/health", 
         "/api/v1/queries/history",
-        "/api/v1/documents/",
+        "/api/v1/documents",
         "/api/v1/monitoring/status"
     ]
     
@@ -2031,7 +2031,7 @@ if __name__ == "__main__":
             ("Frontend", "http://localhost:3000/"),
             ("API Docs", "http://localhost:8000/docs"),
             ("Query History", "http://localhost:8000/api/v1/queries/history"),
-            ("Documents", "http://localhost:8000/api/v1/documents/")
+            ("Documents", "http://localhost:8000/api/v1/documents")
         ]
         
         for name, url in endpoints:

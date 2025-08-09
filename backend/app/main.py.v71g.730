@@ -451,7 +451,7 @@ async def health_check():
         "max_file_size_gb": INCREASED_FILE_LIMIT_GB
     }
 
-@app.post("/api/v1/documents/", response_model=Dict[str, Any])
+@app.post("/api/v1/documents", response_model=Dict[str, Any])
 async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -643,7 +643,7 @@ async def ask_query(
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Query processing failed: {str(e)}")
 
-@app.get("/api/v1/documents/")
+@app.get("/api/v1/documents")
 async def list_documents(
     department: Optional[str] = None,
     status: Optional[str] = None,

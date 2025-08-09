@@ -49,7 +49,7 @@ def fix_backend_upload_endpoint():
             content = f.read()
         
         # Check if upload endpoint already exists
-        if "upload_document" in content and "POST" in content and "/api/v1/documents/" in content:
+        if "upload_document" in content and "POST" in content and "/api/v1/documents" in content:
             print("✅ Upload endpoint already exists")
             return True
         
@@ -65,7 +65,7 @@ from typing import Optional
 UPLOAD_DIR = "/app/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@app.post("/api/v1/documents/")
+@app.post("/api/v1/documents")
 async def upload_document(
     file: UploadFile = File(...),
     department: Optional[str] = Form("General")
@@ -663,7 +663,7 @@ const DocumentsPage = () => {
         formData.append('file', file);
         formData.append('department', 'General');
         
-        const response = await fetch('/api/v1/documents/', {
+        const response = await fetch('/api/v1/documents', {
           method: 'POST',
           body: formData
         });
@@ -905,7 +905,7 @@ def test_upload_functionality():
         
         # Test with the created test file
         result = subprocess.run(
-            "curl -X POST http://localhost:8000/api/v1/documents/ -F 'file=@test.txt' -F 'department=General'",
+            "curl -X POST http://localhost:8000/api/v1/documents -F 'file=@test.txt' -F 'department=General'",
             shell=True,
             capture_output=True,
             text=True,
@@ -996,7 +996,7 @@ def main():
     print("1. Copy enhanced components to your frontend directory")
     print("2. Rebuild backend: docker-compose build --no-cache backend-07")
     print("3. Restart services: docker-compose up -d")
-    print("4. Test upload: curl -X POST http://localhost:8000/api/v1/documents/ -F 'file=@test.txt'")
+    print("4. Test upload: curl -X POST http://localhost:8000/api/v1/documents -F 'file=@test.txt'")
     print("5. Access UI: http://localhost:3000")
     
     if upload_works:

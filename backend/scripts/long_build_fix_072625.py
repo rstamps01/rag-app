@@ -259,7 +259,7 @@ def test_api_endpoints_long():
         ("http://localhost:8000/", "Root endpoint"),
         ("http://localhost:8000/health", "Health check"),
         ("http://localhost:8000/api/v1/queries/history", "Query history"),
-        ("http://localhost:8000/api/v1/documents/", "Documents list"),
+        ("http://localhost:8000/api/v1/documents", "Documents list"),
         ("http://localhost:8000/docs", "API documentation")
     ]
     

@@ -1,215 +1,146 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+/**
+ * Extended WebSocket hook
+ *
+ * This version of the hook exposes additional helpers used by the
+ * pipeline‑monitoring UI.  Consumers can send JSON messages back to
+ * the server and supply custom `onMessage` and `onError` handlers via
+ * the options parameter.  It also computes a boolean `isConnected` flag
+ * from the current connectionStatus.
+ *
+ * Example usage:
+ * const { connectionStatus, isConnected, sendJsonMessage } =
+ *   useWebSocket(url, { onMessage: handleMsg, onError: handleErr });
+ */
 const useWebSocket = (url, options = {}) => {
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
   const [lastMessage, setLastMessage] = useState(null);
-  const [currentMetrics, setCurrentMetrics] = useState(null);
-  const [pipelineState, setPipelineState] = useState(null);
   const [debugInfo, setDebugInfo] = useState({
     messagesReceived: 0,
     lastMessageTime: null,
     connectionAttempts: 0,
-    errors: []
+    errors: [],
   });
 
   const ws = useRef(null);
   const reconnectTimeoutRef = useRef(null);
-  const { 
-    reconnectInterval = 3000, 
+
+  // Destructure option callbacks with sensible defaults
+  const {
+    onMessage = () => {},
+    onError = () => {},
+    reconnectInterval = 3000,
     maxReconnectAttempts = 10,
-    debug = false 
+    heartbeatInterval = 30000,
+    debug = false,
   } = options;
 
-  // Enhanced data transformation function
-  const transformWebSocketData = useCallback((rawData) => {
-    if (!rawData || typeof rawData !== 'object') {
-      console.warn('Invalid WebSocket data received:', rawData);
-      return null;
-    }
-
+  /**
+   * Send a JSON‑serialisable object to the server.  If the connection
+   * is not currently open, the message will be dropped silently.
+   */
+  const sendJsonMessage = useCallback((obj) => {
     try {
-      // Handle different message formats
-      let data = rawData;
-      
-      // If data is wrapped in a 'data' property, extract it
-      if (rawData.data && typeof rawData.data === 'object') {
-        data = rawData.data;
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify(obj));
       }
-
-      // If data is wrapped in a 'metrics' property, extract it
-      if (rawData.metrics && typeof rawData.metrics === 'object') {
-        data = rawData.metrics;
-      }
-
-      // Transform the data to match frontend expectations
-      const transformed = {
-        system_health: {
-          cpu_percent: parseFloat(data.system_health?.cpu_percent || data.system_health?.cpu_usage || 0),
-          memory_percent: parseFloat(data.system_health?.memory_percent || data.system_health?.memory_usage || 0),
-          memory_available: data.system_health?.memory_available || '0GB'
-        },
-        gpu_performance: Array.isArray(data.gpu_performance) 
-          ? data.gpu_performance.map(gpu => ({
-              utilization: parseFloat(gpu.utilization || 0),
-              memory_used: parseFloat(gpu.memory_used || 0),
-              memory_total: parseFloat(gpu.memory_total || 0),
-              temperature: parseFloat(gpu.temperature || 0)
-            }))
-          : data.gpu_performance && typeof data.gpu_performance === 'object'
-          ? [{
-              utilization: parseFloat(data.gpu_performance.utilization || 0),
-              memory_used: parseFloat(data.gpu_performance.memory_used || 0),
-              memory_total: parseFloat(data.gpu_performance.memory_total || 0),
-              temperature: parseFloat(data.gpu_performance.temperature || 0)
-            }]
-          : [],
-        pipeline_status: {
-          queries_per_minute: parseInt(data.pipeline_status?.queries_per_minute || data.pipeline_status?.queries_per_min || 0),
-          avg_response_time: parseFloat(data.pipeline_status?.avg_response_time || 0),
-          active_queries: parseInt(data.pipeline_status?.active_queries || 0)
-        },
-        connection_status: {
-          websocket_connections: parseInt(data.connection_status?.websocket_connections || data.connection_status?.websocket || 0),
-          backend_status: data.connection_status?.backend_status || data.connection_status?.backend || 'unknown',
-          database_status: data.connection_status?.database_status || data.connection_status?.database || 'unknown',
-          vector_db_status: data.connection_status?.vector_db_status || data.connection_status?.vector_db || 'unknown'
-        },
-        timestamp: data.timestamp || data.lastUpdate || new Date().toISOString()
-      };
-
-      if (debug) {
-        console.log('🔄 Transformed WebSocket data:', {
-          original: rawData,
-          transformed: transformed
-        });
-      }
-
-      return transformed;
     } catch (error) {
-      console.error('❌ Error transforming WebSocket data:', error);
-      return null;
+      console.error('❌ Failed to send WebSocket message:', error);
     }
-  }, [debug]);
+  }, []);
 
-  // Enhanced message handler
-  const handleMessage = useCallback((event) => {
-    try {
-      const rawMessage = JSON.parse(event.data);
-      
-      setDebugInfo(prev => ({
+  /**
+   * Handle raw WebSocket messages.  Messages are parsed and forwarded
+   * to any custom onMessage handler.  The hook also updates internal
+   * debug information.
+   */
+  const handleMessage = useCallback(
+    (event) => {
+      setDebugInfo((prev) => ({
         ...prev,
         messagesReceived: prev.messagesReceived + 1,
-        lastMessageTime: new Date().toISOString()
+        lastMessageTime: new Date().toISOString(),
       }));
 
-      setLastMessage(rawMessage);
-
-      if (debug) {
-        console.log('📨 Raw WebSocket message received:', rawMessage);
+      let parsed;
+      try {
+        parsed = JSON.parse(event.data);
+      } catch (err) {
+        console.error('❌ Error parsing WebSocket message:', err);
+        setDebugInfo((prev) => ({
+          ...prev,
+          errors: [...prev.errors.slice(-4), { time: new Date().toISOString(), error: err.message }],
+        }));
+        return;
       }
 
-      // Handle different message types
-      if (rawMessage.type === 'metrics_update' || rawMessage.type === 'monitoring_update') {
-        const transformedData = transformWebSocketData(rawMessage);
-        if (transformedData) {
-          setCurrentMetrics(transformedData);
-          
-          if (debug) {
-            console.log('✅ Metrics updated:', transformedData);
-          }
-        }
-      } else if (rawMessage.type === 'initial_state') {
-        const transformedData = transformWebSocketData(rawMessage);
-        if (transformedData) {
-          setPipelineState(transformedData);
-          setCurrentMetrics(transformedData);
-          
-          if (debug) {
-            console.log('🏁 Initial state set:', transformedData);
-          }
-        }
-      } else {
-        // Handle messages without explicit type
-        const transformedData = transformWebSocketData(rawMessage);
-        if (transformedData) {
-          setCurrentMetrics(transformedData);
-          
-          if (debug) {
-            console.log('📊 Generic metrics update:', transformedData);
-          }
-        }
+      setLastMessage(parsed);
+      // Invoke user provided handler
+      try {
+        onMessage(parsed);
+      } catch (err) {
+        console.error('❌ Error in onMessage handler:', err);
       }
-    } catch (error) {
-      console.error('❌ Error parsing WebSocket message:', error);
-      setDebugInfo(prev => ({
-        ...prev,
-        errors: [...prev.errors.slice(-4), { 
-          time: new Date().toISOString(), 
-          error: error.message 
-        }]
-      }));
-    }
-  }, [transformWebSocketData, debug]);
+    },
+    [onMessage],
+  );
 
-  // Connection management
+  // Manage connection and reconnection
   const connect = useCallback(() => {
-    if (ws.current?.readyState === WebSocket.OPEN) {
-      return;
-    }
-
+    // Avoid creating multiple connections
+    if (ws.current?.readyState === WebSocket.OPEN) return;
     try {
-      setDebugInfo(prev => ({
+      setDebugInfo((prev) => ({
         ...prev,
-        connectionAttempts: prev.connectionAttempts + 1
+        connectionAttempts: prev.connectionAttempts + 1,
       }));
 
       ws.current = new WebSocket(url);
-      
+
       ws.current.onopen = () => {
-        console.log('🔌 WebSocket connected');
         setConnectionStatus('Connected');
+        if (debug) console.log('🔌 WebSocket connected');
+        // Send an initial ping to verify connectivity
+        sendJsonMessage({ type: 'ping', timestamp: Date.now() });
       };
-      
       ws.current.onmessage = handleMessage;
-      
       ws.current.onclose = (event) => {
-        console.log('🔌 WebSocket disconnected:', event.code, event.reason);
+        if (debug) console.log('🔌 WebSocket disconnected:', event.code, event.reason);
         setConnectionStatus('Disconnected');
-        
-        // Attempt to reconnect
+        // Attempt reconnection
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
         }
-        
         reconnectTimeoutRef.current = setTimeout(() => {
           if (debugInfo.connectionAttempts < maxReconnectAttempts) {
-            console.log('🔄 Attempting to reconnect...');
             connect();
           }
         }, reconnectInterval);
       };
-      
-      ws.current.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
+      ws.current.onerror = (err) => {
+        console.error('❌ WebSocket error:', err);
         setConnectionStatus('Error');
-        setDebugInfo(prev => ({
+        setDebugInfo((prev) => ({
           ...prev,
-          errors: [...prev.errors.slice(-4), { 
-            time: new Date().toISOString(), 
-            error: 'WebSocket connection error' 
-          }]
+          errors: [...prev.errors.slice(-4), { time: new Date().toISOString(), error: 'WebSocket connection error' }],
         }));
+        // Forward error to custom handler
+        try {
+          onError(err);
+        } catch (hookErr) {
+          console.error('❌ Error in onError handler:', hookErr);
+        }
       };
     } catch (error) {
       console.error('❌ Failed to create WebSocket connection:', error);
       setConnectionStatus('Error');
     }
-  }, [url, handleMessage, reconnectInterval, maxReconnectAttempts, debugInfo.connectionAttempts]);
+  }, [url, handleMessage, reconnectInterval, maxReconnectAttempts, debugInfo.connectionAttempts, debug, sendJsonMessage, onError]);
 
-  // Initialize connection
+  // Setup connection on mount
   useEffect(() => {
     connect();
-    
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
@@ -220,13 +151,24 @@ const useWebSocket = (url, options = {}) => {
     };
   }, [connect]);
 
+  // Heartbeat ping to keep connection alive
+  useEffect(() => {
+    if (!heartbeatInterval) return;
+    const interval = setInterval(() => {
+      if (ws.current?.readyState === WebSocket.OPEN) {
+        sendJsonMessage({ type: 'ping', timestamp: Date.now() });
+      }
+    }, heartbeatInterval);
+    return () => clearInterval(interval);
+  }, [heartbeatInterval, sendJsonMessage]);
+
   return {
     connectionStatus,
+    isConnected: connectionStatus === 'Connected',
     lastMessage,
-    currentMetrics,
-    pipelineState,
     debugInfo,
-    reconnect: connect
+    sendJsonMessage,
+    reconnect: connect,
   };
 };
 

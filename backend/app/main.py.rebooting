@@ -336,7 +336,7 @@ class BackgroundTaskManager:
 
 # CORRECTED API Endpoints
 
-@app.post("/api/v1/documents/")
+@app.post("/api/v1/documents")
 async def upload_document(
     file: UploadFile = File(...),
     department: str = Form("General"),
@@ -409,7 +409,7 @@ async def upload_document(
         logger.error(f"Error uploading document: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-@app.get("/api/v1/documents/")
+@app.get("/api/v1/documents")
 async def list_documents(db: Session = Depends(get_db)):
     """List documents using existing schema"""
     try:
@@ -534,6 +534,6 @@ docker-compose exec postgres-07 psql -U rag -d rag -c "SELECT filename, status, 
 curl "http://localhost:8000/api/v1/documents/status"
 
 # List all documents:
-curl "http://localhost:8000/api/v1/documents/"
+curl "http://localhost:8000/api/v1/documents"
 """
 

@@ -19,7 +19,7 @@ export const API_ENDPOINTS = {
     history: `${API_V1_URL}/queries/history`
   },
   documents: {
-    list: `${API_V1_URL}/documents/`,
+    list: `${API_V1_URL}/documents`,
     upload: `${API_V1_URL}/documents/upload`
   },
   health: `${API_BASE_URL}/health`,

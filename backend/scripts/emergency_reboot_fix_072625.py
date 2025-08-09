@@ -157,7 +157,7 @@ async def get_query_history():
         "message": "Query history (minimal mode)"
     }
 
-@app.get("/api/v1/documents/")
+@app.get("/api/v1/documents")
 async def get_documents():
     """Basic documents endpoint"""
     return {
@@ -166,7 +166,7 @@ async def get_documents():
         "message": "Documents list (minimal mode)"
     }
 
-@app.post("/api/v1/documents/")
+@app.post("/api/v1/documents")
 async def upload_document():
     """Basic document upload endpoint"""
     return {
@@ -244,7 +244,7 @@ def test_endpoints(project_dir):
             "http://localhost:8000/",
             "http://localhost:8000/health",
             "http://localhost:8000/api/v1/queries/history",
-            "http://localhost:8000/api/v1/documents/"
+            "http://localhost:8000/api/v1/documents"
         ]
         
         working_endpoints = 0

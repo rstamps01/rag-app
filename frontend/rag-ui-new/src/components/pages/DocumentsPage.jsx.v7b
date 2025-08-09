@@ -66,7 +66,7 @@ const DocumentsPage = () => {
 
     try {
       // ✅ CORRECTED: Use actual backend endpoint
-      const response = await api.post('/api/v1/documents/', formData, {
+      const response = await api.post('/api/v1/documents', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

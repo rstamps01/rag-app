@@ -55,7 +55,7 @@ const DocumentsPage = () => {
         formData.append('file', file);
         formData.append('department', 'General');
         
-        const response = await fetch('/api/v1/documents/', {
+        const response = await fetch('/api/v1/documents', {
           method: 'POST',
           body: formData
         });
