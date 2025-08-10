@@ -37,8 +37,8 @@ class ModelManager:
             cache_dir="/app/models_cache", # Added cache_dir
             device_map=device_map,
             load_in_8bit=load_in_8bit,
-            torch_dtype=torch.float16 if self.use_gpu else torch.float32,
-            attn_implementation="flash_attention_2" if self.use_gpu else "eager"
+            torch_dtype=torch.float16 if self.use_gpu else torch.float32
+            #attn_implementation="flash_attention_2" if self.use_gpu else "eager"
         )
         
         self.models[model_name] = model
