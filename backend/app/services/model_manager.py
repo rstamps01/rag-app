@@ -38,7 +38,7 @@ class ModelManager:
             device_map=device_map,
             load_in_8bit=load_in_8bit,
             torch_dtype=torch.float16 if self.use_gpu else torch.float32,
-            attn_implementation="flex_attention_2" if self.use_gpu else "eager"    ##Changed "flash_attention" to "flex_attention"
+            attn_implementation="flex_attention" if self.use_gpu else "eager"    ##Changed "flash_attention" to "flex_attention"
         )
         
         self.models[model_name] = model
