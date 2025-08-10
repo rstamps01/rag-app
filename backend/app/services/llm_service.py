@@ -12,7 +12,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-class EnhancedLLMService:
+class LLMService:
     """Enhanced LLM service with Mistral-7B integration"""
     
     def __init__(self):
@@ -75,7 +75,7 @@ class EnhancedLLMService:
             # Add GPU-specific optimizations
             if self.device == "cuda":
                 model_kwargs.update({
-                    "attn_implementation": False,        #"flash_attention_2",  # For RTX 5090 optimization
+                    "attn_implementation": "flex_attention",        #"flash_attention_2",  # For RTX 5090 optimization
                     "use_cache": True
                 })
             
@@ -238,5 +238,5 @@ Summary: [/INST]"""
             logger.info("🧹 GPU memory cache cleared")
 
 # Global enhanced LLM service instance
-enhanced_llm_service = EnhancedLLMService()
+enhanced_llm_service = LLMService()
 
