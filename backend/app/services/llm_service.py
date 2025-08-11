@@ -91,7 +91,7 @@ class LLMService:
                 "text-generation",
                 model=self.model,
                 tokenizer=self.tokenizer,
-                device=0 if self.device == "cuda" else -1,
+                #device=0 if self.device == "cuda" else -1,
                 torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
                 return_full_text=False
             )
