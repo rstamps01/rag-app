@@ -22,9 +22,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 20G
+          memory: 16G
         reservations:
-          memory: 8G
+          memory: 4G
           devices:
             - driver: nvidia
               count: 1

@@ -106,7 +106,8 @@ def configure_blackwell_optimizations():
     """Configure RTX 5090 Blackwell-specific optimizations"""
     try:
         # RTX 5090 Blackwell optimizations
-        torch.cuda.set_per_process_memory_fraction(0.95)  # Use 95% of 32GB VRAM
+        #torch.cuda.set_per_process_memory_fraction(0.95)  # Use 95% of 32GB VRAM
+        torch.cuda.set_per_process_memory_fraction(0.80)  # Use 80% of 32GB VRAM
         torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
         
         # Blackwell-specific settings
@@ -117,7 +118,7 @@ def configure_blackwell_optimizations():
         
         logger.info("RTX 5090 Blackwell optimizations configured")
         print("✅ RTX 5090 Blackwell optimizations enabled")
-        print("  - 95% VRAM utilization")
+        print("  - 80% VRAM utilization")
         print("  - TensorFloat-32 precision")
         print("  - Advanced Tensor cores")
         
@@ -128,7 +129,8 @@ def configure_ada_lovelace_optimizations():
     """Configure RTX 4090 Ada Lovelace-specific optimizations"""
     try:
         # RTX 4090 Ada Lovelace optimizations
-        torch.cuda.set_per_process_memory_fraction(0.90)  # Use 90% of 24GB VRAM
+        #torch.cuda.set_per_process_memory_fraction(0.90)  # Use 90% of 24GB VRAM
+        torch.cuda.set_per_process_memory_fraction(0.80)  # Use 80% of 24GB VRAM
         torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
         
         # Ada Lovelace-specific settings
@@ -138,7 +140,7 @@ def configure_ada_lovelace_optimizations():
         
         logger.info("RTX 4090 Ada Lovelace optimizations configured")
         print("✅ RTX 4090 Ada Lovelace optimizations enabled")
-        print("  - 90% VRAM utilization")
+        print("  - 80% VRAM utilization")
         print("  - TensorFloat-32 precision")
         
     except Exception as e:
@@ -148,7 +150,8 @@ def configure_generic_optimizations():
     """Configure generic GPU optimizations"""
     try:
         # Generic GPU optimizations
-        torch.cuda.set_per_process_memory_fraction(0.85)  # Use 85% of VRAM
+        #torch.cuda.set_per_process_memory_fraction(0.85)  # Use 85% of VRAM
+        torch.cuda.set_per_process_memory_fraction(0.80)  # Use 80% of VRAM
         torch.set_float32_matmul_precision('medium')  # Conservative precision
         
         # Generic settings
@@ -156,7 +159,7 @@ def configure_generic_optimizations():
         
         logger.info("Generic GPU optimizations configured")
         print("✅ Generic GPU optimizations enabled")
-        print("  - 85% VRAM utilization")
+        print("  - 80% VRAM utilization")
         print("  - Medium precision")
         
     except Exception as e:

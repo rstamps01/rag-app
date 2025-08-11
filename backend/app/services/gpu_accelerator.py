@@ -73,19 +73,22 @@ class GPUAccelerator:
         try:
             if self.is_blackwell():
                 # RTX 5090 Blackwell optimizations
-                torch.cuda.set_per_process_memory_fraction(0.95)  # Use 95% of 32GB VRAM
+                #torch.cuda.set_per_process_memory_fraction(0.95)  # Use 95% of 32GB VRAM
+                torch.cuda.set_per_process_memory_fraction(0.80)  # Use 80% of 32GB VRAM
                 torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
                 logger.info("Configured RTX 5090 Blackwell optimizations")
                 
             elif self.is_ada_lovelace():
                 # RTX 4090 Ada Lovelace optimizations
-                torch.cuda.set_per_process_memory_fraction(0.90)  # Use 90% of 24GB VRAM
+                #torch.cuda.set_per_process_memory_fraction(0.90)  # Use 90% of 24GB VRAM
+                torch.cuda.set_per_process_memory_fraction(0.80)  # Use 80% of 24GB VRAM
                 torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
                 logger.info("Configured RTX 4090 Ada Lovelace optimizations")
                 
             else:
                 # Generic GPU optimizations
-                torch.cuda.set_per_process_memory_fraction(0.85)
+                #torch.cuda.set_per_process_memory_fraction(0.85)
+                torch.cuda.set_per_process_memory_fraction(0.80)
                 torch.set_float32_matmul_precision('medium')
                 logger.info(f"Configured generic GPU optimizations for {self.architecture}")
             
