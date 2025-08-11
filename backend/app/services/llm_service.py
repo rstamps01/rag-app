@@ -238,5 +238,5 @@ Summary: [/INST]"""
             logger.info("🧹 GPU memory cache cleared")
 
 # Global enhanced LLM service instance
-enhanced_llm_service = LLMService()
-
+#enhanced_llm_service = LLMService()
+llm_service = LLMService()

@@ -12,7 +12,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-class EnhancedLLMService:
+class LLMService:
     """Enhanced LLM service with Mistral-7B integration"""
     
     def __init__(self):
@@ -238,5 +238,5 @@ Summary: [/INST]"""
             logger.info("🧹 GPU memory cache cleared")
 
 # Global enhanced LLM service instance
-enhanced_llm_service = EnhancedLLMService()
+enhanced_llm_service = LLMService()
 
