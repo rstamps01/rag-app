@@ -13,15 +13,15 @@ WORKDIR /app
 COPY rag-ui-new/package*.json ./
 
 # Install project dependencies.
-RUN npm install
+RUN npm install \
+    npm install reactflow
 
 # Copy the rest of the frontend application code.
 COPY rag-ui-new/ .
 
 # Update React version in package.json to use stable version instead of future version
 RUN sed -i 's/"react": "\^19.0.0"/"react": "^18.2.0"/g' package.json && \
-    sed -i 's/"react-dom": "\^19.0.0"/"react-dom": "^18.2.0"/g' package.json && \
-    npm install
+    sed -i 's/"react-dom": "\^19.0.0"/"react-dom": "^18.2.0"/g' package.json && 
 
 # Build the Vite application for production.
 # This will generate static files in the /app/dist directory.

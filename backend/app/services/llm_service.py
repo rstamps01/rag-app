@@ -79,6 +79,15 @@ class LLMService:
                     "use_cache": True
                 })
             
+            #self.model = AutoModelForCausalLM.from_pretrained(
+            #    self.model_name,
+            #    **model_kwargs
+                # Calculate 80% of GPU memory
+            if self.device == "cuda":
+                gpu_memory = torch.cuda.get_device_properties(0).total_memory
+                max_memory_80_percent = int(gpu_memory * 0.80)
+                model_kwargs["max_memory"] = {0: max_memory_80_percent}
+
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
                 **model_kwargs
@@ -238,4 +247,4 @@ Summary: [/INST]"""
             logger.info("🧹 GPU memory cache cleared")
 
 # Global enhanced LLM service instance
-llm_service = LLMService()
+# llm_service = LLMService()
