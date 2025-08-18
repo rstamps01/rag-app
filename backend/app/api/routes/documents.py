@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.schemas.documents import DocumentCreate, DocumentUpdate, Document
 from app.crud.crud_document import create_document, get_documents, get_document, update_document
 from app.db.session import get_db
-from app.services.document_processor import process_and_store_document
+from backend.app.services.integrated_document_processor import process_and_store_document
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)

@@ -13,6 +13,7 @@ passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 websockets==11.0.3  #new
 python-socketio==5.8.0  #new
+asyncpg==0.30.0 #new
 
 # =============================================================================
 # DATABASE DEPENDENCIES (Install Second)

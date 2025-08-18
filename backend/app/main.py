@@ -21,6 +21,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from app.services.integrated_database_service import integrated_database_service
+from app.services.integrated_document_processor import integrated_document_processor
+from app.services.integrated_vector_db_service import integrated_vector_db_service
 
 # Vector processing imports
 try:

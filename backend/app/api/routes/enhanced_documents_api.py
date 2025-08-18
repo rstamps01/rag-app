@@ -14,7 +14,7 @@ from datetime import datetime
 
 from app.db.session import get_db
 from app.models.models import Document
-from app.services.enhanced_vector_db import enhanced_vector_db_service
+from backend.app.services.integrated_vector_db_service import enhanced_vector_db_service
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
