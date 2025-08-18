@@ -89,22 +89,28 @@ services:
           sleep 2
         done &&
         echo 'Cache initialization detected, starting backend with migrations...' &&
+          sleep 7
         cd /app &&
-        
-        # Wait for PostgreSQL
-        while ! pg_isready -h postgres-07 -p 5432 -U rag; do
-          echo 'PostgreSQL is unavailable - sleeping'
-          sleep 2
-        done &&
-        
-        # Run migrations
         echo 'Running database migrations...' &&
         alembic upgrade head &&
-        
-        # Start application
         echo 'Starting FastAPI application...' &&
         PYTHONPATH=/app python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
       "
+
+    #    # Wait for PostgreSQL
+    #    while ! pg_isready -h postgres-07 -p 5432 -U rag; do
+    #      echo 'PostgreSQL is unavailable - sleeping'
+    #      sleep 2
+    #    done &&
+        
+        # Run migrations
+    #   echo 'Running database migrations...' &&
+    #   alembic upgrade head &&
+        
+        # Start application
+    #    echo 'Starting FastAPI application...' &&
+    #    PYTHONPATH=/app python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    #  "
 
     #depends_on:
     #  postgres-07:
