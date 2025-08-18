@@ -82,7 +82,7 @@ class LLMService:
             #self.model = AutoModelForCausalLM.from_pretrained(
             #    self.model_name,
             #    **model_kwargs
-                # Calculate 80% of GPU memory
+                # Calculate 70% of GPU memory
             if self.device == "cuda":
                 gpu_memory = torch.cuda.get_device_properties(0).total_memory
                 max_memory_70_percent = int(gpu_memory * 0.70)
@@ -185,11 +185,11 @@ Please provide a comprehensive and accurate answer based on the context provided
             
             logger.info(f"✅ Response generated in {processing_time:.2f}s ({tokens_per_second:.1f} tokens/s)")
 
- # Clean up GPU memory to prevent fragmentation
- torch.cuda.empty_cache()
- torch.cuda.synchronize()
- import gc
- gc.collect()
+            # Clean up GPU memory to prevent fragmentation
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            import gc
+            gc.collect()
             
             return {
                 "response": generated_text,
