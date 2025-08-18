@@ -74,6 +74,7 @@ RUN pip install --no-cache-dir \
 WORKDIR /app
 COPY requirements.txt .
 COPY .env* ./
+COPY alembic.ini .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Create necessary directories with proper permissions

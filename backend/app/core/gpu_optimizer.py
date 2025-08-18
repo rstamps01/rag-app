@@ -107,7 +107,7 @@ def configure_blackwell_optimizations():
     try:
         # RTX 5090 Blackwell optimizations
         #torch.cuda.set_per_process_memory_fraction(0.95)  # Use 95% of 32GB VRAM
-        torch.cuda.set_per_process_memory_fraction(0.80)  # Use 80% of 32GB VRAM
+        torch.cuda.set_per_process_memory_fraction(0.70)  # Use 70% of 32GB VRAM
         torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
         
         # Blackwell-specific settings
@@ -118,7 +118,7 @@ def configure_blackwell_optimizations():
         
         logger.info("RTX 5090 Blackwell optimizations configured")
         print("✅ RTX 5090 Blackwell optimizations enabled")
-        print("  - 80% VRAM utilization")
+        print("  - 70% VRAM utilization")
         print("  - TensorFloat-32 precision")
         print("  - Advanced Tensor cores")
         
@@ -130,7 +130,7 @@ def configure_ada_lovelace_optimizations():
     try:
         # RTX 4090 Ada Lovelace optimizations
         #torch.cuda.set_per_process_memory_fraction(0.90)  # Use 90% of 24GB VRAM
-        torch.cuda.set_per_process_memory_fraction(0.80)  # Use 80% of 24GB VRAM
+        torch.cuda.set_per_process_memory_fraction(0.70)  # Use 70% of 24GB VRAM
         torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
         
         # Ada Lovelace-specific settings
@@ -140,7 +140,7 @@ def configure_ada_lovelace_optimizations():
         
         logger.info("RTX 4090 Ada Lovelace optimizations configured")
         print("✅ RTX 4090 Ada Lovelace optimizations enabled")
-        print("  - 80% VRAM utilization")
+        print("  - 70% VRAM utilization")
         print("  - TensorFloat-32 precision")
         
     except Exception as e:
@@ -151,7 +151,7 @@ def configure_generic_optimizations():
     try:
         # Generic GPU optimizations
         #torch.cuda.set_per_process_memory_fraction(0.85)  # Use 85% of VRAM
-        torch.cuda.set_per_process_memory_fraction(0.80)  # Use 80% of VRAM
+        torch.cuda.set_per_process_memory_fraction(0.70)  # Use 70% of VRAM
         torch.set_float32_matmul_precision('medium')  # Conservative precision
         
         # Generic settings
@@ -159,7 +159,7 @@ def configure_generic_optimizations():
         
         logger.info("Generic GPU optimizations configured")
         print("✅ Generic GPU optimizations enabled")
-        print("  - 80% VRAM utilization")
+        print("  - 70% VRAM utilization")
         print("  - Medium precision")
         
     except Exception as e:
@@ -196,8 +196,8 @@ def get_optimal_batch_size(model_name: str) -> int:
         # RTX 5090 with 32GB VRAM - can handle larger batches
         if "mistral-7b" in model_name.lower():
             return min(16, max(2, gpu_memory // (2 * 1024 * 1024 * 1024)))  # 2GB per sample
-        elif "gpt-j" in model_name.lower():
-            return min(12, max(2, gpu_memory // (3 * 1024 * 1024 * 1024)))  # 3GB per sample
+        #elif "gpt-j" in model_name.lower():
+        #    return min(12, max(2, gpu_memory // (3 * 1024 * 1024 * 1024)))  # 3GB per sample
         elif "llama" in model_name.lower():
             return min(8, max(1, gpu_memory // (4 * 1024 * 1024 * 1024)))   # 4GB per sample
         else:
@@ -207,8 +207,8 @@ def get_optimal_batch_size(model_name: str) -> int:
         # RTX 4090 with 24GB VRAM
         if "mistral-7b" in model_name.lower():
             return min(8, max(1, gpu_memory // (3 * 1024 * 1024 * 1024)))
-        elif "gpt-j" in model_name.lower():
-            return min(6, max(1, gpu_memory // (4 * 1024 * 1024 * 1024)))
+        #elif "gpt-j" in model_name.lower():
+        #    return min(6, max(1, gpu_memory // (4 * 1024 * 1024 * 1024)))
         elif "llama" in model_name.lower():
             return min(4, max(1, gpu_memory // (6 * 1024 * 1024 * 1024)))
         else:
@@ -216,8 +216,10 @@ def get_optimal_batch_size(model_name: str) -> int:
     
     else:
         # Generic GPU - conservative batch sizes
-        if "gpt-j" in model_name.lower():
-            return min(4, max(1, gpu_memory // (6 * 1024 * 1024 * 1024)))
+        if "mistral-7b" in model_name.lower():
+            return min(8, max(1, gpu_memory // (3 * 1024 * 1024 * 1024)))
+        #if "gpt-j" in model_name.lower():
+        #    return min(4, max(1, gpu_memory // (6 * 1024 * 1024 * 1024)))
         elif "llama" in model_name.lower():
             return min(2, max(1, gpu_memory // (8 * 1024 * 1024 * 1024)))
         else:

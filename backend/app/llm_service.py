@@ -46,7 +46,7 @@ class LLMService:
         
         # Model mapping for different model IDs
         self.model_map = {
-            "gpt-j-6b": "EleutherAI/gpt-j-6b",
+        #    "gpt-j-6b": "EleutherAI/gpt-j-6b",
             "llama2-7b": "meta-llama/Llama-2-7b-chat-hf", 
             "mistral-7b": "mistralai/Mistral-7B-Instruct-v0.2",
             "mistral-7b-instruct": "mistralai/Mistral-7B-Instruct-v0.2",
@@ -178,10 +178,10 @@ class LLMService:
                     torch.backends.cuda.enable_mem_efficient_sdp(True)
                     
                     # Set memory fraction for RTX 5090 (32GB VRAM)
-                    torch.cuda.set_per_process_memory_fraction(0.95)
+                    torch.cuda.set_per_process_memory_fraction(0.70)
                 else:
                     logger.info("Applying standard GPU optimizations")
-                    torch.cuda.set_per_process_memory_fraction(0.85)
+                    torch.cuda.set_per_process_memory_fraction(0.70)
             
             logger.info(f"Model {model_name} loaded successfully with {model_kwargs['attn_implementation']} attention")
             return model, tokenizer, generation_config

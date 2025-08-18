@@ -85,8 +85,8 @@ class LLMService:
                 # Calculate 80% of GPU memory
             if self.device == "cuda":
                 gpu_memory = torch.cuda.get_device_properties(0).total_memory
-                max_memory_70_percent = int(gpu_memory * 0.70)
-                model_kwargs["max_memory"] = {0: max_memory_70_percent}
+                max_memory_80_percent = int(gpu_memory * 0.80)
+                model_kwargs["max_memory"] = {0: max_memory_80_percent}
 
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
@@ -164,7 +164,7 @@ Please provide a comprehensive and accurate answer based on the context provided
             logger.info(f"🤖 Generating response for query: '{query[:50]}...'")
             
             # Generate response
-            with torch.cuda.amp.autocast("cuda") if self.device == "cuda" else torch.no_grad():
+            with torch.amp.autocast("cuda") if self.device == "cuda" else torch.no_grad():
                 result = self.pipeline(
                     prompt,
                     max_new_tokens=max_length,
@@ -184,12 +184,6 @@ Please provide a comprehensive and accurate answer based on the context provided
             tokens_per_second = output_tokens / processing_time if processing_time > 0 else 0
             
             logger.info(f"✅ Response generated in {processing_time:.2f}s ({tokens_per_second:.1f} tokens/s)")
-
- # Clean up GPU memory to prevent fragmentation
- torch.cuda.empty_cache()
- torch.cuda.synchronize()
- import gc
- gc.collect()
             
             return {
                 "response": generated_text,

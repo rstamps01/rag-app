@@ -155,7 +155,7 @@ Please provide a comprehensive and accurate answer based on the context provided
             logger.info(f"🤖 Generating response for query: '{query[:50]}...'")
             
             # Generate response
-            with torch.cuda.amp.autocast() if self.device == "cuda" else torch.no_grad():
+            with torch.cuda.amp.autocast("cuda") if self.device == "cuda" else torch.no_grad():
                 result = self.pipeline(
                     prompt,
                     max_new_tokens=max_length,
