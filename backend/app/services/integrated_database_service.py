@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
+from sqlalchemy import text
 from app.models.models import User, Document, QueryHistory
 from app.core.config import settings
 import logging
@@ -78,12 +79,11 @@ class IntegratedDatabaseManager:
         except Exception as e:
             logger.error(f"❌ Async database pool initialization failed: {e}")
             self.is_async_available = False
-    
+
     def test_connection(self):
-        """Test database connection"""
         try:
             with self.engine.connect() as conn:
-                conn.execute("SELECT 1")
+                conn.execute(text("SELECT 1"))  # ✅ Fixed
             self.is_connected = True
             logger.info("✅ Database connection healthy")
         except Exception as e:
@@ -99,12 +99,12 @@ class IntegratedDatabaseManager:
             return self.SessionLocal()
         else:
             raise Exception("Database not initialized")
-    
+
     def health_check(self) -> bool:
         """Perform database health check"""
         try:
             with self.get_session() as session:
-                session.execute("SELECT 1")
+                session.execute(text("SELECT 1"))  # ✅ Fixed
             return True
         except Exception:
             return False

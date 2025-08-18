@@ -64,6 +64,23 @@ services:
       - POSTGRES_DB=rag
 
     # Enhanced startup command with database initialization wait
+    #command: >
+    #  sh -c "
+    #    echo 'Waiting for cache initialization...' &&
+    #    while [ ! -f /app/models_cache/.initialization_complete ]; do
+    #      echo 'Cache not ready, waiting...'
+    #      sleep 2
+    #    done &&
+    #    echo 'Cache initialization detected, waiting for database initialization...' &&
+    #    while [ ! -f /tmp/.db_init_complete ]; do
+    #      echo 'Database initialization not complete, waiting...'
+    #      sleep 2
+    #    done &&
+    #    echo 'Database initialization complete, starting backend...' &&
+    #    cd /app &&
+    #    PYTHONPATH=/app python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    #  "
+
     command: >
       sh -c "
         echo 'Waiting for cache initialization...' &&
@@ -71,23 +88,31 @@ services:
           echo 'Cache not ready, waiting...'
           sleep 2
         done &&
-        echo 'Cache initialization detected, waiting for database initialization...' &&
-        while [ ! -f /tmp/.db_init_complete ]; do
-          echo 'Database initialization not complete, waiting...'
+        echo 'Cache initialization detected, starting backend with migrations...' &&
+        cd /app &&
+        
+        # Wait for PostgreSQL
+        while ! pg_isready -h postgres-07 -p 5432 -U rag; do
+          echo 'PostgreSQL is unavailable - sleeping'
           sleep 2
         done &&
-        echo 'Database initialization complete, starting backend...' &&
-        cd /app &&
+        
+        # Run migrations
+        echo 'Running database migrations...' &&
+        alembic upgrade head &&
+        
+        # Start application
+        echo 'Starting FastAPI application...' &&
         PYTHONPATH=/app python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
       "
 
-    depends_on:
-      postgres-07:
-        condition: service_healthy
-      qdrant-07:
-        condition: service_healthy
-      db-init-07:
-        condition: service_completed_successfully
+    #depends_on:
+    #  postgres-07:
+    #    condition: service_healthy
+    #  qdrant-07:
+    #    condition: service_healthy
+    #  db-init-07:
+    #    condition: service_completed_successfully
     
     networks:
       - network-07
