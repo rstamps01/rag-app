@@ -14,7 +14,6 @@ from app.core.config import settings
 import logging
 import uuid
 import hashlib
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,6 @@ class EnhancedVectorDBService:
     def __init__(self):
         self.client = None
         self.embedding_model = None
-        #self.collection_name = "rag"
         self.collection_name = settings.QDRANT_COLLECTION_NAME
         self.is_connected = False
         self.initialize_services()
@@ -32,12 +30,6 @@ class EnhancedVectorDBService:
     def initialize_services(self):
         """Initialize Qdrant client and embedding model"""
         try:
-            # Get configuration
-            from app.core.config import settings
-            qdrant_url = getattr(settings, 'QDRANT_URL', 'http://qdrant-07:6333')
-            self.collection_name = getattr(settings, 'QDRANT_COLLECTION_NAME', 'rag')
-            embedding_model_name = getattr(settings, 'EMBEDDING_MODEL_NAME', 'sentence-transformers/all-MiniLM-L6-v2')
-            
             # Initialize Qdrant client
             self.client = QdrantClient(url=settings.QDRANT_URL)
             
@@ -46,13 +38,8 @@ class EnhancedVectorDBService:
             logger.info(f"✅ Qdrant connected: {len(collections.collections)} collections")
             
             # Initialize embedding model
-            try:
-                from sentence_transformers import SentenceTransformer
-                self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
-                logger.info(f"✅ Embedding model loaded: {settings.EMBEDDING_MODEL_NAME}")
-            except Exception as e:
-                logger.error(f"❌ Failed to load embedding model: {e}")
-                self.embedding_model = None
+            self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL_NAME)
+            logger.info(f"✅ Embedding model loaded: {settings.EMBEDDING_MODEL_NAME}")
             
             # Ensure collection exists
             self._ensure_collection()
@@ -104,8 +91,7 @@ class EnhancedVectorDBService:
             # Try to break at sentence boundary
             if end < len(text):
                 last_period = chunk.rfind('.')
-                #last_newline = chunk.rfind('\\n')
-                last_newline = chunk.rfind('\n')
+                last_newline = chunk.rfind('\\n')
                 break_point = max(last_period, last_newline)
                 
                 if break_point > start + chunk_size // 2:
@@ -293,4 +279,3 @@ class EnhancedVectorDBService:
 
 # Global enhanced vector database service instance
 enhanced_vector_db_service = EnhancedVectorDBService()
-

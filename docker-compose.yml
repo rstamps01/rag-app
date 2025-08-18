@@ -160,6 +160,27 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+  
+  # Add database initialization service
+  db-init-07:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: db-init-07
+    environment:
+      - DATABASE_URL=postgresql://rag:rag@postgres-07:5432/rag
+      - PYTHONPATH=/app
+    volumes:
+      - ./backend:/app
+    networks:
+      - network-07
+    depends_on:
+      postgres-07:
+        condition: service_healthy
+    command: python /app/app/scripts/init_database.py
+    profiles:
+      - db-init
+    restart: "no"
 
   # FIXED: Cache initialization as init container
   cache-init-07:

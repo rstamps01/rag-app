@@ -345,7 +345,7 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting Enhanced RAG Application with Vector Processing...")
     logger.info(f"📁 Upload directory: {UPLOAD_DIR}")
     logger.info(f"🔧 Config status: {'OK' if config_ok else 'Fallback'}")
-    logger.info(f"🗄️  Database status: {'OK' if db_ok else 'Unavailable'}")
+    logger.info(f"🗄️ Database status: {'OK' if db_ok else 'Unavailable'}")
     logger.info(f"🤖 LLM status: {'OK' if llm_ok else 'Unavailable'}")
     logger.info(f"🔍 Vector DB status: {'OK' if vector_db_ok else 'Unavailable'}")
     logger.info(f"📊 Vector processing: {'OK' if vector_processing_available else 'Unavailable'}")
@@ -577,7 +577,8 @@ async def ask_query(
                 
                 # Generate response with LLM
                 llm_response = llm_service.generate_response(
-                    prompt=request.query,
+                #    prompt=request.query,
+                    query=request.query,
                     context=context
                 )
                 
@@ -922,7 +923,7 @@ async def delete_document(
         raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
 
 # RESTORED: Document processing status endpoint
-@app.get("/api/v1/documents/status")
+@app.get("/api/v1/documents_status")
 async def get_processing_status(db: Session = Depends(get_db)):
     """Get document processing status summary"""
     if not (db_ok and db is not None):
