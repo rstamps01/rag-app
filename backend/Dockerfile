@@ -84,8 +84,10 @@ RUN mkdir -p /app/models_cache \
              /app/config \
              /app/data/logs \
              /app/data/uploads \
+             /tmp/triton_cache \
     && chmod 755 /app/models_cache \
-    && chmod 755 /app/logs
+    && chmod 755 /app/logs \
+    && chmod 755 /tmp/trition_cache
 
 # Copy application files
 COPY scripts/model_cache_utils.py /app/scripts/
@@ -110,7 +112,8 @@ RUN chmod -R 755 /app
 ENV MODELS_CACHE_DIR=/app/models_cache \
     HF_HUB_CACHE=/app/models_cache/hub \
     HF_HOME=/app/models_cache \
-    TORCH_HOME=/app/models_cache/torch
+    TORCH_HOME=/app/models_cache/torch \
+    TRITON_CACHE_DIR=/tmp/triton_cache
     #HF_DATASETS_CACHE=/app/models_cache/datasets \
     #TRANSFORMERS_CACHE=/app/models_cache/transformers
 

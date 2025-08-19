@@ -193,7 +193,7 @@ Answer:"""
             # For RTX 5090 path (line ~167)
             inputs = tokenizer(prompt, return_tensors="pt", padding=True, truncation=True).to(self.device)
 
-            with torch.amp.autocast("cuda"):
+            with torch.amp.autocast(device_type='cuda'):
                 output = model.generate(
                     input_ids=inputs['input_ids'],
                     attention_mask=inputs['attention_mask'],  # ← ENSURE this is included
