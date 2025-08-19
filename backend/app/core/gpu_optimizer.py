@@ -21,7 +21,7 @@ def detect_gpu_architecture() -> str:
     device_name = device_properties.name.lower()
     
     # RTX 5090 uses Blackwell architecture (compute capability 12.0)
-    if compute_major == 12:
+    if compute_major == 12 and compute_minor == 9:
         return "blackwell"
     # RTX 4090 uses Ada Lovelace architecture (compute capability 8.9)
     elif compute_major == 8 and compute_minor == 9:
