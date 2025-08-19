@@ -9,6 +9,13 @@ This version includes:
 - Removed 100MB file size limit (as requested)
 - Restored optional department parameter
 """
+# GPU Memory Optimization Environment Variables
+import os
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512,expandable_segments:True'
+os.environ['TRITON_CACHE_DIR'] = '/tmp/triton_cache'
+os.environ['TRITON_KERNEL_CACHE_SIZE'] = '1024'
+
+
 import logging
 import time
 import uuid
@@ -370,6 +377,22 @@ app = FastAPI(
     version="2.1.0-vector-enhanced-complete",
     lifespan=lifespan
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Application startup with GPU optimization"""
+    print("🚀 Starting Enhanced RAG Application with GPU optimization...")
+    
+    # Apply GPU memory optimization
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.set_per_process_memory_fraction(0.8)
+            torch.cuda.empty_cache()
+            print("✅ GPU memory optimization applied at startup")
+    except Exception as e:
+        print(f"⚠️ GPU optimization warning: {e}")
+
 
 # Configure CORS
 app.add_middleware(

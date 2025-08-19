@@ -132,6 +132,7 @@ class LLMService:
         """Check if LLM service is available"""
         return self.is_loaded and self.model is not None
     
+
     def generate_response(
         self,
         query: str,
@@ -140,10 +141,11 @@ class LLMService:
         temperature: float = 0.7,
         top_p: float = 0.9,
         do_sample: bool = True
-    ) -> Dict[str, Any]:
+    ) -> str:  # ← Changed from Dict[str, Any] to str
         """Generate response using Mistral model"""
         if not self.is_available():
             raise Exception("LLM service not available")
+
         
         start_time = time.time()
         
@@ -191,8 +193,9 @@ Please provide a comprehensive and accurate answer based on the context provided
             import gc
             gc.collect()
             
-            return {
-                "response": generated_text,
+            # ... your existing generation code ...
+            # Store metadata in instance variable
+            self.last_generation_metadata = {
                 "processing_time": processing_time,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
@@ -201,11 +204,21 @@ Please provide a comprehensive and accurate answer based on the context provided
                 "device": self.device,
                 "context_used": bool(context)
             }
+
+
+
+             # Return only the response text
+            return generated_text  # ← Return string instead of dict
             
         except Exception as e:
             logger.error(f"❌ Response generation failed: {e}")
             raise Exception(f"LLM generation failed: {str(e)}")
     
+    def get_generation_metadata(self) -> Dict[str, Any]:
+            """Get metadata from last generation"""
+            return getattr(self, 'last_generation_metadata', {})   
+
+
     def generate_embedding_friendly_summary(self, text: str, max_length: int = 200) -> str:
         """Generate a summary optimized for embedding generation"""
         if not self.is_available():

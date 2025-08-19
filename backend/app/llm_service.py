@@ -13,6 +13,7 @@ import threading
 import time
 from typing import Dict, Any, Optional, List, Tuple
 import torch
+from .core.gpu_config import GPUMemoryOptimizer
 from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,9 @@ class LLMService:
         return cls._instance
     
     def __init__(self):
+        # Apply GPU memory optimization for RTX 5090
+        GPUMemoryOptimizer.optimize_for_rtx5090()
+        
         if hasattr(self, '_initialized'):
             return
         
