@@ -86,8 +86,7 @@ RUN mkdir -p /app/models_cache \
              /app/data/uploads \
              /tmp/triton_cache \
     && chmod 755 /app/models_cache \
-    && chmod 755 /app/logs \
-    && chmod 755 /tmp/trition_cache
+    && chmod 755 /app/logs 
 
 # Copy application files
 COPY scripts/model_cache_utils.py /app/scripts/
