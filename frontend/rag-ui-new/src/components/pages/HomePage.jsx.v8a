@@ -1,0 +1,39 @@
+/*
+ * v1.0.0.0
+ * Location: frontend/rag-ui-new/src/components/pages/HomePage.jsx
+ *
+ * This home page offers a friendly landing experience with
+ * large, clickable cards that navigate to the core sections of the
+ * application: Documents, Queries and Pipeline Monitor.  Each card
+ * includes a brief description of what the section provides.  You can
+ * further enhance this page by fetching summary stats (number of
+ * documents uploaded, recent queries, etc.) via the backend API.
+ */
+
+import React from 'react';
+import { Link } from 'react-router-dom';
+
+const HomePage = () => {
+  return (
+    <div className="p-8 space-y-8">
+      <h1 className="text-3xl font-bold text-white">Welcome to your GPU‑accelerated RAG AI Application</h1>
+      <p className="text-gray-300">Use the cards below to jump to different parts of the system.</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Link to="/documents" className="block bg-gray-800 p-6 rounded shadow hover:bg-gray-700 transition-colors">
+          <h2 className="text-xl font-semibold text-white mb-2">Documents</h2>
+          <p className="text-gray-400">Upload and manage your documents for AI processing.</p>
+        </Link>
+        <Link to="/queries" className="block bg-gray-800 p-6 rounded shadow hover:bg-gray-700 transition-colors">
+          <h2 className="text-xl font-semibold text-white mb-2">Queries</h2>
+          <p className="text-gray-400">Ask questions and review past queries stored in the system.</p>
+        </Link>
+        <Link to="/monitoring" className="block bg-gray-800 p-6 rounded shadow hover:bg-gray-700 transition-colors">
+          <h2 className="text-xl font-semibold text-white mb-2">Pipeline Monitor</h2>
+          <p className="text-gray-400">Monitor real‑time system performance and data flow through your RAG pipeline.</p>
+        </Link>
+      </div>
+    </div>
+  );
+};
+
+export default HomePage;

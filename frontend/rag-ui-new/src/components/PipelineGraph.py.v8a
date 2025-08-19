@@ -1,7 +1,7 @@
 /*
   Version: v1.0.0.0
-
-  Location: frontend/rag-ui-new/src/components/
+  Added: 8/9/25
+  Location: frontend/rag-ui-new/src/components/monitoring/PipelineGraph.jsx
 
   PipelineGraph.jsx
 
@@ -13,7 +13,7 @@
   additional metrics in a side panel.
 
   Usage:
-
+ 
     import PipelineGraph from './PipelineGraph';
 
     const stages = [
@@ -78,7 +78,7 @@ const StageNode = ({ data }) => {
     </div>
   );
 };
-
+ 
 const nodeTypes = { stage: StageNode };
 
 export default function PipelineGraph({ stages, edges, onNodeClick }) {
