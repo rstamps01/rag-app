@@ -13,7 +13,8 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import useWebSocket from '../../hooks/useWebSocket.jsx.v7c';
+//import useWebSocket from '../../hooks/useWebSocket.jsx.v7c';
+import useWebSocket from '../../hooks/useWebSocket.jsx';
 import PipelineGraph from '../../components/PipelineGraph';
 
 const PipelineMonitoringDashboard = () => {
