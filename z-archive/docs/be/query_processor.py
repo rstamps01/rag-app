@@ -159,7 +159,7 @@ async def process_query(
         logger.debug(f"[Pipeline ID: {pipeline_id}] Query processor using embedding model with dimension: {expected_dimension}")
         
         # Use mixed precision if on GPU
-        with torch.cuda.amp.autocast() if device == "cuda" else nullcontext():
+        with torch.amp.autocast(device_type='cuda') if device == "cuda" else nullcontext():
             query_vector = embedding_model.encode(query_text, convert_to_numpy=True).tolist()
             
         logger.debug(f"[Pipeline ID: {pipeline_id}] Generated query vector with dimension: {len(query_vector)}")
@@ -298,7 +298,7 @@ async def process_query(
         use_cuda_graphs = torch.cuda.is_available() and hasattr(torch.cuda, 'graphs') and torch.__version__ >= "2.0.0"
         
         # Use mixed precision inference
-        with torch.cuda.amp.autocast() if device == "cuda" else nullcontext():
+        with torch.amp.autocast(device_type=) if device == "cuda" else nullcontext():
             llm_response_data = llm_pipeline(
                 prompt,
                 do_sample=True,

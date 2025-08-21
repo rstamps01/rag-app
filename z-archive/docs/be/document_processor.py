@@ -356,7 +356,7 @@ def generate_embeddings(texts: List[str], pipeline_id: str) -> Optional[List[Lis
             logger.info(f"[Pipeline ID: {pipeline_id}] Using batch size {batch_size} for embedding generation")
         
         # Use mixed precision if on GPU
-        with torch.cuda.amp.autocast() if device == "cuda" else nullcontext():
+        with torch.amp.autocast(device_type='cuda') if device == "cuda" else nullcontext():
             # Process in batches to avoid OOM
             all_embeddings = []
             for i in range(0, len(texts), batch_size):
