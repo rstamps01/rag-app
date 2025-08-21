@@ -56,7 +56,7 @@
   },
   "gpu_settings": {
     "enable_gpu_cache": true,
-    "gpu_memory_fraction": 0.8,
+    "gpu_memory_fraction": 0.7,
     "allow_memory_growth": true
   },
   "environment": {

@@ -173,7 +173,7 @@ class Settings(BaseSettings):
     REQUEST_TIMEOUT: str = Field(default="120", description="Request timeout")
     BATCH_SIZE: str = Field(default="1", description="Batch size")
     TORCH_MEMORY_FRACTION: str = Field(
-        default="0.8",
+        default="0.7",
         description="Torch memory fraction"
     )
     ENABLE_MEMORY_EFFICIENT_ATTENTION: str = Field(

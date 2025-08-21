@@ -387,7 +387,7 @@ async def startup_event():
     try:
         import torch
         if torch.cuda.is_available():
-            torch.cuda.set_per_process_memory_fraction(0.8)
+            torch.cuda.set_per_process_memory_fraction(0.7)
             torch.cuda.empty_cache()
             print("✅ GPU memory optimization applied at startup")
     except Exception as e:

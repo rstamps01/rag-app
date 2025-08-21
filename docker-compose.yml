@@ -9,6 +9,7 @@ services:
     restart: unless-stopped
     ports:
     - 8000:8000
+    - 9090:9090
     healthcheck:
       test:
       - CMD
@@ -21,9 +22,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 16G
+          memory: 24G
         reservations:
-          memory: 4G
+          memory: 8G
           devices:
           - driver: nvidia
             count: 1
@@ -38,8 +39,10 @@ services:
     - HF_HUB_CACHE=/app/models_cache/hub
     - MODELS_CACHE_DIR=/app/models_cache
     - PYTHONPATH=/app
+    - TORCH_CUDA_ARCH_LIST=12.0
     - CUDA_VISIBLE_DEVICES=0
     - NVIDIA_VISIBLE_DEVICES=0
+    - CUDA_LAUNCH_BLOCKING=1
     - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     - DATABASE_URL=postgresql://rag:rag@postgres-07:5432/rag
     - QDRANT_URL=http://qdrant-07:6333
@@ -59,6 +62,9 @@ services:
     - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,expandable_segments:True
     - TRITON_CACHE_DIR=/tmp/triton_cache
     - TRITON_KERNEL_CACHE_SIZE=1024
+  # PyTorch Verbose Logging
+    - TORCHDYNAMO_VERBOSE=1
+    - TORCH_LOGS=+dynamo,+distributed,+inductor
     command: "sh -c \"\n  echo 'Waiting for cache initialization...' &&\n  while [\
       \ ! -f /app/models_cache/.initialization_complete ]; do\n    echo 'Cache not\
       \ ready, waiting...'\n    sleep 2\n  done &&\n  echo 'Cache initialization detected,\
