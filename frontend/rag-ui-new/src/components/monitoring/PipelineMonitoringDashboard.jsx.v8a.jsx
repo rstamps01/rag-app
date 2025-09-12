@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import useWebSocket from '../../hooks/useWebSocket.jsx.v7c';
+// import useWebSocket from '../../hooks/useWebSocket.jsx';
 // Import the interactive pipeline graph component.  Adjust the import
 // path based on your project structure.  This assumes the file lives
 // in frontend/rag-ui-new/src/components/PipelineGraph.jsx as noted in
