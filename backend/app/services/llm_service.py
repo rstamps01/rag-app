@@ -75,7 +75,7 @@ class LLMService:
             # Add GPU-specific optimizations
             if self.device == "cuda":
                 model_kwargs.update({
-                    "attn_implementation": "flex_attention",        #"flash_attention_2",  # For RTX 5090 optimization
+                    "attn_implementation": "sdpa",                  # FIXED: Changed from flex_attention to sdpa for stability
                     "use_cache": True
                 })
             
