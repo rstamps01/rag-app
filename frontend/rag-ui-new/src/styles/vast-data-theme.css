@@ -1,0 +1,360 @@
+/**
+ * VAST Data Brand Theme
+ * Comprehensive styling based on VAST Data brand guidelines
+ * https://brand.vastdata.com/d/vsTmbmZTQyJs/brand-guidelines
+ */
+
+/* VAST Data Color Palette */
+:root {
+  /* Primary Colors */
+  --vast-primary: #00D4AA;      /* Teal/Green - Primary brand color */
+  --vast-secondary: #0066CC;    /* Blue - Secondary brand color */
+  --vast-accent: #FF6B35;       /* Orange - Accent color */
+  
+  /* Neutral Colors */
+  --vast-neutral: #2C3E50;      /* Dark Blue-Grey - Text and borders */
+  --vast-light: #F8F9FA;        /* Light Grey - Backgrounds */
+  --vast-dark: #1A1A1A;         /* Dark Background */
+  --vast-medium: #6C757D;       /* Medium Grey */
+  
+  /* Pipeline Node Colors */
+  --node-query: #00D4AA;        /* Teal for input nodes */
+  --node-process: #0066CC;      /* Blue for processing nodes */
+  --node-output: #FF6B35;       /* Orange for output nodes */
+  --node-resource: #6C5CE7;     /* Purple for monitoring nodes */
+  --node-vector: #00B894;       /* Green for vector operations */
+  
+  /* Status Colors */
+  --status-success: #00D4AA;    /* Success state */
+  --status-warning: #FF6B35;    /* Warning state */
+  --status-error: #E74C3C;      /* Error state */
+  --status-info: #0066CC;       /* Info state */
+  
+  /* Background Gradients */
+  --gradient-primary: linear-gradient(135deg, #00D4AA 0%, #00B894 100%);
+  --gradient-secondary: linear-gradient(135deg, #0066CC 0%, #0052A3 100%);
+  --gradient-accent: linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%);
+  --gradient-dark: linear-gradient(135deg, #1A1A1A 0%, #2C3E50 100%);
+}
+
+/* Base Typography - VAST Data Font Family */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background-color: var(--vast-dark);
+  color: var(--vast-light);
+}
+
+/* React Flow Custom Styling */
+.react-flow {
+  background-color: var(--vast-dark);
+}
+
+.react-flow__node {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+}
+
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 5;
+  animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+/* Custom Node Styling */
+.pipeline-node {
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid var(--vast-neutral);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.pipeline-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.pipeline-node.selected {
+  border-color: var(--vast-primary);
+  box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.2);
+}
+
+/* Node Type Specific Colors */
+.pipeline-node.query-node {
+  border-color: var(--node-query);
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.1) 0%, rgba(0, 212, 170, 0.05) 100%);
+}
+
+.pipeline-node.vector-node {
+  border-color: var(--node-vector);
+  background: linear-gradient(135deg, rgba(0, 184, 148, 0.1) 0%, rgba(0, 184, 148, 0.05) 100%);
+}
+
+.pipeline-node.process-node {
+  border-color: var(--node-process);
+  background: linear-gradient(135deg, rgba(0, 102, 204, 0.1) 0%, rgba(0, 102, 204, 0.05) 100%);
+}
+
+.pipeline-node.output-node {
+  border-color: var(--node-output);
+  background: linear-gradient(135deg, rgba(255, 107, 53, 0.1) 0%, rgba(255, 107, 53, 0.05) 100%);
+}
+
+.pipeline-node.monitor-node {
+  border-color: var(--node-resource);
+  background: linear-gradient(135deg, rgba(108, 92, 231, 0.1) 0%, rgba(108, 92, 231, 0.05) 100%);
+}
+
+/* Handle Styling */
+.react-flow__handle {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--vast-light);
+  background: var(--vast-primary);
+}
+
+.react-flow__handle-top {
+  top: -6px;
+}
+
+.react-flow__handle-bottom {
+  bottom: -6px;
+}
+
+.react-flow__handle-left {
+  left: -6px;
+}
+
+.react-flow__handle-right {
+  right: -6px;
+}
+
+/* Controls Styling */
+.react-flow__controls {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.react-flow__controls-button {
+  background: transparent;
+  border: none;
+  color: var(--vast-neutral);
+  transition: all 0.2s ease;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--vast-primary);
+  color: white;
+}
+
+/* MiniMap Styling */
+.react-flow__minimap {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Panel Styling */
+.monitoring-panel {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 16px;
+}
+
+/* Status Indicators */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-indicator.connected {
+  background: rgba(0, 212, 170, 0.1);
+  color: var(--status-success);
+  border: 1px solid var(--status-success);
+}
+
+.status-indicator.disconnected {
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--status-error);
+  border: 1px solid var(--status-error);
+}
+
+.status-indicator.processing {
+  background: rgba(255, 107, 53, 0.1);
+  color: var(--status-warning);
+  border: 1px solid var(--status-warning);
+}
+
+.status-indicator.idle {
+  background: rgba(108, 117, 125, 0.1);
+  color: var(--vast-medium);
+  border: 1px solid var(--vast-medium);
+}
+
+/* Metric Cards */
+.metric-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--vast-primary);
+}
+
+.metric-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vast-neutral);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Animation Classes */
+.pulse-animation {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.glow-effect {
+  box-shadow: 0 0 20px rgba(0, 212, 170, 0.3);
+}
+
+/* Vector Visualization Styling */
+.vector-point {
+  fill: var(--vast-primary);
+  stroke: var(--vast-light);
+  stroke-width: 1;
+  transition: all 0.3s ease;
+}
+
+.vector-point:hover {
+  fill: var(--vast-accent);
+  stroke-width: 2;
+  transform: scale(1.2);
+}
+
+.vector-point.selected {
+  fill: var(--vast-accent);
+  stroke: var(--vast-accent);
+  stroke-width: 3;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .pipeline-node {
+    min-width: 150px;
+    padding: 8px;
+  }
+  
+  .metric-card {
+    padding: 12px;
+  }
+  
+  .metric-value {
+    font-size: 18px;
+  }
+}
+
+/* Dark Mode Enhancements */
+@media (prefers-color-scheme: dark) {
+  .pipeline-node {
+    background: rgba(26, 26, 26, 0.95);
+    color: var(--vast-light);
+  }
+  
+  .monitoring-panel {
+    background: rgba(26, 26, 26, 0.95);
+    color: var(--vast-light);
+  }
+  
+  .metric-card {
+    background: rgba(26, 26, 26, 0.95);
+    color: var(--vast-light);
+  }
+}
+
+/* Loading States */
+.loading-shimmer {
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0) 0%, 
+    rgba(255, 255, 255, 0.2) 50%, 
+    rgba(255, 255, 255, 0) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vast-primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--node-vector);
+}
