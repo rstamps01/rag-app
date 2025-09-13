@@ -90,11 +90,11 @@ except Exception as e:
 
 # Try to import LLM service
 try:
-    from app.services.llm_service import LLMService
-    logger.info("✅ LLM Service imported successfully")
+    from app.services.enhanced_llm_service import LLMService, enhanced_llm_service
+    logger.info("✅ Enhanced LLM Service imported successfully")
     llm_ok = True
 except Exception as e:
-    logger.error(f"⚠️  LLM Service import failed: {e}")
+    logger.error(f"⚠️  Enhanced LLM Service import failed: {e}")
 
 # Try to import Vector DB service
 try:
@@ -151,10 +151,10 @@ def initialize_services():
     # Initialize LLM Service
     if llm_ok:
         try:
-            llm_service = LLMService()
-            logger.info("✅ LLM Service initialized")
+            llm_service = enhanced_llm_service  # Use the pre-initialized enhanced instance
+            logger.info("✅ Enhanced LLM Service initialized")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize LLM Service: {e}")
+            logger.error(f"❌ Failed to initialize Enhanced LLM Service: {e}")
             llm_service = None
     
     # Initialize Vector DB Service
