@@ -11,8 +11,8 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 from app.services.query_processor import QueryProcessor
-from app.services.llm_service import LLMService
-from app.services.vector_db import VectorDBService
+from app.services.enhanced_llm_service import LLMService, enhanced_llm_service
+from app.services.integrated_vector_db_service import IntegratedVectorDBService, integrated_vector_db_service
 from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor
 from app.crud.crud_query_history import create_query_history
 from app.schemas.query import QueryHistoryCreate, QueryResponse, SourceDocument

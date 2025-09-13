@@ -13,7 +13,7 @@ import logging
 from app.db.session import get_db 
 from sqlalchemy.orm import Session
 
-from app.services import query_wrapper
+from app.services.enhanced_query_wrapper import enhanced_query_wrapper
 from app.schemas.query import QueryRequest, QueryResponse, QueryHistoryResponse
 from app.crud import crud_query_history
 
@@ -37,8 +37,8 @@ async def process_query_endpoint(
         department_to_use = request.department if request.department is not None else "General"
         logger.info(f"Calling query_wrapper.process_query with query: {request.query}, department: {department_to_use}, user_id: {user_id_to_pass}")
         
-        # Call the async function from the imported module
-        response = await query_wrapper.process_query(
+        # Call the async function from the enhanced query wrapper
+        response = await enhanced_query_wrapper.process_query(
             query=request.query,
             department=department_to_use,
             user_id=user_id_to_pass

@@ -4,7 +4,7 @@ import torch
 import time
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 import numpy as np
-from app.services.vector_db import VectorDBService
+from app.services.integrated_vector_db_service import IntegratedVectorDBService, integrated_vector_db_service
 from backend.app.services.integrated_document_processor import DocumentProcessor
 from app.services.gpu_accelerator import GPUAccelerator
 
@@ -24,7 +24,7 @@ class RAGService:
         self.scaler = self.gpu_accelerator.setup_mixed_precision() if self.is_rtx5090 else None
         
         # Initialize vector DB service
-        self.vector_db = VectorDBService()
+        self.vector_db = integrated_vector_db_service
         
         # Initialize document processor with GPU acceleration
         self.document_processor = DocumentProcessor(use_gpu=use_gpu)

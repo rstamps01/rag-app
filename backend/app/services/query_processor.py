@@ -9,7 +9,7 @@ from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient, models
 from app.core.config import settings
 from app.core.pipeline_monitor import pipeline_monitor
-from app.services.llm_service import LLMService
+from app.services.enhanced_llm_service import LLMService, enhanced_llm_service
 from app.services.gpu_accelerator import GPUAccelerator
 
 # FIXED: Changed from relative import to absolute import

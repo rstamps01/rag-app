@@ -90,19 +90,19 @@ except Exception as e:
 
 # Try to import LLM service
 try:
-    from app.services.llm_service import LLMService
-    logger.info("✅ LLM Service imported successfully")
+    from app.services.enhanced_llm_service import LLMService, enhanced_llm_service
+    logger.info("✅ Enhanced LLM Service imported successfully")
     llm_ok = True
 except Exception as e:
-    logger.error(f"⚠️  LLM Service import failed: {e}")
+    logger.error(f"⚠️  Enhanced LLM Service import failed: {e}")
 
 # Try to import Vector DB service
 try:
-    from app.services.vector_db import VectorDBService
-    logger.info("✅ Vector DB Service imported successfully")
+    from app.services.integrated_vector_db_service import IntegratedVectorDBService, integrated_vector_db_service
+    logger.info("✅ Integrated Vector DB Service imported successfully")
     vector_db_ok = True
 except Exception as e:
-    logger.error(f"⚠️  Vector DB Service import failed: {e}")
+    logger.error(f"⚠️  Integrated Vector DB Service import failed: {e}")
 
 # Pydantic models for API
 class QueryRequest(BaseModel):
@@ -151,19 +151,19 @@ def initialize_services():
     # Initialize LLM Service
     if llm_ok:
         try:
-            llm_service = LLMService()
-            logger.info("✅ LLM Service initialized")
+            llm_service = enhanced_llm_service  # Use the pre-initialized enhanced instance
+            logger.info("✅ Enhanced LLM Service initialized")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize LLM Service: {e}")
+            logger.error(f"❌ Failed to initialize Enhanced LLM Service: {e}")
             llm_service = None
     
     # Initialize Vector DB Service
     if vector_db_ok:
         try:
-            vector_db_service = VectorDBService()
-            logger.info("✅ Vector DB Service initialized")
+            vector_db_service = integrated_vector_db_service  # Use the pre-initialized integrated instance
+            logger.info("✅ Integrated Vector DB Service initialized")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Vector DB Service: {e}")
+            logger.error(f"❌ Failed to initialize Integrated Vector DB Service: {e}")
             vector_db_service = None
     
     # Initialize embedding model for vector processing
