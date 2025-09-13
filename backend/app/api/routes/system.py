@@ -35,7 +35,7 @@ async def get_system_info() -> Any:
         system_info["gpu"]["rtx5090_optimizations"] = {
             "tensor_cores_enabled": True,
             "mixed_precision_enabled": True,
-            "flash_attention_enabled": True,
+            "flash_attention_enabled": supports_pytorch_sdpa(),
             "cuda_graphs_enabled": True,
             "memory_optimization_enabled": True
         }

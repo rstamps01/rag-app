@@ -34,11 +34,11 @@ class ModelManager:
         # Load model with optimizations
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            cache_dir="/app/models_cache", # Added cache_dir
+            cache_dir="/app/models_cache",  # Added cache_dir
             device_map=device_map,
             load_in_8bit=load_in_8bit,
             torch_dtype=torch.float16 if self.use_gpu else torch.float32,
-            attn_implementation="flex_attention" if self.use_gpu else "eager"    ##Changed "flash_attention" to "flex_attention"
+            attn_implementation="sdpa" if self.use_gpu else "eager"     ##Changed "flash_attention" to "flex_attention"
         )
         
         self.models[model_name] = model

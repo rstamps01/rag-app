@@ -124,7 +124,7 @@ services:
   frontend-07:
     build:
     #  context: https://github.com/rstamps01/rag-app.git#main
-      context: ./backend
+      context: ./frontend
       dockerfile: Dockerfile
       args:
       - BUILDKIT_INLINE_CACHE=1
