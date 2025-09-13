@@ -26,23 +26,18 @@ RUN sed -i 's/"react": "\^19.0.0"/"react": "^18.2.0"/g' package.json && \
 
 # Build the Vite application for production.
 # This will generate static files in the /app/dist directory.
-RUN npm run build
+RUN echo "Starting frontend build..." && \
+    npm run build && \
+    echo "Frontend build completed successfully"
 
 # === Production Stage ===
 # Use a lightweight Nginx image to serve the static files.
+# Copy the custom Nginx configuration file.
+# This file should be located in the same directory as this Dockerfile (frontend/).
 
 FROM nginx:stable-alpine
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY --from=build /app/dist /usr/share/nginx/html
-
-# Copy the Vite build output from the build stage to the Nginx web root.
-# Vite outputs to the 'dist' directory by default.
-# Build the Vite application for production.
-# This will generate static files in the /app/dist directory.
-
-RUN echo "Starting frontend build..." && \
-    npm run build && \
-    echo "Frontend build completed successfully"
 
 # Expose the port Nginx will listen on.
 EXPOSE 3000
