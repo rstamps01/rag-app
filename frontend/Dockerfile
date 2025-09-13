@@ -28,6 +28,10 @@ RUN sed -i 's/"react": "\^19.0.0"/"react": "^18.2.0"/g' package.json && \
 # This will generate static files in the /app/dist directory.
 RUN npm run build
 
+RUN echo "Starting frontend build..." && \
+    npm run build && \
+    echo "Frontend build completed successfully"
+
 # === Production Stage ===
 # Use a lightweight Nginx image to serve the static files.
 FROM nginx:stable-alpine
@@ -39,6 +43,9 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Copy the custom Nginx configuration file.
 # This file should be located in the same directory as this Dockerfile (frontend/).
 COPY nginx.conf /etc/nginx/nginx.conf
+
+access_log /dev/stdout main;
+error_log /dev/stderr warn;
 
 # Expose the port Nginx will listen on.
 EXPOSE 3000
