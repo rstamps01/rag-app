@@ -13,7 +13,7 @@ WORKDIR /app
 COPY rag-ui-new/package*.json ./
 
 # Install project dependencies.
-RUN npm install \
+RUN npm install && \
     npm install reactflow
 
 # Copy the rest of the frontend application code.
@@ -38,7 +38,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 # Copy the custom Nginx configuration file.
 # This file should be located in the same directory as this Dockerfile (frontend/).
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # Expose the port Nginx will listen on.
 EXPOSE 3000
