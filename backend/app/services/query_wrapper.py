@@ -13,7 +13,7 @@ from datetime import datetime
 
 from app.services.query_processor import QueryProcessor
 from app.services.enhanced_llm_service import LLMService, enhanced_llm_service
-from app.services.vector_db import VectorDBService
+from app.services.integrated_vector_db_service import IntegratedVectorDBService, integrated_vector_db_service
 from app.crud import crud_query_history # Import CRUD for query history
 from app.db.session import get_db
 from app.schemas.query import QueryResponse, SourceDocument

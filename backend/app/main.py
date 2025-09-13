@@ -98,11 +98,11 @@ except Exception as e:
 
 # Try to import Vector DB service
 try:
-    from app.services.vector_db import VectorDBService
-    logger.info("✅ Vector DB Service imported successfully")
+    from app.services.integrated_vector_db_service import IntegratedVectorDBService, integrated_vector_db_service
+    logger.info("✅ Integrated Vector DB Service imported successfully")
     vector_db_ok = True
 except Exception as e:
-    logger.error(f"⚠️  Vector DB Service import failed: {e}")
+    logger.error(f"⚠️  Integrated Vector DB Service import failed: {e}")
 
 # Pydantic models for API
 class QueryRequest(BaseModel):
@@ -160,10 +160,10 @@ def initialize_services():
     # Initialize Vector DB Service
     if vector_db_ok:
         try:
-            vector_db_service = VectorDBService()
-            logger.info("✅ Vector DB Service initialized")
+            vector_db_service = integrated_vector_db_service  # Use the pre-initialized integrated instance
+            logger.info("✅ Integrated Vector DB Service initialized")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Vector DB Service: {e}")
+            logger.error(f"❌ Failed to initialize Integrated Vector DB Service: {e}")
             vector_db_service = None
     
     # Initialize embedding model for vector processing
