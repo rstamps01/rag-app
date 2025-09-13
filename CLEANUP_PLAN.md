@@ -18,12 +18,11 @@ This cleanup removes duplicate service files and consolidates functionality to e
 - **Query Processing**: `enhanced_query_wrapper.py` (most feature-complete)
 - **Document Processing**: `integrated_document_processor.py` (most integrated)
 
-### Files to Remove
-- All `.backup*` files
-- All `.v8*` files  
-- All `.copy*` files
-- All `.original` files
-- Duplicate API route files
+### Approach: Import Standardization
+- Keep all backup and version files in place for safety
+- Standardize all imports to use the chosen service implementations
+- Update main.py and route files to use consistent services
+- Maintain backup files as reference but ensure only one service is active
 
 ### Import Updates Required
 - `main.py`: Update LLM and Vector DB service imports
