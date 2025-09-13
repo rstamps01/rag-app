@@ -3,7 +3,7 @@ services:
     env_file:
     - .env
     build:
-      context: ./backend
+      context: https://github.com/rstamps01/rag-app.git#main
       dockerfile: Dockerfile
     container_name: backend-07
     restart: unless-stopped
@@ -122,7 +122,7 @@ services:
     - network-07
   frontend-07:
     build:
-      context: ./frontend
+      context: https://github.com/rstamps01/rag-app.git#main
       dockerfile: Dockerfile
       args:
       - BUILDKIT_INLINE_CACHE=1
@@ -151,7 +151,7 @@ services:
       retries: 3
   db-init-07:
     build:
-      context: ./backend
+      context: https://github.com/rstamps01/rag-app.git#main
       dockerfile: Dockerfile
     container_name: db-init-07
     environment:
@@ -181,7 +181,7 @@ services:
     restart: 'no'
   cache-init-07:
     build:
-      context: ./backend
+      context: https://github.com/rstamps01/rag-app.git#main
       dockerfile: Dockerfile.cache-init
       args:
       - BUILDKIT_INLINE_CACHE=1
