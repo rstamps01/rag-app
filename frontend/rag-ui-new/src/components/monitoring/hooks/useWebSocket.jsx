@@ -20,7 +20,7 @@ const useWebSocket = (url, options = {}) => {
     debug = false 
   } = options;
 
-  // Enhanced data transformation function
+  // Enhanced data transformation function - Fixed to handle backend field variations
   const transformWebSocketData = useCallback((rawData) => {
     if (!rawData || typeof rawData !== 'object') {
       console.warn('Invalid WebSocket data received:', rawData);
@@ -44,35 +44,78 @@ const useWebSocket = (url, options = {}) => {
       // Transform the data to match frontend expectations
       const transformed = {
         system_health: {
+          // Handle both backend field names: cpu_usage and cpu_percent
           cpu_percent: parseFloat(data.system_health?.cpu_percent || data.system_health?.cpu_usage || 0),
+          // Handle both backend field names: memory_usage and memory_percent
           memory_percent: parseFloat(data.system_health?.memory_percent || data.system_health?.memory_usage || 0),
+          // Calculate memory_available if not provided
           memory_available: data.system_health?.memory_available || '0GB'
         },
-        gpu_performance: Array.isArray(data.gpu_performance) 
-          ? data.gpu_performance.map(gpu => ({
-              utilization: parseFloat(gpu.utilization || 0),
-              memory_used: parseFloat(gpu.memory_used || 0),
-              memory_total: parseFloat(gpu.memory_total || 0),
-              temperature: parseFloat(gpu.temperature || 0)
-            }))
-          : data.gpu_performance && typeof data.gpu_performance === 'object'
-          ? [{
-              utilization: parseFloat(data.gpu_performance.utilization || 0),
-              memory_used: parseFloat(data.gpu_performance.memory_used || 0),
-              memory_total: parseFloat(data.gpu_performance.memory_total || 0),
-              temperature: parseFloat(data.gpu_performance.temperature || 0)
-            }]
-          : [],
+        
+        gpu_performance: (() => {
+          // Backend sends GPU data as single object, convert to array format
+          if (data.gpu_performance && typeof data.gpu_performance === 'object') {
+            // Check if it's already an array
+            if (Array.isArray(data.gpu_performance)) {
+              return data.gpu_performance.map(gpu => ({
+                utilization: parseFloat(gpu.utilization || gpu.gpu_utilization || 0),
+                memory_used: parseFloat(gpu.memory_used || gpu.gpu_memory_used || 0),
+                memory_total: parseFloat(gpu.memory_total || gpu.gpu_memory_total || 0),
+                temperature: parseFloat(gpu.temperature || gpu.gpu_temperature || 0)
+              }));
+            } else {
+              // Convert single object to array format
+              return [{
+                utilization: parseFloat(data.gpu_performance.utilization || data.gpu_performance.gpu_utilization || 0),
+                memory_used: parseFloat(data.gpu_performance.memory_used || data.gpu_performance.gpu_memory_used || 0),
+                memory_total: parseFloat(data.gpu_performance.memory_total || data.gpu_performance.gpu_memory_total || 0),
+                temperature: parseFloat(data.gpu_performance.temperature || data.gpu_performance.gpu_temperature || 0)
+              }];
+            }
+          }
+          return [];
+        })(),
+        
         pipeline_status: {
-          queries_per_minute: parseInt(data.pipeline_status?.queries_per_minute || data.pipeline_status?.queries_per_min || 0),
-          avg_response_time: parseFloat(data.pipeline_status?.avg_response_time || 0),
-          active_queries: parseInt(data.pipeline_status?.active_queries || 0)
+          // Handle both section names: pipeline_status and query_performance
+          queries_per_minute: parseInt(
+            data.pipeline_status?.queries_per_minute || 
+            data.query_performance?.queries_per_minute || 
+            data.pipeline_status?.queries_per_min || 
+            data.query_performance?.queries_per_min || 
+            0
+          ),
+          // Handle different field names for response time
+          avg_response_time: parseFloat(
+            data.pipeline_status?.avg_response_time || 
+            data.query_performance?.avg_response_time || 
+            data.pipeline_status?.average_response_time_ms || 
+            data.query_performance?.average_response_time_ms || 
+            0
+          ),
+          active_queries: parseInt(
+            data.pipeline_status?.active_queries || 
+            data.query_performance?.active_queries || 
+            0
+          )
         },
+        
         connection_status: {
-          websocket_connections: parseInt(data.connection_status?.websocket_connections || data.connection_status?.websocket || 0),
-          backend_status: data.connection_status?.backend_status || data.connection_status?.backend || 'unknown',
-          database_status: data.connection_status?.database_status || data.connection_status?.database || 'unknown',
-          vector_db_status: data.connection_status?.vector_db_status || data.connection_status?.vector_db || 'unknown'
+          // Handle different field naming conventions
+          websocket_connections: parseInt(
+            data.connection_status?.websocket_connections || 
+            data.connection_status?.websocket || 
+            0
+          ),
+          backend_status: data.connection_status?.backend_status || 
+                         data.connection_status?.backend || 
+                         'unknown',
+          database_status: data.connection_status?.database_status || 
+                          data.connection_status?.database || 
+                          'unknown',
+          vector_db_status: data.connection_status?.vector_db_status || 
+                           data.connection_status?.vector_db || 
+                           'unknown'
         },
         timestamp: data.timestamp || data.lastUpdate || new Date().toISOString()
       };
