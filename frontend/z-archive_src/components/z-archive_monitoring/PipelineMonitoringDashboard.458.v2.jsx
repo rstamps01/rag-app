@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Badge, Progress } from '../ui/index.jsx';
+import { Card, Badge, Progress } from '../../src/components/ui/index.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { Activity, Cpu, HardDrive, Network, Zap, TrendingUp, Server } from 'lucide-react';
-import useWebSocket from '../../hooks/useWebSocket.jsx';
+import useWebSocket from '../../src/hooks/useWebSocket.js';
 
 const EnhancedPipelineMonitoringDashboard = () => {
   // Enhanced state management with comprehensive metrics

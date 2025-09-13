@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Button, Alert } from '../ui';
+import { Card, Button, Alert } from '../../../rag-ui-new/src/components/ui';
 
 const DocumentsPage = () => {
   const [documents, setDocuments] = useState([]);

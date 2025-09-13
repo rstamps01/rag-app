@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Badge, Progress } from '../ui/index.jsx';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
-import { Activity, Cpu, HardDrive, Network, Zap, Database, Globe, Clock, TrendingUp, Server } from 'lucide-react';
-import useWebSocket from '../../hooks/useWebSocket.jsx';
+import { Card, Badge, Progress } from '../../src/components/ui/index.jsx';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { Activity, Cpu, HardDrive, Network, Zap, TrendingUp, Server } from 'lucide-react';
+import useWebSocket from '../../src/hooks/useWebSocket.jsx';
 
 const EnhancedPipelineMonitoringDashboard = () => {
   // Enhanced state management with comprehensive metrics
@@ -108,22 +108,6 @@ const EnhancedPipelineMonitoringDashboard = () => {
           });
 
           console.log('✅ Enhanced metrics updated:', newMetrics);
-        } else if (data.type === 'initial_state' && data.data) {
-          // Handle initial state
-          const initialMetrics = {
-            system_health: data.data.system_health || localMetrics.system_health,
-            gpu_performance: Array.isArray(data.data.gpu_performance) 
-              ? data.data.gpu_performance 
-              : [data.data.gpu_performance || localMetrics.gpu_performance[0]],
-            pipeline_stats: data.data.pipeline_stats || localMetrics.pipeline_stats,
-            connection_status: data.data.connection_status || localMetrics.connection_status,
-            network_stats: data.data.network_stats || localMetrics.network_stats,
-            disk_stats: data.data.disk_stats || localMetrics.disk_stats,
-            lastUpdate: data.data.lastUpdate || new Date().toISOString()
-          };
-
-          setLocalMetrics(initialMetrics);
-          console.log('🚀 Enhanced initial state loaded:', initialMetrics);
         }
       } catch (error) {
         console.error('❌ Error parsing enhanced WebSocket data:', error);
