@@ -6,7 +6,7 @@ import os
 # Add the app directory to Python path
 sys.path.append('/app')
 
-from app.services.query_wrapper import process_query
+from app.services.enhanced_query_wrapper import enhanced_query_wrapper
 
 async def test_integration():
     """Test the RAG integration"""
@@ -27,7 +27,7 @@ async def test_integration():
         
         try:
             # Process query (db parameter can be None for testing)
-            result = await process_query(
+            result = await enhanced_query_wrapper.process_query(
                 db=None,
                 query_text=query,
                 department="General",
