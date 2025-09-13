@@ -38,7 +38,11 @@ class ModelManager:
             device_map=device_map,
             load_in_8bit=load_in_8bit,
             torch_dtype=torch.float16 if self.use_gpu else torch.float32,
+<<<<<<< HEAD
             attn_implementation="sdpa" if self.use_gpu else "eager"     ##Changed "flash_attention" to "flex_attention"
+=======
+            attn_implementation="sdpa" if self.use_gpu else "eager"    ##FIXED: Changed from "flex_attention" to "sdpa" for stability
+>>>>>>> e35a376a205bad2acb607db7a526f3357334cdea
         )
         
         self.models[model_name] = model

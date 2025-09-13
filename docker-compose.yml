@@ -3,7 +3,6 @@ services:
     env_file:
     - .env
     build:
-    #  context: https://github.com/rstamps01/rag-app.git#main
       context: ./backend
       dockerfile: Dockerfile
     container_name: backend-07
@@ -31,6 +30,7 @@ services:
             count: 1
             capabilities:
             - gpu
+
     volumes:
     - ./backend/models_cache:/app/models_cache:rw
     - backend_logs-07:/app/data/logs:rw
@@ -74,6 +74,7 @@ services:
       \ app.main:app --host 0.0.0.0 --port 8000\n\"\n"
     networks:
     - network-07
+
   postgres-07:
     image: postgres:15
     container_name: postgres-07
@@ -95,6 +96,7 @@ services:
       retries: 5
     networks:
     - network-07
+
   qdrant-07:
     image: qdrant/qdrant:latest
     container_name: qdrant-07
@@ -121,9 +123,13 @@ services:
       start_period: 30s
     networks:
     - network-07
+
   frontend-07:
     build:
+<<<<<<< HEAD
     #  context: https://github.com/rstamps01/rag-app.git#main
+=======
+>>>>>>> e35a376a205bad2acb607db7a526f3357334cdea
       context: ./frontend
       dockerfile: Dockerfile
       args:
@@ -134,7 +140,7 @@ services:
     - REACT_APP_ENVIRONMENT=production
     - REACT_APP_API_URL_INTERNAL=http://backend-07:8000
     volumes:
-    - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+    - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
     - 3000:3000
     networks:
@@ -143,17 +149,19 @@ services:
     - backend-07
     restart: unless-stopped
     healthcheck:
-      test:
-      - CMD
-      - curl
-      - -f
-      - http://localhost:3000
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+      
+
   db-init-07:
     build:
-    #  context: https://github.com/rstamps01/rag-app.git#main
       context: ./backend
       dockerfile: Dockerfile
     container_name: db-init-07
@@ -182,9 +190,9 @@ services:
       \ complete' &&\n  touch /tmp/.db_init_complete &&\n  echo '\U0001F389 Integrated\
       \ database initialization completed successfully' &&\n  exit 0\n\"\n"
     restart: 'no'
+
   cache-init-07:
     build:
-    #  context: https://github.com/rstamps01/rag-app.git#main
       context: ./backend
       dockerfile: Dockerfile.cache-init
       args:
@@ -223,12 +231,14 @@ services:
         reservations:
           memory: 2G
           cpus: '1.0'
+    
     logging:
       driver: json-file
       options:
         max-size: 10m
         max-file: '3'
         labels: com.rag-app.service
+
 volumes:
   postgres_data-07:
     driver: local
@@ -248,6 +258,7 @@ volumes:
   db_init_status:
     driver: local
     name: db_init_status_07
+
 networks:
   network-07:
     driver: bridge
