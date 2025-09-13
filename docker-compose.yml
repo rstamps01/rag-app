@@ -126,10 +126,6 @@ services:
 
   frontend-07:
     build:
-<<<<<<< HEAD
-    #  context: https://github.com/rstamps01/rag-app.git#main
-=======
->>>>>>> e35a376a205bad2acb607db7a526f3357334cdea
       context: ./frontend
       dockerfile: Dockerfile
       args:
