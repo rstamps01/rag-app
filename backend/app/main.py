@@ -423,6 +423,16 @@ except Exception as e:
     logger.error(f"⚠️  Monitoring router import failed: {e}")
     monitoring_available = False
 
+# Qdrant Proxy Router
+try:
+    from app.api.routes.qdrant_proxy import router as qdrant_router
+    app.include_router(qdrant_router, tags=["qdrant-proxy"])
+    qdrant_proxy_available = True
+    logger.info("✅ Qdrant proxy router imported and registered successfully")
+except Exception as e:
+    logger.error(f"⚠️  Qdrant proxy router import failed: {e}")
+    qdrant_proxy_available = False
+
 # Root endpoints
 @app.get("/")
 async def root():
