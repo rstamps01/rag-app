@@ -4,6 +4,9 @@
  * https://brand.vastdata.com/d/vsTmbmZTQyJs/brand-guidelines
  */
 
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 /* VAST Data Color Palette */
 :root {
   /* Primary Colors */
@@ -38,8 +41,6 @@
 }
 
 /* Base Typography - VAST Data Font Family */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   background-color: var(--vast-dark);
@@ -54,6 +55,49 @@ body {
 .react-flow__node {
   font-family: 'Inter', sans-serif;
   font-weight: 500;
+}
+
+/* Fix for white dashed box artifact */
+.react-flow__node-default {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Ensure all React Flow nodes have proper styling */
+.react-flow__node-stage {
+  background: #6c7ae0 !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 10px !important;
+  min-width: 120px !important;
+  text-align: center !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
+}
+
+/* Hide any placeholder or empty nodes */
+.react-flow__node[data-id*="placeholder"],
+.react-flow__node[data-id*="empty"],
+.react-flow__node:empty {
+  display: none !important;
+}
+
+/* Remove any white dashed boxes or artifacts */
+.react-flow__node[style*="border: 2px dashed"],
+.react-flow__node[style*="border: dashed"],
+.react-flow__node[class*="dashed"],
+.react-flow__node[class*="white"] {
+  display: none !important;
+}
+
+/* Ensure React Flow container is clean */
+.react-flow__renderer {
+  background: transparent !important;
+}
+
+.react-flow__pane {
+  background: transparent !important;
 }
 
 .react-flow__edge-path {

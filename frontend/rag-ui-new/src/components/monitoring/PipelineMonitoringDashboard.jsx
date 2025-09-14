@@ -28,7 +28,7 @@ const PipelineMonitoringDashboard = () => {
     metrics,
     pipelineState,
     reconnect,
-  } = useWebSocket('ws://localhost:8000/api/v1/ws/pipeline-monitoring');
+  } = useWebSocket('ws://10.0.0.48:8000/api/v1/ws/pipeline-monitoring');
   // Update timestamp when metrics arrive
   useEffect(() => {
     if (metrics) {

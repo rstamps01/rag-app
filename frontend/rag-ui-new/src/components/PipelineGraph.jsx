@@ -84,12 +84,18 @@ const nodeTypes = { stage: StageNode };
 export default function PipelineGraph({ stages, edges, onNodeClick }) {
   // Convert stages to nodes expected by React Flow
   const nodes = useMemo(() => {
-    return stages.map((stage, idx) => ({
-      id: stage.id,
-      type: 'stage',
-      position: { x: idx * 200, y: 0 },
-      data: { ...stage },
-    }));
+    return stages
+      .filter(stage => stage && stage.id && stage.label) // Filter out invalid stages
+      .map((stage, idx) => ({
+        id: stage.id,
+        type: 'stage',
+        position: { x: idx * 200, y: 0 },
+        data: { 
+          label: stage.label || stage.id,
+          status: stage.status || 'idle',
+          ...stage 
+        },
+      }));
   }, [stages]);
 
   // Convert plain edges to React Flow edges
@@ -121,6 +127,11 @@ export default function PipelineGraph({ stages, edges, onNodeClick }) {
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClickHandler}
         fitView
+        deleteKeyCode={null} // Disable delete key
+        multiSelectionKeyCode={null} // Disable multi-selection
+        nodesDraggable={false} // Disable dragging
+        nodesConnectable={false} // Disable connections
+        elementsSelectable={false} // Disable selection
       >
         <MiniMap
           nodeColor={(node) => STATUS_COLOURS[node.data.status] || STATUS_COLOURS.default}
