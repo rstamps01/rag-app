@@ -103,28 +103,11 @@ const useWebSocket = (url, options = {}) => {
         if (debug) console.log('🔌 WebSocket connected');
         // Send an initial ping to verify connectivity
         sendJsonMessage({ type: 'ping', timestamp: Date.now() });
-        
-        // Start heartbeat to keep connection alive
-        const heartbeat = setInterval(() => {
-          if (ws.current?.readyState === WebSocket.OPEN) {
-            sendJsonMessage({ type: 'ping', timestamp: Date.now() });
-          } else {
-            clearInterval(heartbeat);
-          }
-        }, heartbeatInterval);
-        
-        // Store heartbeat interval for cleanup
-        ws.current.heartbeatInterval = heartbeat;
       };
       ws.current.onmessage = handleMessage;
       ws.current.onclose = (event) => {
         if (debug) console.log('🔌 WebSocket disconnected:', event.code, event.reason);
         setConnectionStatus('Disconnected');
-        
-        // Clear heartbeat interval
-        if (ws.current?.heartbeatInterval) {
-          clearInterval(ws.current.heartbeatInterval);
-        }
         
         // Attempt reconnection
         if (reconnectTimeoutRef.current) {
@@ -164,10 +147,6 @@ const useWebSocket = (url, options = {}) => {
         clearTimeout(reconnectTimeoutRef.current);
       }
       if (ws.current) {
-        // Clear heartbeat interval
-        if (ws.current.heartbeatInterval) {
-          clearInterval(ws.current.heartbeatInterval);
-        }
         ws.current.close();
       }
     };

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -276,11 +277,29 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             # Await messages from the client and handle ping/pong
             try:
                 message = await websocket.receive_text()
+                logger.debug(f"Received WebSocket message: {message[:100]}...")
+                
                 # Handle ping messages
-                if message == "ping" or (message.startswith('{"type":"ping"') if message else False):
+                if message == "ping":
                     await websocket.send_text("pong")
                     logger.debug("Sent pong response")
+                elif message.startswith('{"type":"ping"'):
+                    await websocket.send_text('{"type":"pong","timestamp":"' + str(int(time.time() * 1000)) + '"}')
+                    logger.debug("Sent JSON pong response")
+                else:
+                    logger.debug(f"Ignoring message: {message}")
+                    
             except WebSocketDisconnect:
+                logger.info("WebSocket disconnected by client")
                 break
+            except Exception as e:
+                logger.warning(f"Error processing WebSocket message: {e}")
+                # Continue the loop instead of breaking
+                continue
+                
     except WebSocketDisconnect:
+        logger.info("WebSocket disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
         manager.disconnect(websocket)
