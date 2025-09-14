@@ -650,10 +650,15 @@ async def ask_query(
         if db_ok and db is not None:
             try:
                 # Extract response text from dictionary if needed
+                logger.info(f"DEBUG: response_text type: {type(response_text)}")
+                logger.info(f"DEBUG: response_text content: {str(response_text)[:200]}...")
+                
                 if isinstance(response_text, dict):
                     response_text_str = response_text.get('response', str(response_text))
+                    logger.info(f"DEBUG: Extracted response string: {response_text_str[:200]}...")
                 else:
                     response_text_str = str(response_text)
+                    logger.info(f"DEBUG: Using response as string: {response_text_str[:200]}...")
                 
                 query_record = QueryHistory(
                     query_text=request.query,
@@ -677,10 +682,13 @@ async def ask_query(
                 logger.error(f"Failed to store query in database: {e}")
         
         # Extract response text for QueryResponse
+        logger.info(f"DEBUG: Preparing QueryResponse - response_text type: {type(response_text)}")
         if isinstance(response_text, dict):
             response_text_for_return = response_text.get('response', str(response_text))
+            logger.info(f"DEBUG: QueryResponse using extracted string: {response_text_for_return[:200]}...")
         else:
             response_text_for_return = str(response_text)
+            logger.info(f"DEBUG: QueryResponse using string: {response_text_for_return[:200]}...")
         
         return QueryResponse(
             response=response_text_for_return,
