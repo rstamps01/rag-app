@@ -649,9 +649,15 @@ async def ask_query(
         query_id = f"query-{int(time.time())}"
         if db_ok and db is not None:
             try:
+                # Extract response text from dictionary if needed
+                if isinstance(response_text, dict):
+                    response_text_str = response_text.get('response', str(response_text))
+                else:
+                    response_text_str = str(response_text)
+                
                 query_record = QueryHistory(
                     query_text=request.query,
-                    response_text=response_text,
+                    response_text=response_text_str,
                     llm_model_used=settings.LLM_MODEL_NAME if config_ok else "mistralai/Mistral-7B-Instruct-v0.2",
                     processing_time_ms=int(processing_time * 1000),
                     department_filter=request.department,
@@ -670,8 +676,14 @@ async def ask_query(
             except Exception as e:
                 logger.error(f"Failed to store query in database: {e}")
         
+        # Extract response text for QueryResponse
+        if isinstance(response_text, dict):
+            response_text_for_return = response_text.get('response', str(response_text))
+        else:
+            response_text_for_return = str(response_text)
+        
         return QueryResponse(
-            response=response_text,
+            response=response_text_for_return,
             model=settings.LLM_MODEL_NAME if config_ok else "mistralai/Mistral-7B-Instruct-v0.2",
             timestamp=time.time(),
             query_id=query_id,

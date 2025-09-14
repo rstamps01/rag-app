@@ -273,9 +273,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await manager.connect(websocket)
     try:
         while True:
-            # Await messages from the client.  Currently, we ignore
-            # received messages; however, consuming them prevents the
-            # connection from closing due to ping/pong mismatches.
-            await websocket.receive_text()
+            # Await messages from the client and handle ping/pong
+            try:
+                message = await websocket.receive_text()
+                # Handle ping messages
+                if message == "ping" or (message.startswith('{"type":"ping"') if message else False):
+                    await websocket.send_text("pong")
+                    logger.debug("Sent pong response")
+            except WebSocketDisconnect:
+                break
     except WebSocketDisconnect:
         manager.disconnect(websocket)
