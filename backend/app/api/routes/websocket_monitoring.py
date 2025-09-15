@@ -38,6 +38,25 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
+# Fallback logger in case the main logger fails
+def safe_log(level, message, *args, **kwargs):
+    """Safe logging function that won't fail if logger is not available."""
+    try:
+        if level == "info":
+            logger.info(message, *args, **kwargs)
+        elif level == "error":
+            logger.error(message, *args, **kwargs)
+        elif level == "warning":
+            logger.warning(message, *args, **kwargs)
+        elif level == "debug":
+            logger.debug(message, *args, **kwargs)
+    except NameError:
+        # Fallback to print if logger is not available
+        print(f"[{level.upper()}] {message}")
+    except Exception:
+        # Silent fallback
+        pass
+
 try:
     # Attempt to import GPUtil for real GPU metrics.  If the import
     # fails, the module falls back to returning zeros for GPU stats.
@@ -280,29 +299,29 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             # Await messages from the client and handle ping/pong
             try:
                 message = await websocket.receive_text()
-                logger.debug(f"Received WebSocket message: {message[:100]}...")
+                safe_log("debug", f"Received WebSocket message: {message[:100]}...")
                 
                 # Handle ping messages
                 if message == "ping":
                     await websocket.send_text("pong")
-                    logger.debug("Sent pong response")
+                    safe_log("debug", "Sent pong response")
                 elif message.startswith('{"type":"ping"'):
                     await websocket.send_text('{"type":"pong","timestamp":"' + str(int(time.time() * 1000)) + '"}')
-                    logger.debug("Sent JSON pong response")
+                    safe_log("debug", "Sent JSON pong response")
                 else:
-                    logger.debug(f"Ignoring message: {message}")
+                    safe_log("debug", f"Ignoring message: {message}")
                     
             except WebSocketDisconnect:
-                logger.info("WebSocket disconnected by client")
+                safe_log("info", "WebSocket disconnected by client")
                 break
             except Exception as e:
-                logger.warning(f"Error processing WebSocket message: {e}")
+                safe_log("warning", f"Error processing WebSocket message: {e}")
                 # Continue the loop instead of breaking
                 continue
                 
     except WebSocketDisconnect:
-        logger.info("WebSocket disconnected")
+        safe_log("info", "WebSocket disconnected")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        safe_log("error", f"WebSocket error: {e}")
     finally:
         manager.disconnect(websocket)
