@@ -1,0 +1,379 @@
+/* VAST Data Pipeline Visualization Styles */
+
+/* CSS Variables for VAST Data Color Palette */
+:root {
+  /* Primary VAST Data Colors */
+  --vast-primary: #00D4AA;      /* Teal/Green */
+  --vast-secondary: #0066CC;    /* Blue */
+  --vast-accent: #FF6B35;       /* Orange */
+  --vast-neutral: #2C3E50;      /* Dark Blue-Grey */
+  --vast-light: #F8F9FA;        /* Light Grey */
+  --vast-dark: #1A1A1A;         /* Dark Background */
+  
+  /* Pipeline Node Colors */
+  --node-query: #00D4AA;        /* Teal for input */
+  --node-process: #0066CC;      /* Blue for processing */
+  --node-output: #FF6B35;       /* Orange for output */
+  --node-resource: #6C5CE7;     /* Purple for monitoring */
+  
+  /* Status Colors */
+  --status-idle: #6c7ae0;
+  --status-processing: #f8b400;
+  --status-error: #e05858;
+  --status-complete: #4caf50;
+  --status-warning: #ff9800;
+  --status-success: #00D4AA;
+  --status-active: #0066CC;
+  --status-default: #9e9e9e;
+  
+  /* Health Colors */
+  --health-healthy: #4caf50;
+  --health-warning: #ff9800;
+  --health-critical: #e05858;
+  --health-unknown: #9e9e9e;
+}
+
+/* Enhanced Pipeline Graph Container */
+.enhanced-pipeline-graph {
+  background: linear-gradient(135deg, var(--vast-dark), var(--vast-neutral));
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* VAST Data Branded Nodes */
+.vast-node {
+  background: linear-gradient(135deg, var(--node-process), var(--node-process)dd);
+  border: 2px solid var(--node-process)80;
+  border-radius: 16px;
+  color: white;
+  min-width: 180px;
+  text-align: center;
+  box-shadow: 0 4px 12px var(--node-process)30;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.vast-node:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px var(--node-process)60;
+}
+
+.vast-node.selected {
+  border-color: var(--vast-primary);
+  box-shadow: 0 8px 24px var(--vast-primary)40;
+}
+
+.vast-node.processing {
+  box-shadow: 0 0 20px var(--vast-accent)40;
+  animation: processing-glow 2s infinite;
+}
+
+.vast-node.error {
+  box-shadow: 0 0 20px #e0585840;
+  animation: error-pulse 1s infinite;
+}
+
+.vast-node.success {
+  box-shadow: 0 0 20px var(--vast-primary)40;
+}
+
+/* Node Header */
+.node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.node-icon {
+  font-size: 1.2rem;
+  margin-right: 8px;
+}
+
+.node-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex: 1;
+  margin: 0 8px;
+}
+
+/* Health Indicators */
+.health-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.health-indicator.healthy {
+  background: var(--health-healthy);
+}
+
+.health-indicator.warning {
+  background: var(--health-warning);
+}
+
+.health-indicator.critical {
+  background: var(--health-critical);
+}
+
+.health-indicator.unknown {
+  background: var(--health-unknown);
+}
+
+/* Status Indicator */
+.status-indicator {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.9;
+}
+
+/* Node Metrics */
+.node-metrics {
+  font-size: 0.7rem;
+  margin-top: 8px;
+  opacity: 0.9;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.metric-item.error {
+  background: rgba(224, 88, 88, 0.2);
+  color: #ff4444;
+}
+
+/* Processing Animations */
+.processing-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+  animation: shimmer 2s infinite;
+  pointer-events: none;
+}
+
+.processing-dot {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vast-accent);
+  animation: pulse 1.5s infinite;
+  box-shadow: 0 0 8px var(--vast-accent)80;
+}
+
+.success-indicator {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vast-primary);
+  box-shadow: 0 0 8px var(--vast-primary)80;
+}
+
+.error-indicator {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  font-size: 0.8rem;
+  color: #ff4444;
+  animation: pulse-red 1s infinite;
+}
+
+/* Enhanced Tooltips */
+.vast-tooltip {
+  background: linear-gradient(135deg, var(--vast-dark), var(--vast-neutral));
+  color: white;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 12px;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px var(--vast-primary)40;
+  border: 1px solid var(--vast-primary);
+  min-width: 200px;
+  backdrop-filter: blur(10px);
+}
+
+/* Edge Styling */
+.react-flow__edge-path {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.latency-indicator {
+  transition: all 0.3s ease;
+}
+
+.data-particle {
+  filter: drop-shadow(0 0 2px var(--vast-primary));
+}
+
+/* Animations */
+@keyframes pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(1.2); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes pulse-red {
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+
+@keyframes processing-glow {
+  0% { box-shadow: 0 0 20px var(--vast-accent)40; }
+  50% { box-shadow: 0 0 30px var(--vast-accent)60; }
+  100% { box-shadow: 0 0 20px var(--vast-accent)40; }
+}
+
+@keyframes error-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(224, 88, 88, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(224, 88, 88, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(224, 88, 88, 0); }
+}
+
+@keyframes dash-flow {
+  to { stroke-dashoffset: -12; }
+}
+
+@keyframes particle-flow {
+  0% { opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* React Flow Customizations */
+.react-flow__minimap {
+  background: var(--vast-dark);
+  border: 1px solid var(--vast-primary)40;
+  border-radius: 8px;
+}
+
+.react-flow__controls {
+  background: var(--vast-dark);
+  border: 1px solid var(--vast-primary)40;
+  border-radius: 8px;
+}
+
+.react-flow__controls-button {
+  background: transparent;
+  border: none;
+  color: white;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--vast-primary)20;
+}
+
+.react-flow__background {
+  opacity: 0.1;
+}
+
+/* Enhanced Dashboard Styles */
+.enhanced-pipeline-dashboard {
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  min-height: 100vh;
+}
+
+.metrics-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.node-details-panel {
+  background: var(--vast-dark);
+  color: white;
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.3);
+  border-left: 1px solid var(--vast-primary)40;
+}
+
+/* Connection Status Indicator */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.connection-status.connected {
+  background: rgba(0, 212, 170, 0.1);
+  color: var(--vast-primary);
+  border: 1px solid var(--vast-primary)40;
+}
+
+.connection-status.disconnected {
+  background: rgba(224, 88, 88, 0.1);
+  color: #e05858;
+  border: 1px solid #e0585840;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .vast-node {
+    min-width: 140px;
+    padding: 12px;
+  }
+  
+  .node-title {
+    font-size: 0.8rem;
+  }
+  
+  .node-metrics {
+    font-size: 0.65rem;
+  }
+  
+  .vast-tooltip {
+    min-width: 160px;
+    font-size: 11px;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .enhanced-pipeline-dashboard {
+    background: linear-gradient(135deg, #1a1a1a, #2c3e50);
+  }
+  
+  .metrics-panel {
+    background: var(--vast-neutral);
+    color: white;
+  }
+}

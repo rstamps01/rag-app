@@ -21,6 +21,7 @@ const PipelineMonitoringDashboard = () => {
   const [debugMode, setDebugMode] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
   const [transformedMetrics, setTransformedMetrics] = useState(null);
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
   
   // WebSocket connection to backend
   const {
@@ -124,22 +125,50 @@ const PipelineMonitoringDashboard = () => {
     const nodes = stageDefinitions.map((def, idx) => {
       const row = def.type === 'document' ? 0 : 1;
       const order = def.type === 'document' ? idx : idx - 4; // query stages start after the 4 doc stages
+      const status = getStatus(def.id, idx);
+      
+      // Calculate metrics based on real-time data
+      const metrics = {
+        throughput: transformedMetrics?.pipelineStatus?.queriesPerMinute || 0,
+        latency: transformedMetrics?.pipelineStatus?.avgResponseTime || 0,
+        errorRate: 0, // Could be calculated from error logs
+      };
+      
+      // Determine health status
+      const health = status === 'processing' ? 'healthy' : 
+                    status === 'error' ? 'critical' : 
+                    status === 'idle' ? 'unknown' : 'healthy';
+      
       return {
         id: def.id,
         label: def.label,
-        status: getStatus(def.id, idx),
+        status: status,
+        metrics: metrics,
+        health: health,
         position: { x: order * 180, y: row * 180 },
       };
     });
-    // Define edges separately for each workflow
+    // Define edges separately for each workflow with throughput metrics
     const edgeList = [];
     const docIds = stageDefinitions.filter((s) => s.type === 'document').map((s) => s.id);
     const queryIds = stageDefinitions.filter((s) => s.type === 'query').map((s) => s.id);
+    const throughput = transformedMetrics?.pipelineStatus?.queriesPerMinute || 0;
+    
     for (let i = 0; i < docIds.length - 1; i++) {
-      edgeList.push({ id: `e-${docIds[i]}-${docIds[i + 1]}`, source: docIds[i], target: docIds[i + 1] });
+      edgeList.push({ 
+        id: `e-${docIds[i]}-${docIds[i + 1]}`, 
+        source: docIds[i], 
+        target: docIds[i + 1],
+        throughput: throughput
+      });
     }
     for (let i = 0; i < queryIds.length - 1; i++) {
-      edgeList.push({ id: `e-${queryIds[i]}-${queryIds[i + 1]}`, source: queryIds[i], target: queryIds[i + 1] });
+      edgeList.push({ 
+        id: `e-${queryIds[i]}-${queryIds[i + 1]}`, 
+        source: queryIds[i], 
+        target: queryIds[i + 1],
+        throughput: throughput
+      });
     }
     return { stages: nodes, edges: edgeList };
   }, [pipelineState, transformedMetrics]);
@@ -259,12 +288,73 @@ const PipelineMonitoringDashboard = () => {
                 <PipelineGraph
                   stages={stages}
                   edges={edges}
+                  selectedNodeId={selectedNodeId}
+                  showTooltips={true}
                   onNodeClick={(stage) => {
-                    // Extend this callback to open a detail panel
                     console.log('Clicked stage:', stage);
+                    setSelectedNodeId(stage.id);
+                    // TODO: Open detailed metrics panel
+                  }}
+                  onNodeHover={(stage, action) => {
+                    if (action === 'enter') {
+                      console.log('Hovered stage:', stage);
+                    }
                   }}
                 />
               </div>
+              {/* Selected Node Details Panel */}
+              {selectedNodeId && (
+                <div className="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-semibold text-white">
+                      {stages.find(s => s.id === selectedNodeId)?.label} Details
+                    </h3>
+                    <button
+                      onClick={() => setSelectedNodeId(null)}
+                      className="text-gray-400 hover:text-white text-xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {(() => {
+                    const selectedStage = stages.find(s => s.id === selectedNodeId);
+                    if (!selectedStage) return null;
+                    
+                    return (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <div className="text-gray-400">Status</div>
+                          <div className="text-white font-medium">{selectedStage.status}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-400">Health</div>
+                          <div className={`font-medium ${
+                            selectedStage.health === 'healthy' ? 'text-green-400' :
+                            selectedStage.health === 'warning' ? 'text-yellow-400' :
+                            selectedStage.health === 'critical' ? 'text-red-400' :
+                            'text-gray-400'
+                          }`}>
+                            {selectedStage.health}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-gray-400">Throughput</div>
+                          <div className="text-white font-medium">
+                            {selectedStage.metrics?.throughput || 0}/min
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-gray-400">Latency</div>
+                          <div className="text-white font-medium">
+                            {selectedStage.metrics?.latency || 0}ms
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+              
               {/* Summary metrics at bottom */}
               {transformedMetrics && (
                 <div className="mt-4 text-sm text-gray-400 space-x-4">
