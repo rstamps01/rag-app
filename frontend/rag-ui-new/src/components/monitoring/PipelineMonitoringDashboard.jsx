@@ -25,11 +25,13 @@ const PipelineMonitoringDashboard = () => {
   // WebSocket connection to backend
   const {
     connectionStatus,
+    isConnected,
     lastMessage,
     messageHistory,
     metrics,
     pipelineState,
     reconnect,
+    debugInfo,
   } = useWebSocket('ws://10.0.0.48:8000/api/v1/ws/pipeline-monitoring', {
     onMessage: (message) => {
       console.log('🔌 Dashboard received message:', message);
@@ -268,11 +270,15 @@ const PipelineMonitoringDashboard = () => {
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-2">
               <h2 className="text-xl font-semibold text-gray-300">
-                {connectionStatus === 'Connecting' ? 'Connecting...' : 'Disconnected'}
+                {connectionStatus === 'Connecting' ? 'Connecting...' : 
+                 connectionStatus === 'Connected' ? 'Connected' :
+                 connectionStatus === 'Failed' ? 'Connection Failed' : 'Disconnected'}
               </h2>
               <p className="text-sm text-gray-400">
                 {connectionStatus === 'Connecting'
-                  ? 'Attempting to connect to pipeline monitoring...'
+                  ? `Attempting to connect to pipeline monitoring... (${debugInfo.connectionAttempts}/${debugInfo.connectionAttempts})`
+                  : connectionStatus === 'Failed'
+                  ? 'Max reconnection attempts reached. Click Reconnect to try again.'
                   : 'Pipeline monitoring connection lost'}
               </p>
               {connectionStatus !== 'Connecting' && (
@@ -280,8 +286,15 @@ const PipelineMonitoringDashboard = () => {
                   onClick={reconnect}
                   className="px-4 py-2 bg-blue-600 rounded text-white hover:bg-blue-500"
                 >
-                  Reconnect
+                  {connectionStatus === 'Failed' ? 'Retry Connection' : 'Reconnect'}
                 </button>
+              )}
+              {debugMode && (
+                <div className="text-xs text-gray-500 mt-2">
+                  <p>Attempts: {debugInfo.connectionAttempts}</p>
+                  <p>Messages: {debugInfo.messagesReceived}</p>
+                  <p>Errors: {debugInfo.errors.length}</p>
+                </div>
               )}
             </div>
           )}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
- * Extended WebSocket hook
+ * Extended WebSocket hook with improved connection management
  *
  * This version of the hook exposes additional helpers used by the
  * pipeline‑monitoring UI.  Consumers can send JSON messages back to
@@ -25,13 +25,15 @@ const useWebSocket = (url, options = {}) => {
 
   const ws = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  const connectionAttemptsRef = useRef(0);
+  const isConnectingRef = useRef(false);
 
   // Destructure option callbacks with sensible defaults
   const {
     onMessage = () => {},
     onError = () => {},
-    reconnectInterval = 3000,
-    maxReconnectAttempts = 10,
+    reconnectInterval = 5000, // Increased from 3000
+    maxReconnectAttempts = 5, // Reduced from 10
     heartbeatInterval = 30000,
     debug = false,
   } = options;
@@ -86,49 +88,77 @@ const useWebSocket = (url, options = {}) => {
     [onMessage],
   );
 
-  // Manage connection and reconnection
+  // Manage connection and reconnection with exponential backoff
   const connect = useCallback(() => {
-    // Avoid creating multiple connections
-    if (ws.current?.readyState === WebSocket.OPEN) return;
+    // Prevent multiple simultaneous connection attempts
+    if (isConnectingRef.current || ws.current?.readyState === WebSocket.OPEN || ws.current?.readyState === WebSocket.CONNECTING) {
+      return;
+    }
     
-    // Set connecting status
+    // Check if we've exceeded max attempts
+    if (connectionAttemptsRef.current >= maxReconnectAttempts) {
+      setConnectionStatus('Failed');
+      if (debug) console.log('🔌 Max reconnection attempts reached');
+      return;
+    }
+    
+    isConnectingRef.current = true;
     setConnectionStatus('Connecting');
     
     try {
+      connectionAttemptsRef.current += 1;
       setDebugInfo((prev) => ({
         ...prev,
-        connectionAttempts: prev.connectionAttempts + 1,
+        connectionAttempts: connectionAttemptsRef.current,
       }));
 
       ws.current = new WebSocket(url);
 
       ws.current.onopen = () => {
+        isConnectingRef.current = false;
+        connectionAttemptsRef.current = 0; // Reset on successful connection
         setConnectionStatus('Connected');
         if (debug) console.log('🔌 WebSocket connected');
         // Send an initial ping to verify connectivity
         sendJsonMessage({ type: 'ping', timestamp: Date.now() });
       };
+      
       ws.current.onmessage = handleMessage;
+      
       ws.current.onclose = (event) => {
-        if (debug) console.log('🔌 WebSocket disconnected:', event.code, event.reason);
+        isConnectingRef.current = false;
         setConnectionStatus('Disconnected');
+        if (debug) console.log('🔌 WebSocket disconnected:', event.code, event.reason);
         
-        // Attempt reconnection
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-        }
-        reconnectTimeoutRef.current = setTimeout(() => {
-          if (debugInfo.connectionAttempts < maxReconnectAttempts) {
-            connect();
+        // Only attempt reconnection if we haven't exceeded max attempts
+        if (connectionAttemptsRef.current < maxReconnectAttempts) {
+          // Exponential backoff: 2^attempts * baseInterval (max 30 seconds)
+          const backoffDelay = Math.min(
+            Math.pow(2, connectionAttemptsRef.current) * 1000,
+            30000
+          );
+          
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
           }
-        }, reconnectInterval);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connect();
+          }, backoffDelay);
+        } else {
+          setConnectionStatus('Failed');
+        }
       };
+      
       ws.current.onerror = (err) => {
+        isConnectingRef.current = false;
         console.error('❌ WebSocket error:', err);
         setConnectionStatus('Error');
         setDebugInfo((prev) => ({
           ...prev,
-          errors: [...prev.errors.slice(-4), { time: new Date().toISOString(), error: 'WebSocket connection error' }],
+          errors: [...prev.errors.slice(-4), { 
+            time: new Date().toISOString(), 
+            error: 'WebSocket connection error' 
+          }],
         }));
         // Forward error to custom handler
         try {
@@ -138,10 +168,11 @@ const useWebSocket = (url, options = {}) => {
         }
       };
     } catch (error) {
+      isConnectingRef.current = false;
       console.error('❌ Failed to create WebSocket connection:', error);
       setConnectionStatus('Error');
     }
-  }, [url, handleMessage, reconnectInterval, maxReconnectAttempts, debugInfo.connectionAttempts, debug, sendJsonMessage, onError]);
+  }, [url, handleMessage, maxReconnectAttempts, debug, sendJsonMessage, onError]);
 
   // Setup connection on mount
   useEffect(() => {
@@ -156,25 +187,6 @@ const useWebSocket = (url, options = {}) => {
     };
   }, [connect]);
 
-  // Add connection stability check
-  useEffect(() => {
-    if (connectionStatus === 'Connected' && ws.current?.readyState === WebSocket.OPEN) {
-      // Connection is stable, no need to reconnect
-      return;
-    }
-    
-    if (connectionStatus === 'Disconnected' && ws.current?.readyState === WebSocket.CLOSED) {
-      // Connection is closed, attempt to reconnect after a delay
-      const timeoutId = setTimeout(() => {
-        if (debugInfo.connectionAttempts < maxReconnectAttempts) {
-          connect();
-        }
-      }, 5000); // 5 second delay before reconnecting
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [connectionStatus, connect, debugInfo.connectionAttempts, maxReconnectAttempts]);
-
   // Heartbeat ping to keep connection alive
   useEffect(() => {
     if (!heartbeatInterval) return;
@@ -186,13 +198,26 @@ const useWebSocket = (url, options = {}) => {
     return () => clearInterval(interval);
   }, [heartbeatInterval, sendJsonMessage]);
 
+  // Manual reconnect function that resets attempt counter
+  const reconnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+    if (ws.current) {
+      ws.current.close();
+    }
+    connectionAttemptsRef.current = 0;
+    isConnectingRef.current = false;
+    connect();
+  }, [connect]);
+
   return {
     connectionStatus,
     isConnected: connectionStatus === 'Connected',
     lastMessage,
     debugInfo,
     sendJsonMessage,
-    reconnect: connect,
+    reconnect,
   };
 };
 
