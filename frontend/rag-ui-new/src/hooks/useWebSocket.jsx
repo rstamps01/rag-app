@@ -156,6 +156,25 @@ const useWebSocket = (url, options = {}) => {
     };
   }, [connect]);
 
+  // Add connection stability check
+  useEffect(() => {
+    if (connectionStatus === 'Connected' && ws.current?.readyState === WebSocket.OPEN) {
+      // Connection is stable, no need to reconnect
+      return;
+    }
+    
+    if (connectionStatus === 'Disconnected' && ws.current?.readyState === WebSocket.CLOSED) {
+      // Connection is closed, attempt to reconnect after a delay
+      const timeoutId = setTimeout(() => {
+        if (debugInfo.connectionAttempts < maxReconnectAttempts) {
+          connect();
+        }
+      }, 5000); // 5 second delay before reconnecting
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [connectionStatus, connect, debugInfo.connectionAttempts, maxReconnectAttempts]);
+
   // Heartbeat ping to keep connection alive
   useEffect(() => {
     if (!heartbeatInterval) return;
