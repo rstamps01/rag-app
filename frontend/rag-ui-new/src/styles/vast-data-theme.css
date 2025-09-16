@@ -110,69 +110,17 @@ body {
   border: none !important;
 }
 
-/* Hide ReactFlow connection preview and selection artifacts */
-.react-flow__connectionline,
-.react-flow__connection-path,
-.react-flow__edge-path,
-.react-flow__edge.selected,
-.react-flow__edge.animated,
-.react-flow__edge.animated path {
-  display: none !important;
-}
+/* Hide ReactFlow connection preview and selection artifacts - REMOVED TOO AGGRESSIVE */
 
-/* Hide any connection preview boxes */
-.react-flow__connection,
-.react-flow__connection-line,
-.react-flow__connection-path,
-.react-flow__edge-updater,
-.react-flow__edge-updater-target,
-.react-flow__edge-updater-source {
-  display: none !important;
-}
+/* Hide any connection preview boxes - REMOVED TOO AGGRESSIVE */
 
-/* Hide any placeholder or preview elements */
-.react-flow__node[data-id*="preview"],
-.react-flow__node[data-id*="connection"],
-.react-flow__node[data-id*="placeholder"],
-.react-flow__node[data-id*="temp"],
-.react-flow__node[data-id*="new"] {
-  display: none !important;
-}
+/* Hide any placeholder or preview elements - REMOVED TOO AGGRESSIVE */
 
-/* Hide any elements with dashed borders that might be connection previews */
-div[style*="border: 2px dashed"],
-div[style*="border: dashed"],
-div[class*="dashed"],
-div[style*="border-style: dashed"] {
-  display: none !important;
-}
+/* Hide any elements with dashed borders that might be connection previews - REMOVED TOO AGGRESSIVE */
 
-/* Specifically target any white boxes with dashed borders */
-div[style*="background: white"][style*="dashed"],
-div[style*="background: #fff"][style*="dashed"],
-div[style*="background-color: white"][style*="dashed"],
-div[style*="background-color: #fff"][style*="dashed"] {
-  display: none !important;
-}
+/* Specifically target any white boxes with dashed borders - REMOVED TOO AGGRESSIVE */
 
-/* Nuclear option: Hide any element that looks like a white dashed box */
-div[style*="border: 2px dashed white"],
-div[style*="border: 2px dashed #fff"],
-div[style*="border: 2px dashed #ffffff"],
-div[style*="border: dashed white"],
-div[style*="border: dashed #fff"],
-div[style*="border: dashed #ffffff"],
-div[style*="border-style: dashed"][style*="background: white"],
-div[style*="border-style: dashed"][style*="background: #fff"],
-div[style*="border-style: dashed"][style*="background-color: white"],
-div[style*="border-style: dashed"][style*="background-color: #fff"] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  height: 0 !important;
-  width: 0 !important;
-  overflow: hidden !important;
-}
+/* Nuclear option: Hide any element that looks like a white dashed box - REMOVED TOO AGGRESSIVE */
 
 /* Target any element that might be a connection preview or placeholder */
 .react-flow__node:not([data-id]):not(.react-flow__node-stage),
@@ -216,18 +164,7 @@ div[style*="position: relative"][style*="border"] {
   border: none !important;
 }
 
-/* Nuclear option: Hide any element with dashed border anywhere in the ReactFlow container */
-.react-flow__renderer *[style*="dashed"],
-.react-flow__renderer *[style*="border: 2px dashed"],
-.react-flow__renderer *[style*="border: dashed"],
-.react-flow__renderer *[style*="border-style: dashed"] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  height: 0 !important;
-  width: 0 !important;
-  overflow: hidden !important;
-}
+/* Nuclear option: Hide any element with dashed border anywhere in the ReactFlow container - REMOVED TOO AGGRESSIVE */
 
 /* Direct targeting of white dashed boxes - REMOVED TOO AGGRESSIVE */
 
