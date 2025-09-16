@@ -132,6 +132,13 @@ export default function PipelineGraph({ stages, edges, onNodeClick }) {
         nodesDraggable={false} // Disable dragging
         nodesConnectable={false} // Disable connections
         elementsSelectable={false} // Disable selection
+        connectionMode={null} // Disable connection mode
+        onConnect={null} // Disable connect handler
+        onConnectStart={null} // Disable connect start
+        onConnectEnd={null} // Disable connect end
+        onSelectionChange={null} // Disable selection change
+        onNodesChange={null} // Disable nodes change
+        onEdgesChange={null} // Disable edges change
       >
         <MiniMap
           nodeColor={(node) => STATUS_COLOURS[node.data.status] || STATUS_COLOURS.default}
