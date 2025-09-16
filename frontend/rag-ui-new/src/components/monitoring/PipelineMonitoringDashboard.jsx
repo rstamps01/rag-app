@@ -32,8 +32,11 @@ const PipelineMonitoringDashboard = () => {
     reconnect,
   } = useWebSocket('ws://10.0.0.48:8000/api/v1/ws/pipeline-monitoring', {
     onMessage: (message) => {
+      console.log('🔌 Dashboard received message:', message);
+      
       // Transform backend data structure to frontend expected format
       if (message.type === 'metrics_update' && message.data) {
+        console.log('📊 Processing metrics_update in dashboard');
         const data = message.data;
         const transformed = {
           systemHealth: {
@@ -60,8 +63,11 @@ const PipelineMonitoringDashboard = () => {
             vectorDbStatus: data.connection_status?.vector_db || 'unknown',
           }
         };
+        console.log('✅ Setting transformed metrics:', transformed);
         // Update the transformed metrics state
         setTransformedMetrics(transformed);
+      } else {
+        console.log('⚠️ Dashboard ignoring message type:', message.type);
       }
     }
   });

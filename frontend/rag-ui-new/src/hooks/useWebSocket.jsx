@@ -57,11 +57,6 @@ const useWebSocket = (url, options = {}) => {
    */
   const handleMessage = useCallback(
     (event) => {
-      // Ensure we're marked as connected when receiving messages
-      if (connectionStatus !== 'Connected') {
-        setConnectionStatus('Connected');
-      }
-      
       setDebugInfo((prev) => ({
         ...prev,
         messagesReceived: prev.messagesReceived + 1,
@@ -88,7 +83,7 @@ const useWebSocket = (url, options = {}) => {
         console.error('❌ Error in onMessage handler:', err);
       }
     },
-    [onMessage, connectionStatus],
+    [onMessage],
   );
 
   // Manage connection and reconnection
