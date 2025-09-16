@@ -578,12 +578,19 @@ async def ask_query(
                 query_embedding = embedding_model.encode(request.query).tolist()
                 
                 # Search in Qdrant
+                logger.info(f"DEBUG: Query embedding shape: {len(query_embedding)}")
+                logger.info(f"DEBUG: Query embedding sample: {query_embedding[:5]}")
+                
                 search_results = qdrant_client.search(
                     collection_name="rag",
                     query_vector=query_embedding,
                     limit=5,
-                    score_threshold=0.7
+                    score_threshold=0.0  # Lower threshold for debugging
                 )
+                
+                logger.info(f"DEBUG: Raw search results count: {len(search_results)}")
+                for i, result in enumerate(search_results[:3]):
+                    logger.info(f"DEBUG: Result {i}: score={result.score:.4f}, payload keys={list(result.payload.keys())}")
                 
                 # Process search results
                 for result in search_results:
