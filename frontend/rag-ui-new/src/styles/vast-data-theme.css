@@ -95,13 +95,7 @@ body {
   box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
 }
 
-/* Hide any dashed selection indicators */
-.react-flow__node[style*="border-style: dashed"],
-.react-flow__node[style*="border: 2px dashed white"],
-.react-flow__node[style*="border: 2px dashed #fff"] {
-  border: none !important;
-  display: none !important;
-}
+/* Hide any dashed selection indicators - REMOVED TOO AGGRESSIVE */
 
 /* Ensure no selection outline appears */
 .react-flow__node:focus,
@@ -130,32 +124,7 @@ body {
   display: none !important;
 }
 
-/* Hide any ReactFlow connection preview elements */
-.react-flow__connectionline,
-.react-flow__connection-line,
-.react-flow__connection-path,
-.react-flow__edge-updater,
-.react-flow__edge-updater-target,
-.react-flow__edge-updater-source,
-.react-flow__connection,
-.react-flow__connection-line,
-.react-flow__connection-path,
-.react-flow__edge-updater,
-.react-flow__edge-updater-target,
-.react-flow__edge-updater-source,
-.react-flow__connectionline,
-.react-flow__connection-line,
-.react-flow__connection-path,
-.react-flow__edge-updater,
-.react-flow__edge-updater-target,
-.react-flow__edge-updater-source {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  height: 0 !important;
-  width: 0 !important;
-  overflow: hidden !important;
-}
+/* Hide any ReactFlow connection preview elements - REMOVED TOO AGGRESSIVE */
 
 /* Hide any element that looks like a connection preview box */
 div[style*="position: absolute"][style*="border"],
