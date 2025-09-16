@@ -14,7 +14,53 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import AdvancedDataFlowAnimations from './AdvancedDataFlowAnimations';
-import { Card, Button, Badge, Input } from '../ui';
+// Simple UI components to avoid import issues
+const Card = ({ children, className = '', ...props }) => (
+  <div className={`bg-gray-800 rounded-lg shadow-lg border border-gray-700 ${className}`} {...props}>
+    {children}
+  </div>
+);
+
+const Button = ({ children, variant = 'primary', className = '', ...props }) => {
+  const baseClasses = 'px-4 py-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
+  const variantClasses = {
+    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
+    secondary: 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500',
+    outline: 'border border-gray-600 text-gray-300 hover:bg-gray-700 focus:ring-gray-500',
+    ghost: 'text-gray-300 hover:bg-gray-700 focus:ring-gray-500'
+  };
+  
+  return (
+    <button className={`${baseClasses} ${variantClasses[variant]} ${className}`} {...props}>
+      {children}
+    </button>
+  );
+};
+
+const Badge = ({ children, variant = 'default', className = '', ...props }) => {
+  const baseClasses = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium';
+  const variantClasses = {
+    default: 'bg-gray-700 text-gray-200',
+    secondary: 'bg-gray-600 text-gray-200',
+    success: 'bg-green-600 text-white',
+    warning: 'bg-yellow-600 text-white',
+    error: 'bg-red-600 text-white',
+    info: 'bg-blue-600 text-white'
+  };
+  
+  return (
+    <span className={`${baseClasses} ${variantClasses[variant]} ${className}`} {...props}>
+      {children}
+    </span>
+  );
+};
+
+const Input = ({ className = '', ...props }) => (
+  <input 
+    className={`w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${className}`} 
+    {...props} 
+  />
+);
 import { 
   Play, 
   Pause, 
