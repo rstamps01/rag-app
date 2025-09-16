@@ -8,20 +8,17 @@ FROM node:20 AS build
 # Set the working directory inside the container.
 WORKDIR /app
 
-# Copy package.json and package-lock.json (or yarn.lock) for the Vite project.
-# Assumes these files are inside the rag-ui-new directory.
-COPY rag-ui-new/package*.json ./
+# Copy only package.json for clean dependency resolution
+COPY rag-ui-new/package.json ./
 
-# Install project dependencies and fix vulnerabilities
-RUN npm install && \
+# Install project dependencies with clean resolution and fix vulnerabilities
+RUN rm -f package-lock.json && \
+    npm install && \
     npm install reactflow && \
     npm audit fix --force
 
 # Copy the rest of the frontend application code.
 COPY rag-ui-new/ .
-
-# Install dependencies with the correct React version
-RUN npm install
 
 # Build the Vite application for production.
 # This will generate static files in the /app/dist directory.
