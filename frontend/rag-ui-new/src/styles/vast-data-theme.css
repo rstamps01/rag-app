@@ -91,6 +91,31 @@ body {
   display: none !important;
 }
 
+/* Hide ReactFlow selection and connection preview artifacts */
+.react-flow__node.selected,
+.react-flow__node.selectable,
+.react-flow__node.connecting,
+.react-flow__node.valid,
+.react-flow__node.invalid {
+  border: none !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
+}
+
+/* Hide any dashed selection indicators */
+.react-flow__node[style*="border-style: dashed"],
+.react-flow__node[style*="border: 2px dashed white"],
+.react-flow__node[style*="border: 2px dashed #fff"] {
+  border: none !important;
+  display: none !important;
+}
+
+/* Ensure no selection outline appears */
+.react-flow__node:focus,
+.react-flow__node:focus-visible {
+  outline: none !important;
+  border: none !important;
+}
+
 /* Ensure React Flow container is clean */
 .react-flow__renderer {
   background: transparent !important;

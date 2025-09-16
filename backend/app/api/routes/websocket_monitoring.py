@@ -267,18 +267,40 @@ class ConnectionManager:
 
     @staticmethod
     def _get_connection_status() -> Dict[str, str]:
-        """Placeholder for connection statuses of backend services.
-
-        Ideally, this method would perform health checks against the
-        vector database, PostgreSQL and other components.  Here we
-        return "unknown" for each service so the front‑end can
-        differentiate between disconnected and unknown states.
+        """Check connection statuses of backend services.
+        
+        Performs actual health checks against the database, vector database,
+        and other components to provide real status information.
         """
-        return {
-            "backend": "unknown",
+        status = {
+            "backend": "healthy",
             "database": "unknown",
             "vector_db": "unknown",
         }
+        
+        # Check PostgreSQL database connection
+        try:
+            from app.db.session import get_db
+            db = next(get_db())
+            # Simple query to test connection
+            db.execute("SELECT 1")
+            status["database"] = "healthy"
+        except Exception as e:
+            safe_log("warning", f"Database health check failed: {e}")
+            status["database"] = "unhealthy"
+        
+        # Check Qdrant vector database connection
+        try:
+            from app.services.vector_search import get_qdrant_client
+            qdrant = get_qdrant_client()
+            # Check if we can list collections
+            collections = qdrant.get_collections()
+            status["vector_db"] = "healthy"
+        except Exception as e:
+            safe_log("warning", f"Vector DB health check failed: {e}")
+            status["vector_db"] = "unhealthy"
+        
+        return status
 
 
 manager = ConnectionManager()
