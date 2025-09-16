@@ -20,7 +20,8 @@ import PipelineGraph from '../../components/PipelineGraph';
 const PipelineMonitoringDashboard = () => {
   const [debugMode, setDebugMode] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
-  const [metrics, setMetrics] = useState(null);
+  const [transformedMetrics, setTransformedMetrics] = useState(null);
+  
   // WebSocket connection to backend
   const {
     connectionStatus,
@@ -34,7 +35,7 @@ const PipelineMonitoringDashboard = () => {
       // Transform backend data structure to frontend expected format
       if (message.type === 'metrics_update' && message.data) {
         const data = message.data;
-        const transformedMetrics = {
+        const transformed = {
           systemHealth: {
             cpuUsage: data.system_health?.cpu_usage || 0,
             memoryUsage: data.system_health?.memory_usage || 0,
@@ -59,17 +60,17 @@ const PipelineMonitoringDashboard = () => {
             vectorDbStatus: data.connection_status?.vector_db || 'unknown',
           }
         };
-        // Update the metrics state
-        setMetrics(transformedMetrics);
+        // Update the transformed metrics state
+        setTransformedMetrics(transformed);
       }
     }
   });
   // Update timestamp when metrics arrive
   useEffect(() => {
-    if (metrics) {
+    if (transformedMetrics) {
       setLastUpdateTime(new Date().toLocaleTimeString());
     }
-  }, [metrics]);
+  }, [transformedMetrics]);
   // Formatters
   const formatPercentage = (value) => (typeof value === 'number' ? `${value.toFixed(1)}%` : '0%');
   const formatMemory = (used, total) => (typeof used === 'number' && typeof total === 'number' ? `${used}MB / ${total}MB` : 'N/A');
@@ -98,7 +99,7 @@ const PipelineMonitoringDashboard = () => {
         return pipelineState.stages[id].status || 'idle';
       }
       // Fallback: mark first stage of each workflow as processing when active
-      if (metrics && metrics.pipelineStatus && metrics.pipelineStatus.activeQueries > 0) {
+      if (transformedMetrics && transformedMetrics.pipelineStatus && transformedMetrics.pipelineStatus.activeQueries > 0) {
         if ((id === 'upload' || id === 'search')) return 'processing';
       }
       return 'idle';
@@ -125,7 +126,7 @@ const PipelineMonitoringDashboard = () => {
       edgeList.push({ id: `e-${queryIds[i]}-${queryIds[i + 1]}`, source: queryIds[i], target: queryIds[i + 1] });
     }
     return { stages: nodes, edges: edgeList };
-  }, [pipelineState, metrics]);
+  }, [pipelineState, transformedMetrics]);
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -148,11 +149,11 @@ const PipelineMonitoringDashboard = () => {
             Debug
           </button>
           <span>•</span>
-          <span>{metrics ? metrics.pipelineStatus.queriesPerMinute : 0}/min</span>
+          <span>{transformedMetrics ? transformedMetrics.pipelineStatus.queriesPerMinute : 0}/min</span>
           <span>•</span>
-          <span>{metrics ? formatResponseTime(metrics.pipelineStatus.avgResponseTime) : '0ms'}</span>
+          <span>{transformedMetrics ? formatResponseTime(transformedMetrics.pipelineStatus.avgResponseTime) : '0ms'}</span>
           <span>•</span>
-          <span>{metrics ? formatPercentage(metrics.systemHealth.cpuUsage) : '0% CPU'}</span>
+          <span>{transformedMetrics ? formatPercentage(transformedMetrics.systemHealth.cpuUsage) : '0% CPU'}</span>
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -163,33 +164,33 @@ const PipelineMonitoringDashboard = () => {
             <h2 className="text-lg font-semibold text-white">System Health</h2>
             <div className="flex justify-between text-sm text-gray-300">
               <span>CPU Usage</span>
-              <span>{metrics ? formatPercentage(metrics.systemHealth.cpuUsage) : '0%'}</span>
+              <span>{transformedMetrics ? formatPercentage(transformedMetrics.systemHealth.cpuUsage) : '0%'}</span>
             </div>
             <div className="flex justify-between text-sm text-gray-300">
               <span>Memory</span>
-              <span>{metrics ? formatPercentage(metrics.systemHealth.memoryUsage) : '0%'}</span>
+              <span>{transformedMetrics ? formatPercentage(transformedMetrics.systemHealth.memoryUsage) : '0%'}</span>
             </div>
           </div>
           {/* GPU Performance */}
           <div className="bg-gray-800 p-4 rounded shadow space-y-1">
             <h2 className="text-lg font-semibold text-white">GPU Performance (RTX 5090)</h2>
-            {metrics && metrics.gpuPerformance && metrics.gpuPerformance.length > 0 ? (
+            {transformedMetrics && transformedMetrics.gpuPerformance && transformedMetrics.gpuPerformance.length > 0 ? (
               <>
                 <div className="flex justify-between text-sm text-gray-300">
                   <span>Utilization</span>
-                  <span>{formatPercentage(metrics.gpuPerformance[0].utilization)}</span>
+                  <span>{formatPercentage(transformedMetrics.gpuPerformance[0].utilization)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-gray-300">
                   <span>Memory</span>
-                  <span>{formatMemory(metrics.gpuPerformance[0].memory_used, metrics.gpuPerformance[0].memory_total)}</span>
+                  <span>{formatMemory(transformedMetrics.gpuPerformance[0].memory_used, transformedMetrics.gpuPerformance[0].memory_total)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-gray-300">
                   <span>Temperature</span>
-                  <span>{metrics.gpuPerformance[0].temperature}°C</span>
+                  <span>{transformedMetrics.gpuPerformance[0].temperature}°C</span>
                 </div>
                 <div className="flex justify-between text-sm text-gray-300">
                   <span>Power</span>
-                  <span>{metrics.gpuPerformance[0].power_draw}W / {metrics.gpuPerformance[0].power_limit}W</span>
+                  <span>{transformedMetrics.gpuPerformance[0].power_draw}W / {transformedMetrics.gpuPerformance[0].power_limit}W</span>
                 </div>
               </>
             ) : (
@@ -201,15 +202,15 @@ const PipelineMonitoringDashboard = () => {
             <h2 className="text-lg font-semibold text-white">Query Performance</h2>
             <div className="flex justify-between text-sm text-gray-300">
               <span>Queries/Min</span>
-              <span>{metrics ? metrics.pipelineStatus.queriesPerMinute : 0}</span>
+              <span>{transformedMetrics ? transformedMetrics.pipelineStatus.queriesPerMinute : 0}</span>
             </div>
             <div className="flex justify-between text-sm text-gray-300">
               <span>Avg Response</span>
-              <span>{metrics ? formatResponseTime(metrics.pipelineStatus.avgResponseTime) : '0ms'}</span>
+              <span>{transformedMetrics ? formatResponseTime(transformedMetrics.pipelineStatus.avgResponseTime) : '0ms'}</span>
             </div>
             <div className="flex justify-between text-sm text-gray-300">
               <span>Active Queries</span>
-              <span>{metrics ? metrics.pipelineStatus.activeQueries : 0}</span>
+              <span>{transformedMetrics ? transformedMetrics.pipelineStatus.activeQueries : 0}</span>
             </div>
           </div>
           {/* Connection Status */}
@@ -217,19 +218,19 @@ const PipelineMonitoringDashboard = () => {
             <h2 className="text-lg font-semibold text-white">Connection Status</h2>
             <div className="flex justify-between text-sm text-gray-300">
               <span>WebSocket</span>
-              <span>{metrics ? `${metrics.connectionStatus.websocketConnections} clients` : '0 clients'}</span>
+              <span>{transformedMetrics ? `${transformedMetrics.connectionStatus.websocketConnections} clients` : '0 clients'}</span>
             </div>
             <div className="flex justify-between text-sm text-gray-300">
               <span>Backend</span>
-              <span>{metrics ? metrics.connectionStatus.backendStatus : 'unknown'}</span>
+              <span>{transformedMetrics ? transformedMetrics.connectionStatus.backendStatus : 'unknown'}</span>
             </div>
             <div className="flex justify-between text-sm text-gray-300">
               <span>Database</span>
-              <span>{metrics ? metrics.connectionStatus.databaseStatus : 'unknown'}</span>
+              <span>{transformedMetrics ? transformedMetrics.connectionStatus.databaseStatus : 'unknown'}</span>
             </div>
             <div className="flex justify-between text-sm text-gray-300">
               <span>Vector DB</span>
-              <span>{metrics ? metrics.connectionStatus.vectorDbStatus : 'unknown'}</span>
+              <span>{transformedMetrics ? transformedMetrics.connectionStatus.vectorDbStatus : 'unknown'}</span>
             </div>
           </div>
         </div>
@@ -249,11 +250,11 @@ const PipelineMonitoringDashboard = () => {
                 />
               </div>
               {/* Summary metrics at bottom */}
-              {metrics && (
+              {transformedMetrics && (
                 <div className="mt-4 text-sm text-gray-400 space-x-4">
-                  <span>CPU: {formatPercentage(metrics.systemHealth.cpuUsage)}</span>
-                  <span>Memory: {formatPercentage(metrics.systemHealth.memoryUsage)}</span>
-                  <span>Queries/Min: {metrics.pipelineStatus.queriesPerMinute}</span>
+                  <span>CPU: {formatPercentage(transformedMetrics.systemHealth.cpuUsage)}</span>
+                  <span>Memory: {formatPercentage(transformedMetrics.systemHealth.memoryUsage)}</span>
+                  <span>Queries/Min: {transformedMetrics.pipelineStatus.queriesPerMinute}</span>
                   {lastUpdateTime && <span>Last update: {lastUpdateTime}</span>}
                 </div>
               )}
