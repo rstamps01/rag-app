@@ -186,9 +186,13 @@ const useWebSocket = (url, options = {}) => {
     }
   }, [url, handleMessage, maxReconnectAttempts, debug, sendJsonMessage, onError]);
 
+  // Store connect function in ref to avoid dependency issues
+  const connectRef = useRef(connect);
+  connectRef.current = connect;
+
   // Setup connection on mount
   useEffect(() => {
-    connect();
+    connectRef.current();
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
@@ -198,7 +202,7 @@ const useWebSocket = (url, options = {}) => {
         ws.current.close();
       }
     };
-  }, [connect]);
+  }, []); // Empty dependency array to run only on mount/unmount
 
   // Heartbeat ping to keep connection alive
   useEffect(() => {

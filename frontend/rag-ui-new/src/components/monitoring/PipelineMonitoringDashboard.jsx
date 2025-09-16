@@ -36,6 +36,13 @@ const PipelineMonitoringDashboard = () => {
     onMessage: (message) => {
       console.log('🔌 Dashboard received message:', message);
       
+      // Handle pong messages as valid connection indicators
+      if (message.type === 'pong') {
+        console.log('🏓 Received pong - connection is alive');
+        setLastUpdateTime(new Date().toISOString());
+        return;
+      }
+      
       // Transform backend data structure to frontend expected format
       if (message.type === 'metrics_update' && message.data) {
         console.log('📊 Processing metrics_update in dashboard');
@@ -69,7 +76,8 @@ const PipelineMonitoringDashboard = () => {
         // Update the transformed metrics state
         setTransformedMetrics(transformed);
       } else {
-        console.log('⚠️ Dashboard ignoring message type:', message.type);
+        // Silently ignore other message types (like pong which is handled above)
+        console.log('📝 Dashboard received message type:', message.type);
       }
     }
   });
