@@ -37,7 +37,7 @@
   add reactflow``.  The default styling is imported from the library.
 */
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect } from 'react';
 import ReactFlow, {
   MiniMap,
   Controls,
