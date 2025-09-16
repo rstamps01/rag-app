@@ -59,6 +59,11 @@ const useWebSocket = (url, options = {}) => {
    */
   const handleMessage = useCallback(
     (event) => {
+      // Update connection status to Connected when we receive messages
+      setConnectionStatus('Connected');
+      // Reset connection attempts counter on successful connection
+      connectionAttemptsRef.current = 0;
+      
       setDebugInfo((prev) => ({
         ...prev,
         messagesReceived: prev.messagesReceived + 1,
