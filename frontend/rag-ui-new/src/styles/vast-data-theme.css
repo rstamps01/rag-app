@@ -83,13 +83,7 @@ body {
   display: none !important;
 }
 
-/* Remove any white dashed boxes or artifacts */
-.react-flow__node[style*="border: 2px dashed"],
-.react-flow__node[style*="border: dashed"],
-.react-flow__node[class*="dashed"],
-.react-flow__node[class*="white"] {
-  display: none !important;
-}
+/* Remove any white dashed boxes or artifacts - REMOVED TOO AGGRESSIVE */
 
 /* Hide ReactFlow selection and connection preview artifacts */
 .react-flow__node.selected,
@@ -235,28 +229,7 @@ div[style*="position: relative"][style*="border"] {
   overflow: hidden !important;
 }
 
-/* Direct targeting of white dashed boxes - more aggressive approach */
-div[style*="border: 2px dashed white"],
-div[style*="border: 2px dashed #fff"],
-div[style*="border: 2px dashed #ffffff"],
-div[style*="border: dashed white"],
-div[style*="border: dashed #fff"],
-div[style*="border: dashed #ffffff"],
-div[style*="border-style: dashed"][style*="background: white"],
-div[style*="border-style: dashed"][style*="background: #fff"],
-div[style*="border-style: dashed"][style*="background-color: white"],
-div[style*="border-style: dashed"][style*="background-color: #fff"],
-div[style*="border-style: dashed"][style*="background-color: #ffffff"] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  height: 0 !important;
-  width: 0 !important;
-  overflow: hidden !important;
-  position: absolute !important;
-  left: -9999px !important;
-  top: -9999px !important;
-}
+/* Direct targeting of white dashed boxes - REMOVED TOO AGGRESSIVE */
 
 /* Target any element that might be a connection preview or placeholder box - REMOVED TOO AGGRESSIVE */
 
@@ -267,30 +240,7 @@ div[style*="border-style: dashed"][style*="background-color: #ffffff"] {
   background: transparent !important;
 }
 
-/* Target the specific white dashed box artifact */
-.react-flow__renderer > div > div[style*="border"],
-.react-flow__renderer > div > div[style*="dashed"],
-.react-flow__renderer > div > div[style*="white"],
-.react-flow__renderer > div > div[style*="#fff"] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  height: 0 !important;
-  width: 0 !important;
-  overflow: hidden !important;
-}
-
-/* Hide any element that might be the white dashed box */
-.react-flow__renderer div[style*="border: 2px dashed"],
-.react-flow__renderer div[style*="border: dashed"],
-.react-flow__renderer div[style*="border-style: dashed"] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  height: 0 !important;
-  width: 0 !important;
-  overflow: hidden !important;
-}
+/* Target the specific white dashed box artifact - REMOVED TOO AGGRESSIVE */
 
 /* Nuclear option: Hide any div with white background and dashed border - REMOVED TOO AGGRESSIVE */
 
