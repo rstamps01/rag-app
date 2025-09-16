@@ -147,31 +147,33 @@ export default function PipelineGraph({ stages, edges, onNodeClick }) {
     return () => clearTimeout(timer);
   }, [debugWhiteBoxes, nodes]);
 
-  return (
-    <div style={{ width: '100%', height: '100%' }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={rfEdges}
-        nodeTypes={nodeTypes}
-        onNodeClick={onNodeClickHandler}
-        fitView
-        deleteKeyCode={null} // Disable delete key
-        multiSelectionKeyCode={null} // Disable multi-selection
-        nodesDraggable={false} // Disable dragging
-        nodesConnectable={false} // Disable connections
-        elementsSelectable={false} // Disable selection
-        connectionMode={null} // Disable connection mode
-        onConnect={null} // Disable connect handler
-        onConnectStart={null} // Disable connect start
-        onConnectEnd={null} // Disable connect end
-        onSelectionChange={null} // Disable selection change
-        onNodesChange={null} // Disable nodes change
-        onEdgesChange={null} // Disable edges change
-        connectionLineType="straight" // Use straight connection lines
-        connectionLineStyle={{ display: 'none' }} // Hide connection line
-        defaultEdgeOptions={{ style: { display: 'none' } }} // Hide default edges
-        proOptions={{ hideAttribution: true }} // Hide ReactFlow attribution
-      >
+  // Error boundary for ReactFlow
+  try {
+    return (
+      <div style={{ width: '100%', height: '100%' }}>
+        <ReactFlow
+          nodes={nodes}
+          edges={rfEdges}
+          nodeTypes={nodeTypes}
+          onNodeClick={onNodeClickHandler}
+          fitView
+          deleteKeyCode={null} // Disable delete key
+          multiSelectionKeyCode={null} // Disable multi-selection
+          nodesDraggable={false} // Disable dragging
+          nodesConnectable={false} // Disable connections
+          elementsSelectable={false} // Disable selection
+          connectionMode={null} // Disable connection mode
+          onConnect={null} // Disable connect handler
+          onConnectStart={null} // Disable connect start
+          onConnectEnd={null} // Disable connect end
+          onSelectionChange={null} // Disable selection change
+          onNodesChange={null} // Disable nodes change
+          onEdgesChange={null} // Disable edges change
+          connectionLineType="straight" // Use straight connection lines
+          connectionLineStyle={{ display: 'none' }} // Hide connection line
+          defaultEdgeOptions={{ style: { display: 'none' } }} // Hide default edges
+          proOptions={{ hideAttribution: true }} // Hide ReactFlow attribution
+        >
         <MiniMap
           nodeColor={(node) => STATUS_COLOURS[node.data.status] || STATUS_COLOURS.default}
         />
@@ -180,4 +182,16 @@ export default function PipelineGraph({ stages, edges, onNodeClick }) {
       </ReactFlow>
     </div>
   );
+  } catch (error) {
+    console.error('❌ ReactFlow rendering error:', error);
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: 'white', textAlign: 'center' }}>
+          <h3>Pipeline Visualization Error</h3>
+          <p>There was an error rendering the pipeline graph.</p>
+          <p style={{ fontSize: '0.8em', color: '#888' }}>{error.message}</p>
+        </div>
+      </div>
+    );
+  }
 }
