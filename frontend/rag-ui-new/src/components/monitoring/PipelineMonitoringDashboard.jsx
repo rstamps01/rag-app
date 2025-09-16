@@ -13,15 +13,13 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-//import useWebSocket from '../../hooks/useWebSocket.jsx.v7c';
 import useWebSocket from '../../hooks/useWebSocket.jsx';
-import PipelineGraph from '../../components/PipelineGraph';
+import DynamicPipelineVisualization from '../DynamicPipelineVisualization';
 
 const PipelineMonitoringDashboard = () => {
   const [debugMode, setDebugMode] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
   const [transformedMetrics, setTransformedMetrics] = useState(null);
-  const [selectedNodeId, setSelectedNodeId] = useState(null);
   
   // WebSocket connection to backend
   const {
@@ -49,11 +47,12 @@ const PipelineMonitoringDashboard = () => {
         console.log('📊 Processing metrics_update in dashboard');
         const data = message.data;
         const transformed = {
-          systemHealth: {
-            cpuUsage: data.system_health?.cpu_usage || 0,
-            memoryUsage: data.system_health?.memory_usage || 0,
+          system_health: {
+            cpu_percent: data.system_health?.cpu_usage || data.system_health?.cpu_percent || 0,
+            memory_percent: data.system_health?.memory_usage || data.system_health?.memory_percent || 0,
+            memory_available: data.system_health?.memory_available || 'N/A'
           },
-          gpuPerformance: data.gpu_performance ? [{
+          gpu_performance: data.gpu_performance ? [{
             utilization: data.gpu_performance.gpu_utilization || 0,
             memory_used: data.gpu_performance.gpu_memory_used_mib || data.gpu_performance.gpu_memory_used || 0,
             memory_total: data.gpu_performance.gpu_memory_total_mib || data.gpu_performance.gpu_memory_total || 0,
@@ -61,33 +60,33 @@ const PipelineMonitoringDashboard = () => {
             power_draw: data.gpu_performance.gpu_power_draw_w || 0,
             power_limit: data.gpu_performance.gpu_power_limit_w || 0,
           }] : [],
-          pipelineStatus: {
-            queriesPerMinute: data.query_performance?.queries_per_minute || 0,
-            avgResponseTime: data.query_performance?.average_response_time_ms || 0,
-            activeQueries: data.query_performance?.active_queries || 0,
+          pipeline_status: {
+            queries_per_minute: data.query_performance?.queries_per_minute || 0,
+            avg_response_time: data.query_performance?.average_response_time_ms || 0,
+            active_queries: data.query_performance?.active_queries || 0,
           },
-          connectionStatus: {
-            websocketConnections: 1, // We know we're connected
-            backendStatus: data.connection_status?.backend || 'unknown',
-            databaseStatus: data.connection_status?.database || 'unknown',
-            vectorDbStatus: data.connection_status?.vector_db || 'unknown',
+          connection_status: {
+            websocket_connections: 1, // We know we're connected
+            backend_status: data.connection_status?.backend || 'unknown',
+            database_status: data.connection_status?.database || 'unknown',
+            vector_db_status: data.connection_status?.vector_db || 'unknown',
           }
         };
         console.log('✅ Setting transformed metrics:', transformed);
-        // Update the transformed metrics state
         setTransformedMetrics(transformed);
       } else {
-        // Silently ignore other message types (like pong which is handled above)
         console.log('📝 Dashboard received message type:', message.type);
       }
     }
   });
+
   // Update timestamp when metrics arrive
   useEffect(() => {
     if (transformedMetrics) {
       setLastUpdateTime(new Date().toLocaleTimeString());
     }
   }, [transformedMetrics]);
+
   // Formatters
   const formatPercentage = (value) => (typeof value === 'number' ? `${value.toFixed(1)}%` : '0%');
   const formatMemory = (used, total) => (typeof used === 'number' && typeof total === 'number' ? `${used}MB / ${total}MB` : 'N/A');
@@ -96,338 +95,116 @@ const PipelineMonitoringDashboard = () => {
     if (typeof time === 'string' && time.includes('ms')) return time;
     return '0ms';
   };
-  // Build nodes and edges for document + query workflows
-  const { stages, edges } = useMemo(() => {
-    /* Define a unified list of stages.  Each stage has an id, label and
-     * type indicating which workflow it belongs to (document or query).
-     * Adjust or extend this list to reflect your actual pipeline.
-     */
-    const stageDefinitions = [
-      { id: 'upload', label: 'Upload', type: 'document' },
-      { id: 'chunk', label: 'Chunk', type: 'document' },
-      { id: 'embed', label: 'Embed', type: 'document' },
-      { id: 'upsert', label: 'Upsert', type: 'document' },
-      { id: 'search', label: 'Search', type: 'query' },
-      { id: 'generate', label: 'Generate', type: 'query' },
-    ];
-    // Determine status for each stage from pipelineState or metrics
-    const getStatus = (id, idx) => {
-      if (pipelineState && pipelineState.stages && pipelineState.stages[id]) {
-        return pipelineState.stages[id].status || 'idle';
-      }
-      // Fallback: mark first stage of each workflow as processing when active
-      if (transformedMetrics && transformedMetrics.pipelineStatus && transformedMetrics.pipelineStatus.activeQueries > 0) {
-        if ((id === 'upload' || id === 'search')) return 'processing';
-      }
-      return 'idle';
-    };
-    // Build nodes with positions: document stages on the top row, query stages on the bottom
-    const nodes = stageDefinitions.map((def, idx) => {
-      const row = def.type === 'document' ? 0 : 1;
-      const order = def.type === 'document' ? idx : idx - 4; // query stages start after the 4 doc stages
-      const status = getStatus(def.id, idx);
-      
-      // Calculate metrics based on real-time data
-      const metrics = {
-        throughput: transformedMetrics?.pipelineStatus?.queriesPerMinute || 0,
-        latency: transformedMetrics?.pipelineStatus?.avgResponseTime || 0,
-        errorRate: 0, // Could be calculated from error logs
-      };
-      
-      // Determine health status
-      const health = status === 'processing' ? 'healthy' : 
-                    status === 'error' ? 'critical' : 
-                    status === 'idle' ? 'unknown' : 'healthy';
-      
-      return {
-        id: def.id,
-        label: def.label,
-        status: status,
-        metrics: metrics,
-        health: health,
-        position: { x: order * 180, y: row * 180 },
-      };
-    });
-    // Define edges separately for each workflow with throughput metrics
-    const edgeList = [];
-    const docIds = stageDefinitions.filter((s) => s.type === 'document').map((s) => s.id);
-    const queryIds = stageDefinitions.filter((s) => s.type === 'query').map((s) => s.id);
-    const throughput = transformedMetrics?.pipelineStatus?.queriesPerMinute || 0;
-    
-    for (let i = 0; i < docIds.length - 1; i++) {
-      edgeList.push({ 
-        id: `e-${docIds[i]}-${docIds[i + 1]}`, 
-        source: docIds[i], 
-        target: docIds[i + 1],
-        throughput: throughput
-      });
-    }
-    for (let i = 0; i < queryIds.length - 1; i++) {
-      edgeList.push({ 
-        id: `e-${queryIds[i]}-${queryIds[i + 1]}`, 
-        source: queryIds[i], 
-        target: queryIds[i + 1],
-        throughput: throughput
-      });
-    }
-    return { stages: nodes, edges: edgeList };
-  }, [pipelineState, transformedMetrics]);
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-gray-900">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center space-y-2 md:space-y-0">
+      <div className="bg-gray-800 shadow-md py-4 px-6 flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-white">RAG Pipeline Monitor</h1>
-          <span className="text-blue-400 text-sm">Real‑time Monitoring</span>
+          <h1 className="text-3xl font-bold text-white">RAG Pipeline Monitor</h1>
+          <p className="text-blue-400 text-sm">Dynamic Real-time Monitoring</p>
         </div>
-        <div className="flex items-center space-x-4 text-sm text-gray-400">
-          <span>System</span>
-          <span>•</span>
-          <span className={connectionStatus === 'Connected' ? 'text-green-400' : 'text-yellow-400'}>
-            {connectionStatus} {transformedMetrics ? '(Data)' : '(No Data)'}
-          </span>
-          <span>•</span>
+        
+        <div className="flex items-center space-x-4 text-sm">
+          <div className={`flex items-center gap-2 ${connectionStatus === 'Connected' ? 'text-green-400' : 'text-yellow-400'}`}>
+            <span className={`w-3 h-3 rounded-full ${connectionStatus === 'Connected' ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></span>
+            {connectionStatus} {transformedMetrics ? '(Live Data)' : '(No Data)'}
+          </div>
+          
           <button
             onClick={() => setDebugMode(!debugMode)}
             className="px-3 py-1 bg-blue-600 rounded text-sm text-white hover:bg-blue-500"
           >
-            Debug
+            {debugMode ? 'Hide Debug' : 'Debug'}
           </button>
-          <span>•</span>
-          <span>{transformedMetrics ? transformedMetrics.pipelineStatus.queriesPerMinute : 0}/min</span>
-          <span>•</span>
-          <span>{transformedMetrics ? formatResponseTime(transformedMetrics.pipelineStatus.avgResponseTime) : '0ms'}</span>
-          <span>•</span>
-          <span>{transformedMetrics ? formatPercentage(transformedMetrics.systemHealth.cpuUsage) : '0% CPU'}</span>
+          
+          {transformedMetrics && (
+            <div className="flex items-center space-x-4 text-gray-400">
+              <span>{transformedMetrics.pipeline_status.queries_per_minute}/min</span>
+              <span>{formatResponseTime(transformedMetrics.pipeline_status.avg_response_time)}</span>
+              <span>{formatPercentage(transformedMetrics.system_health.cpu_percent)}</span>
+              {lastUpdateTime && <span>Last: {lastUpdateTime}</span>}
+            </div>
+          )}
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Left column with metrics */}
-        <div className="space-y-4 md:col-span-1">
-          {/* System Health */}
-          <div className="bg-gray-800 p-4 rounded shadow space-y-1">
-            <h2 className="text-lg font-semibold text-white">System Health</h2>
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>CPU Usage</span>
-              <span>{transformedMetrics ? formatPercentage(transformedMetrics.systemHealth.cpuUsage) : '0%'}</span>
-            </div>
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>Memory</span>
-              <span>{transformedMetrics ? formatPercentage(transformedMetrics.systemHealth.memoryUsage) : '0%'}</span>
-            </div>
-          </div>
-          {/* GPU Performance */}
-          <div className="bg-gray-800 p-4 rounded shadow space-y-1">
-            <h2 className="text-lg font-semibold text-white">GPU Performance (RTX 5090)</h2>
-            {transformedMetrics && transformedMetrics.gpuPerformance && transformedMetrics.gpuPerformance.length > 0 ? (
-              <>
-                <div className="flex justify-between text-sm text-gray-300">
-                  <span>Utilization</span>
-                  <span>{formatPercentage(transformedMetrics.gpuPerformance[0].utilization)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-gray-300">
-                  <span>Memory</span>
-                  <span>{formatMemory(transformedMetrics.gpuPerformance[0].memory_used, transformedMetrics.gpuPerformance[0].memory_total)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-gray-300">
-                  <span>Temperature</span>
-                  <span>{transformedMetrics.gpuPerformance[0].temperature}°C</span>
-                </div>
-                <div className="flex justify-between text-sm text-gray-300">
-                  <span>Power</span>
-                  <span>{transformedMetrics.gpuPerformance[0].power_draw}W / {transformedMetrics.gpuPerformance[0].power_limit}W</span>
-                </div>
-              </>
-            ) : (
-              <p className="text-gray-400">No GPU data available</p>
+
+      {/* Main Dynamic Pipeline Visualization */}
+      <div className="h-[calc(100vh-80px)]">
+        {connectionStatus === 'Connected' ? (
+          <DynamicPipelineVisualization 
+            realTimeData={transformedMetrics}
+            connectionStatus={connectionStatus}
+            onDebugToggle={() => setDebugMode(!debugMode)}
+            debugMode={debugMode}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+            <div className="text-6xl">🔌</div>
+            <h2 className="text-2xl font-semibold text-gray-300">
+              {connectionStatus === 'Connecting' ? 'Connecting...' : 
+               connectionStatus === 'Failed' ? 'Connection Failed' : 'Disconnected'}
+            </h2>
+            <p className="text-gray-400 max-w-md">
+              {connectionStatus === 'Connecting'
+                ? `Attempting to connect to pipeline monitoring... (${debugInfo.connectionAttempts}/${debugInfo.maxConnectionAttempts || 5})`
+                : connectionStatus === 'Failed'
+                ? 'Max reconnection attempts reached. Click Reconnect to try again.'
+                : 'Pipeline monitoring connection lost. Click Reconnect to restore connection.'}
+            </p>
+            {connectionStatus !== 'Connecting' && (
+              <button
+                onClick={reconnect}
+                className="px-6 py-3 bg-blue-600 rounded-lg text-white hover:bg-blue-500 transition-colors"
+              >
+                {connectionStatus === 'Failed' ? 'Retry Connection' : 'Reconnect'}
+              </button>
+            )}
+            {debugMode && (
+              <div className="text-xs text-gray-500 mt-4 p-4 bg-gray-800 rounded-lg">
+                <p>Attempts: {debugInfo.connectionAttempts}</p>
+                <p>Messages: {debugInfo.messagesReceived}</p>
+                <p>Errors: {debugInfo.errors.length}</p>
+              </div>
             )}
           </div>
-          {/* Query Performance */}
-          <div className="bg-gray-800 p-4 rounded shadow space-y-1">
-            <h2 className="text-lg font-semibold text-white">Query Performance</h2>
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>Queries/Min</span>
-              <span>{transformedMetrics ? transformedMetrics.pipelineStatus.queriesPerMinute : 0}</span>
-            </div>
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>Avg Response</span>
-              <span>{transformedMetrics ? formatResponseTime(transformedMetrics.pipelineStatus.avgResponseTime) : '0ms'}</span>
-            </div>
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>Active Queries</span>
-              <span>{transformedMetrics ? transformedMetrics.pipelineStatus.activeQueries : 0}</span>
-            </div>
-          </div>
-          {/* Connection Status */}
-          <div className="bg-gray-800 p-4 rounded shadow space-y-1">
-            <h2 className="text-lg font-semibold text-white">Connection Status</h2>
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>WebSocket</span>
-              <span>{transformedMetrics ? `${transformedMetrics.connectionStatus.websocketConnections} clients` : '0 clients'}</span>
-            </div>
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>Backend</span>
-              <span>{transformedMetrics ? transformedMetrics.connectionStatus.backendStatus : 'unknown'}</span>
-            </div>
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>Database</span>
-              <span>{transformedMetrics ? transformedMetrics.connectionStatus.databaseStatus : 'unknown'}</span>
-            </div>
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>Vector DB</span>
-              <span>{transformedMetrics ? transformedMetrics.connectionStatus.vectorDbStatus : 'unknown'}</span>
-            </div>
-          </div>
-        </div>
-        {/* Right column - main content */}
-        <div className="md:col-span-3 bg-gray-900 p-4 rounded shadow relative overflow-x-auto">
-          {connectionStatus === 'Connected' ? (
-            <>
-              {/* Interactive pipeline graph */}
-              <div className="h-64 md:h-96">
-                <PipelineGraph
-                  stages={stages}
-                  edges={edges}
-                  selectedNodeId={selectedNodeId}
-                  showTooltips={true}
-                  onNodeClick={(stage) => {
-                    console.log('Clicked stage:', stage);
-                    setSelectedNodeId(stage.id);
-                    // TODO: Open detailed metrics panel
-                  }}
-                  onNodeHover={(stage, action) => {
-                    if (action === 'enter') {
-                      console.log('Hovered stage:', stage);
-                    }
-                  }}
-                />
-              </div>
-              {/* Selected Node Details Panel */}
-              {selectedNodeId && (
-                <div className="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-semibold text-white">
-                      {stages.find(s => s.id === selectedNodeId)?.label} Details
-                    </h3>
-                    <button
-                      onClick={() => setSelectedNodeId(null)}
-                      className="text-gray-400 hover:text-white text-xl"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  {(() => {
-                    const selectedStage = stages.find(s => s.id === selectedNodeId);
-                    if (!selectedStage) return null;
-                    
-                    return (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <div className="text-gray-400">Status</div>
-                          <div className="text-white font-medium">{selectedStage.status}</div>
-                        </div>
-                        <div>
-                          <div className="text-gray-400">Health</div>
-                          <div className={`font-medium ${
-                            selectedStage.health === 'healthy' ? 'text-green-400' :
-                            selectedStage.health === 'warning' ? 'text-yellow-400' :
-                            selectedStage.health === 'critical' ? 'text-red-400' :
-                            'text-gray-400'
-                          }`}>
-                            {selectedStage.health}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-400">Throughput</div>
-                          <div className="text-white font-medium">
-                            {selectedStage.metrics?.throughput || 0}/min
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-400">Latency</div>
-                          <div className="text-white font-medium">
-                            {selectedStage.metrics?.latency || 0}ms
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-              
-              {/* Summary metrics at bottom */}
-              {transformedMetrics && (
-                <div className="mt-4 text-sm text-gray-400 space-x-4">
-                  <span>CPU: {formatPercentage(transformedMetrics.systemHealth.cpuUsage)}</span>
-                  <span>Memory: {formatPercentage(transformedMetrics.systemHealth.memoryUsage)}</span>
-                  <span>Queries/Min: {transformedMetrics.pipelineStatus.queriesPerMinute}</span>
-                  {lastUpdateTime && <span>Last update: {lastUpdateTime}</span>}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-2">
-              <h2 className="text-xl font-semibold text-gray-300">
-                {connectionStatus === 'Connecting' ? 'Connecting...' : 
-                 connectionStatus === 'Connected' ? 'Connected' :
-                 connectionStatus === 'Failed' ? 'Connection Failed' : 'Disconnected'}
-              </h2>
-              <p className="text-sm text-gray-400">
-                {connectionStatus === 'Connecting'
-                  ? `Attempting to connect to pipeline monitoring... (${debugInfo.connectionAttempts}/${debugInfo.connectionAttempts})`
-                  : connectionStatus === 'Failed'
-                  ? 'Max reconnection attempts reached. Click Reconnect to try again.'
-                  : 'Pipeline monitoring connection lost'}
-              </p>
-              {connectionStatus !== 'Connecting' && (
-                <button
-                  onClick={reconnect}
-                  className="px-4 py-2 bg-blue-600 rounded text-white hover:bg-blue-500"
-                >
-                  {connectionStatus === 'Failed' ? 'Retry Connection' : 'Reconnect'}
-                </button>
-              )}
-              {debugMode && (
-                <div className="text-xs text-gray-500 mt-2">
-                  <p>Attempts: {debugInfo.connectionAttempts}</p>
-                  <p>Messages: {debugInfo.messagesReceived}</p>
-                  <p>Errors: {debugInfo.errors.length}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        )}
       </div>
-      {/* Debug panel */}
+
+      {/* Debug Panel */}
       {debugMode && (
-        <div className="bg-gray-800 p-4 rounded shadow text-sm text-gray-200 space-y-2">
-          <h3 className="text-lg font-semibold text-white">Debug Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h4 className="font-semibold text-blue-400">Connection Status</h4>
-              <pre className="whitespace-pre-wrap break-words text-xs">{JSON.stringify({ 
-                connectionStatus, 
-                lastUpdateTime,
-                hasTransformedMetrics: !!transformedMetrics,
-                hasRawMetrics: !!metrics,
-                hasLastMessage: !!lastMessage
-              }, null, 2)}</pre>
-            </div>
-            <div>
-              <h4 className="font-semibold text-blue-400">Pipeline State</h4>
-              <pre className="whitespace-pre-wrap break-words text-xs">{JSON.stringify({ 
-                stagesCount: stages?.length || 0,
-                edgesCount: edges?.length || 0,
-                pipelineState: pipelineState || 'null'
-              }, null, 2)}</pre>
+        <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-4 max-h-64 overflow-y-auto">
+          <div className="max-w-7xl mx-auto">
+            <h3 className="text-lg font-semibold text-white mb-4">Debug Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <h4 className="font-semibold text-blue-400 mb-2">Connection Status</h4>
+                <pre className="whitespace-pre-wrap break-words text-xs text-gray-300">
+                  {JSON.stringify({ 
+                    connectionStatus, 
+                    lastUpdateTime,
+                    hasTransformedMetrics: !!transformedMetrics,
+                    hasRawMetrics: !!metrics,
+                    hasLastMessage: !!lastMessage
+                  }, null, 2)}
+                </pre>
+              </div>
+              <div>
+                <h4 className="font-semibold text-green-400 mb-2">Pipeline State</h4>
+                <pre className="whitespace-pre-wrap break-words text-xs text-gray-300">
+                  {JSON.stringify({ 
+                    pipelineState: pipelineState || 'null',
+                    hasPipelineState: !!pipelineState
+                  }, null, 2)}
+                </pre>
+              </div>
+              <div>
+                <h4 className="font-semibold text-yellow-400 mb-2">Transformed Metrics</h4>
+                <pre className="whitespace-pre-wrap break-words text-xs text-gray-300">
+                  {transformedMetrics ? JSON.stringify(transformedMetrics, null, 2) : 'No metrics available'}
+                </pre>
+              </div>
             </div>
           </div>
-          {transformedMetrics && (
-            <div>
-              <h4 className="font-semibold text-green-400">Transformed Metrics</h4>
-              <pre className="whitespace-pre-wrap break-words text-xs">{JSON.stringify(transformedMetrics, null, 2)}</pre>
-            </div>
-          )}
         </div>
       )}
     </div>

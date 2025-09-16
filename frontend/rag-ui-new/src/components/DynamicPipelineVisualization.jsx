@@ -538,109 +538,120 @@ const NodeCustomizationPanel = ({ selectedNode, onUpdate, onClose }) => {
 };
 
 // Main Dynamic Pipeline Visualization Component
-const DynamicPipelineVisualization = () => {
+const DynamicPipelineVisualization = ({ 
+  realTimeData, 
+  connectionStatus, 
+  onDebugToggle, 
+  debugMode = false 
+}) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isAnimating, setIsAnimating] = useState(true);
   const [showCustomization, setShowCustomization] = useState(false);
-  const [pipelineData, setPipelineData] = useState(null);
   const reactFlowInstance = useReactFlow();
 
-  // Sample pipeline data
-  const samplePipelineData = {
-    system_health: {
-      cpu_percent: Math.random() * 100,
-      memory_percent: Math.random() * 100,
-      memory_available: `${(Math.random() * 16).toFixed(1)}GB`
-    },
-    gpu_performance: [{
-      utilization: Math.random() * 100,
-      memory_used: Math.random() * 24000,
-      memory_total: 24576,
-      temperature: 60 + Math.random() * 30
-    }],
-    pipeline_status: {
-      queries_per_minute: Math.floor(Math.random() * 50),
-      avg_response_time: Math.random() * 3000,
-      active_queries: Math.floor(Math.random() * 10)
-    },
-    connection_status: {
-      websocket_connections: Math.floor(Math.random() * 5) + 1,
-      backend_status: 'connected',
-      database_status: 'connected',
-      vector_db_status: 'connected'
-    }
-  };
-
-  // Initialize nodes
+  // Initialize nodes with RAG pipeline stages
   useEffect(() => {
     const initialNodes = [
       {
-        id: 'query-input',
+        id: 'upload',
         type: 'dynamicNode',
         position: { x: 100, y: 200 },
         data: {
-          label: 'Query Input',
-          type: 'query-input',
-          status: 'active',
-          health: 'healthy',
-          metrics: {
-            throughput: samplePipelineData.pipeline_status.queries_per_minute,
-            latency: samplePipelineData.pipeline_status.avg_response_time * 0.1,
-            active_queries: samplePipelineData.pipeline_status.active_queries
-          },
-          customization: {}
-        }
-      },
-      {
-        id: 'vector-search',
-        type: 'dynamicNode',
-        position: { x: 400, y: 200 },
-        data: {
-          label: 'Vector Search',
-          type: 'vector-search',
-          status: 'processing',
-          health: 'healthy',
-          metrics: {
-            search_latency: samplePipelineData.pipeline_status.avg_response_time * 0.3,
-            results_count: Math.floor(Math.random() * 20),
-            collection_health: 'healthy'
-          },
-          customization: {}
-        }
-      },
-      {
-        id: 'llm-processing',
-        type: 'dynamicNode',
-        position: { x: 700, y: 200 },
-        data: {
-          label: 'LLM Processing',
-          type: 'llm-processing',
-          status: 'processing',
-          health: samplePipelineData.gpu_performance[0].temperature > 80 ? 'warning' : 'healthy',
-          metrics: {
-            gpu_utilization: samplePipelineData.gpu_performance[0].utilization,
-            gpu_memory: samplePipelineData.gpu_performance[0].memory_used,
-            processing_time: samplePipelineData.pipeline_status.avg_response_time * 0.7,
-            temperature: samplePipelineData.gpu_performance[0].temperature
-          },
-          customization: {}
-        }
-      },
-      {
-        id: 'response',
-        type: 'dynamicNode',
-        position: { x: 1000, y: 200 },
-        data: {
-          label: 'Response Delivery',
-          type: 'response',
+          label: 'Upload',
+          type: 'upload',
           status: 'idle',
-          health: 'healthy',
+          health: 'unknown',
           metrics: {
-            response_time: samplePipelineData.pipeline_status.avg_response_time,
-            success_rate: 100,
-            throughput: samplePipelineData.pipeline_status.queries_per_minute
+            throughput: 0,
+            latency: 0,
+            active_uploads: 0
+          },
+          customization: {}
+        }
+      },
+      {
+        id: 'chunk',
+        type: 'dynamicNode',
+        position: { x: 350, y: 200 },
+        data: {
+          label: 'Chunk',
+          type: 'chunk',
+          status: 'idle',
+          health: 'unknown',
+          metrics: {
+            throughput: 0,
+            latency: 0,
+            chunks_processed: 0
+          },
+          customization: {}
+        }
+      },
+      {
+        id: 'embed',
+        type: 'dynamicNode',
+        position: { x: 600, y: 200 },
+        data: {
+          label: 'Embed',
+          type: 'embed',
+          status: 'idle',
+          health: 'unknown',
+          metrics: {
+            throughput: 0,
+            latency: 0,
+            vectors_created: 0
+          },
+          customization: {}
+        }
+      },
+      {
+        id: 'upsert',
+        type: 'dynamicNode',
+        position: { x: 850, y: 200 },
+        data: {
+          label: 'Upsert',
+          type: 'upsert',
+          status: 'idle',
+          health: 'unknown',
+          metrics: {
+            throughput: 0,
+            latency: 0,
+            vectors_stored: 0
+          },
+          customization: {}
+        }
+      },
+      {
+        id: 'search',
+        type: 'dynamicNode',
+        position: { x: 100, y: 400 },
+        data: {
+          label: 'Search',
+          type: 'search',
+          status: 'idle',
+          health: 'unknown',
+          metrics: {
+            throughput: 0,
+            latency: 0,
+            search_queries: 0
+          },
+          customization: {}
+        }
+      },
+      {
+        id: 'generate',
+        type: 'dynamicNode',
+        position: { x: 350, y: 400 },
+        data: {
+          label: 'Generate',
+          type: 'generate',
+          status: 'idle',
+          health: 'unknown',
+          metrics: {
+            throughput: 0,
+            latency: 0,
+            responses_generated: 0
           },
           customization: {}
         }
@@ -648,19 +659,17 @@ const DynamicPipelineVisualization = () => {
       {
         id: 'resource-monitor',
         type: 'dynamicNode',
-        position: { x: 100, y: 400 },
+        position: { x: 600, y: 400 },
         data: {
           label: 'Resource Monitor',
           type: 'resource-monitor',
           status: 'active',
-          health: samplePipelineData.system_health.cpu_percent > 90 ? 'critical' : 
-                  samplePipelineData.system_health.cpu_percent > 80 ? 'warning' : 'healthy',
+          health: 'healthy',
           metrics: {
-            cpu_percent: samplePipelineData.system_health.cpu_percent,
-            memory_percent: samplePipelineData.system_health.memory_percent,
-            memory_available: samplePipelineData.system_health.memory_available,
-            gpu_utilization: samplePipelineData.gpu_performance[0].utilization,
-            gpu_temperature: samplePipelineData.gpu_performance[0].temperature
+            cpu_percent: 0,
+            memory_percent: 0,
+            gpu_utilization: 0,
+            gpu_temperature: 0
           },
           customization: {}
         }
@@ -669,104 +678,111 @@ const DynamicPipelineVisualization = () => {
 
     const initialEdges = [
       {
-        id: 'query-to-vector',
-        source: 'query-input',
-        target: 'vector-search',
+        id: 'upload-to-chunk',
+        source: 'upload',
+        target: 'chunk',
         type: 'animated',
-        data: {
-          throughput: samplePipelineData.pipeline_status.queries_per_minute,
-          latency: samplePipelineData.pipeline_status.avg_response_time * 0.3
-        }
+        data: { throughput: 0, latency: 0 }
       },
       {
-        id: 'vector-to-llm',
-        source: 'vector-search',
-        target: 'llm-processing',
+        id: 'chunk-to-embed',
+        source: 'chunk',
+        target: 'embed',
         type: 'animated',
-        data: {
-          throughput: samplePipelineData.pipeline_status.queries_per_minute,
-          latency: samplePipelineData.pipeline_status.avg_response_time * 0.4
-        }
+        data: { throughput: 0, latency: 0 }
       },
       {
-        id: 'llm-to-response',
-        source: 'llm-processing',
-        target: 'response',
+        id: 'embed-to-upsert',
+        source: 'embed',
+        target: 'upsert',
         type: 'animated',
-        data: {
-          throughput: samplePipelineData.pipeline_status.queries_per_minute,
-          latency: samplePipelineData.pipeline_status.avg_response_time * 0.3
-        }
+        data: { throughput: 0, latency: 0 }
+      },
+      {
+        id: 'search-to-generate',
+        source: 'search',
+        target: 'generate',
+        type: 'animated',
+        data: { throughput: 0, latency: 0 }
       }
     ];
 
     setNodes(initialNodes);
     setEdges(initialEdges);
-    setPipelineData(samplePipelineData);
   }, []);
 
-  // Update data periodically
+  // Update nodes with real-time data
   useEffect(() => {
-    if (!isAnimating) return;
+    if (!realTimeData) return;
 
-    const interval = setInterval(() => {
-      const newData = {
-        system_health: {
-          cpu_percent: Math.random() * 100,
-          memory_percent: Math.random() * 100,
-          memory_available: `${(Math.random() * 16).toFixed(1)}GB`
-        },
-        gpu_performance: [{
-          utilization: Math.random() * 100,
-          memory_used: Math.random() * 24000,
-          memory_total: 24576,
-          temperature: 60 + Math.random() * 30
-        }],
-        pipeline_status: {
-          queries_per_minute: Math.floor(Math.random() * 50),
-          avg_response_time: Math.random() * 3000,
-          active_queries: Math.floor(Math.random() * 10)
+    setNodes(prevNodes => 
+      prevNodes.map(node => {
+        const { system_health, gpu_performance, pipeline_status } = realTimeData;
+        const gpu = gpu_performance && gpu_performance.length > 0 ? gpu_performance[0] : {};
+        
+        // Determine status based on real data
+        let status = 'idle';
+        let health = 'unknown';
+        
+        if (node.id === 'resource-monitor') {
+          status = 'active';
+          health = system_health.cpu_percent > 90 ? 'critical' : 
+                  system_health.cpu_percent > 80 ? 'warning' : 'healthy';
+        } else if (pipeline_status.active_queries > 0) {
+          // Simulate processing in different stages
+          const stageOrder = ['search', 'generate', 'upload', 'chunk', 'embed', 'upsert'];
+          const stageIndex = stageOrder.indexOf(node.id);
+          if (stageIndex >= 0 && stageIndex < 2) {
+            status = 'processing';
+            health = 'healthy';
+          } else if (stageIndex >= 2) {
+            status = 'active';
+            health = 'healthy';
+          }
         }
-      };
 
-      setPipelineData(newData);
-      
-      // Update node metrics
-      setNodes(prevNodes => 
-        prevNodes.map(node => ({
+        // Update metrics based on node type
+        let metrics = { ...node.data.metrics };
+        
+        if (node.id === 'resource-monitor') {
+          metrics = {
+            cpu_percent: system_health.cpu_percent || 0,
+            memory_percent: system_health.memory_percent || 0,
+            gpu_utilization: gpu.utilization || 0,
+            gpu_temperature: gpu.temperature || 0
+          };
+        } else {
+          metrics = {
+            ...metrics,
+            throughput: pipeline_status.queries_per_minute || 0,
+            latency: pipeline_status.avg_response_time || 0
+          };
+        }
+
+        return {
           ...node,
           data: {
             ...node.data,
-            status: Math.random() > 0.7 ? 'processing' : 
-                   Math.random() > 0.5 ? 'active' : 'idle',
-            metrics: {
-              ...node.data.metrics,
-              throughput: newData.pipeline_status.queries_per_minute,
-              latency: newData.pipeline_status.avg_response_time * (Math.random() * 0.5 + 0.1),
-              cpu_percent: newData.system_health.cpu_percent,
-              memory_percent: newData.system_health.memory_percent,
-              gpu_utilization: newData.gpu_performance[0].utilization,
-              temperature: newData.gpu_performance[0].temperature
-            }
+            status,
+            health,
+            metrics
           }
-        }))
-      );
+        };
+      })
+    );
 
-      // Update edge data
-      setEdges(prevEdges =>
-        prevEdges.map(edge => ({
-          ...edge,
-          data: {
-            ...edge.data,
-            throughput: newData.pipeline_status.queries_per_minute,
-            latency: newData.pipeline_status.avg_response_time * (Math.random() * 0.5 + 0.1)
-          }
-        }))
-      );
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [isAnimating]);
+    // Update edge data
+    setEdges(prevEdges =>
+      prevEdges.map(edge => ({
+        ...edge,
+        data: {
+          ...edge.data,
+          throughput: realTimeData.pipeline_status?.queries_per_minute || 0,
+          latency: realTimeData.pipeline_status?.avg_response_time || 0
+        }
+      }))
+    );
+  }, [realTimeData]);
 
   const nodeTypes = useMemo(() => ({
     dynamicNode: DynamicPipelineNode,
@@ -886,10 +902,22 @@ const DynamicPipelineVisualization = () => {
                 <Settings className="w-4 h-4" />
                 Customize
               </Button>
+
+              {onDebugToggle && (
+                <Button
+                  onClick={onDebugToggle}
+                  variant={debugMode ? "default" : "outline"}
+                  size="sm"
+                >
+                  <Activity className="w-4 h-4" />
+                  Debug
+                </Button>
+              )}
             </div>
 
             <div className="text-sm text-gray-600">
               <div>Status: {isAnimating ? 'Live' : 'Paused'}</div>
+              <div>Connection: {connectionStatus || 'Unknown'}</div>
               <div>Nodes: {nodes.length}</div>
               <div>Connections: {edges.length}</div>
             </div>

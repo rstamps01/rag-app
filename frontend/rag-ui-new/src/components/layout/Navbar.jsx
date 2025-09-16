@@ -9,6 +9,7 @@ const Navbar = () => {
     { path: '/documents', label: 'Documents' },
     { path: '/queries', label: 'Queries' },
     { path: '/monitoring', label: 'Pipeline Monitor' },
+    { path: '/dynamic-pipeline', label: 'Dynamic Pipeline' },
     { path: '/test', label: 'Test Page' }
   ];
 
