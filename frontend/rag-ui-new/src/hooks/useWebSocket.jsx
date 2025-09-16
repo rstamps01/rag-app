@@ -95,6 +95,13 @@ const useWebSocket = (url, options = {}) => {
       return;
     }
     
+    // Clean up any existing connection that's not in a connecting state
+    if (ws.current && ws.current.readyState === WebSocket.CLOSING) {
+      // Wait a bit for the connection to fully close before creating a new one
+      setTimeout(() => connect(), 100);
+      return;
+    }
+    
     // Check if we've exceeded max attempts
     if (connectionAttemptsRef.current >= maxReconnectAttempts) {
       setConnectionStatus('Failed');
@@ -181,7 +188,8 @@ const useWebSocket = (url, options = {}) => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
-      if (ws.current) {
+      // Only close if connection is actually open, not connecting
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
         ws.current.close();
       }
     };
@@ -203,7 +211,8 @@ const useWebSocket = (url, options = {}) => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
     }
-    if (ws.current) {
+    // Only close if connection is open, not if it's connecting
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.close();
     }
     connectionAttemptsRef.current = 0;
