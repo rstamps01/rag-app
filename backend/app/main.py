@@ -576,47 +576,13 @@ async def ask_query(
                 
                 # Generate query embedding
                 query_embedding = embedding_model.encode(request.query).tolist()
-                logger.info(f"DEBUG: Embedding model: {embedding_model}")
-                logger.info(f"DEBUG: Model max_seq_length: {getattr(embedding_model, 'max_seq_length', 'Unknown')}")
-                
-                # Search in Qdrant
-                logger.info(f"DEBUG: Query embedding shape: {len(query_embedding)}")
-                logger.info(f"DEBUG: Query embedding sample: {query_embedding[:5]}")
                 
                 search_results = qdrant_client.search(
                     collection_name="rag",
                     query_vector=query_embedding,
                     limit=5,
-                    score_threshold=0.0  # Lower threshold for debugging
+                    score_threshold=0.3  # Restore reasonable threshold
                 )
-                
-                logger.info(f"DEBUG: Raw search results count: {len(search_results)}")
-                for i, result in enumerate(search_results[:3]):
-                    logger.info(f"DEBUG: Result {i}: score={result.score:.4f}, payload keys={list(result.payload.keys())}")
-                
-                # Test direct Qdrant search for comparison
-                try:
-                    import httpx
-                    with httpx.Client() as client:
-                        direct_search = {
-                            "vector": query_embedding,
-                            "limit": 5,
-                            "with_payload": True
-                        }
-                        direct_response = client.post(
-                            f"{settings.QDRANT_URL}/collections/rag/points/search",
-                            json=direct_search
-                        )
-                        if direct_response.status_code == 200:
-                            direct_results = direct_response.json()
-                            direct_points = direct_results.get("result", [])
-                            logger.info(f"DEBUG: Direct Qdrant search returned {len(direct_points)} points")
-                            for i, point in enumerate(direct_points[:3]):
-                                logger.info(f"DEBUG: Direct result {i}: score={point.get('score', 0):.4f}")
-                        else:
-                            logger.error(f"DEBUG: Direct Qdrant search failed: {direct_response.status_code}")
-                except Exception as e:
-                    logger.error(f"DEBUG: Direct Qdrant search error: {e}")
                 
                 # Process search results
                 for result in search_results:
@@ -683,15 +649,10 @@ async def ask_query(
         if db_ok and db is not None:
             try:
                 # Extract response text from dictionary if needed
-                logger.info(f"DEBUG: response_text type: {type(response_text)}")
-                logger.info(f"DEBUG: response_text content: {str(response_text)[:200]}...")
-                
                 if isinstance(response_text, dict):
                     response_text_str = response_text.get('response', str(response_text))
-                    logger.info(f"DEBUG: Extracted response string: {response_text_str[:200]}...")
                 else:
                     response_text_str = str(response_text)
-                    logger.info(f"DEBUG: Using response as string: {response_text_str[:200]}...")
                 
                 query_record = QueryHistory(
                     query_text=request.query,
@@ -715,13 +676,10 @@ async def ask_query(
                 logger.error(f"Failed to store query in database: {e}")
         
         # Extract response text for QueryResponse
-        logger.info(f"DEBUG: Preparing QueryResponse - response_text type: {type(response_text)}")
         if isinstance(response_text, dict):
             response_text_for_return = response_text.get('response', str(response_text))
-            logger.info(f"DEBUG: QueryResponse using extracted string: {response_text_for_return[:200]}...")
         else:
             response_text_for_return = str(response_text)
-            logger.info(f"DEBUG: QueryResponse using string: {response_text_for_return[:200]}...")
         
         return QueryResponse(
             response=response_text_for_return,
