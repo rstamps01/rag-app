@@ -139,7 +139,7 @@ const PipelineMonitoringDashboard = () => {
           <span>System</span>
           <span>•</span>
           <span className={connectionStatus === 'Connected' ? 'text-green-400' : 'text-yellow-400'}>
-            {connectionStatus}
+            {connectionStatus} {transformedMetrics ? '(Data)' : '(No Data)'}
           </span>
           <span>•</span>
           <button
@@ -285,10 +285,32 @@ const PipelineMonitoringDashboard = () => {
       {debugMode && (
         <div className="bg-gray-800 p-4 rounded shadow text-sm text-gray-200 space-y-2">
           <h3 className="text-lg font-semibold text-white">Debug Information</h3>
-          <pre className="whitespace-pre-wrap break-words">{JSON.stringify({ connectionStatus, lastUpdateTime }, null, 2)}</pre>
-          <pre className="whitespace-pre-wrap break-words">{JSON.stringify(metrics, null, 2)}</pre>
-          <pre className="whitespace-pre-wrap break-words">{JSON.stringify(lastMessage, null, 2)}</pre>
-          <pre className="whitespace-pre-wrap break-words">{JSON.stringify(pipelineState, null, 2)}</pre>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h4 className="font-semibold text-blue-400">Connection Status</h4>
+              <pre className="whitespace-pre-wrap break-words text-xs">{JSON.stringify({ 
+                connectionStatus, 
+                lastUpdateTime,
+                hasTransformedMetrics: !!transformedMetrics,
+                hasRawMetrics: !!metrics,
+                hasLastMessage: !!lastMessage
+              }, null, 2)}</pre>
+            </div>
+            <div>
+              <h4 className="font-semibold text-blue-400">Pipeline State</h4>
+              <pre className="whitespace-pre-wrap break-words text-xs">{JSON.stringify({ 
+                stagesCount: stages?.length || 0,
+                edgesCount: edges?.length || 0,
+                pipelineState: pipelineState || 'null'
+              }, null, 2)}</pre>
+            </div>
+          </div>
+          {transformedMetrics && (
+            <div>
+              <h4 className="font-semibold text-green-400">Transformed Metrics</h4>
+              <pre className="whitespace-pre-wrap break-words text-xs">{JSON.stringify(transformedMetrics, null, 2)}</pre>
+            </div>
+          )}
         </div>
       )}
     </div>
