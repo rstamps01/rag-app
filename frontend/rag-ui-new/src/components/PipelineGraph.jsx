@@ -119,6 +119,34 @@ export default function PipelineGraph({ stages, edges, onNodeClick }) {
     [onNodeClick]
   );
 
+  // Debug function to identify white dashed box elements
+  const debugWhiteBoxes = useCallback(() => {
+    const allElements = document.querySelectorAll('*');
+    allElements.forEach((el) => {
+      const style = window.getComputedStyle(el);
+      if (style.border.includes('dashed') && (style.backgroundColor === 'white' || style.backgroundColor === 'rgb(255, 255, 255)')) {
+        console.log('🔍 Found white dashed box:', el, {
+          tagName: el.tagName,
+          className: el.className,
+          id: el.id,
+          style: el.style.cssText,
+          computedStyle: {
+            border: style.border,
+            backgroundColor: style.backgroundColor,
+            display: style.display,
+            position: style.position
+          }
+        });
+      }
+    });
+  }, []);
+
+  // Run debug on mount and after updates
+  useEffect(() => {
+    const timer = setTimeout(debugWhiteBoxes, 1000);
+    return () => clearTimeout(timer);
+  }, [debugWhiteBoxes, nodes]);
+
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <ReactFlow
@@ -139,6 +167,10 @@ export default function PipelineGraph({ stages, edges, onNodeClick }) {
         onSelectionChange={null} // Disable selection change
         onNodesChange={null} // Disable nodes change
         onEdgesChange={null} // Disable edges change
+        connectionLineType="straight" // Use straight connection lines
+        connectionLineStyle={{ display: 'none' }} // Hide connection line
+        defaultEdgeOptions={{ style: { display: 'none' } }} // Hide default edges
+        proOptions={{ hideAttribution: true }} // Hide ReactFlow attribution
       >
         <MiniMap
           nodeColor={(node) => STATUS_COLOURS[node.data.status] || STATUS_COLOURS.default}

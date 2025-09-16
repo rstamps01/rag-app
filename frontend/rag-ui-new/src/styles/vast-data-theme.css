@@ -188,6 +188,53 @@ div[style*="border-style: dashed"][style*="background-color: #fff"] {
   display: none !important;
 }
 
+/* Hide any ReactFlow connection preview elements */
+.react-flow__connectionline,
+.react-flow__connection-line,
+.react-flow__connection-path,
+.react-flow__edge-updater,
+.react-flow__edge-updater-target,
+.react-flow__edge-updater-source,
+.react-flow__connection,
+.react-flow__connection-line,
+.react-flow__connection-path,
+.react-flow__edge-updater,
+.react-flow__edge-updater-target,
+.react-flow__edge-updater-source,
+.react-flow__connectionline,
+.react-flow__connection-line,
+.react-flow__connection-path,
+.react-flow__edge-updater,
+.react-flow__edge-updater-target,
+.react-flow__edge-updater-source {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Hide any element that looks like a connection preview box */
+div[style*="position: absolute"][style*="border"],
+div[style*="position: fixed"][style*="border"],
+div[style*="position: relative"][style*="border"] {
+  border: none !important;
+}
+
+/* Nuclear option: Hide any element with dashed border anywhere in the ReactFlow container */
+.react-flow__renderer *[style*="dashed"],
+.react-flow__renderer *[style*="border: 2px dashed"],
+.react-flow__renderer *[style*="border: dashed"],
+.react-flow__renderer *[style*="border-style: dashed"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+}
+
 /* Ensure React Flow container is clean */
 .react-flow__renderer {
   background: transparent !important;
