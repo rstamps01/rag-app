@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import PipelineGraph from './PipelineGraph';
 import usePipelineFlow from '../hooks/usePipelineFlow';
+import QdrantVectorVisualization from './QdrantVectorVisualization';
+import PerformanceMonitor from './PerformanceMonitor';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Button } from '../ui/button';
@@ -15,8 +17,9 @@ import { Button } from '../ui/button';
  * - Live performance monitoring
  */
 const EnhancedPipelineDashboard = () => {
-  const [viewMode, setViewMode] = useState('flow'); // 'flow', 'metrics', 'vector'
+  const [viewMode, setViewMode] = useState('flow'); // 'flow', 'metrics', 'vector', 'performance'
   const [selectedNodeDetails, setSelectedNodeDetails] = useState(null);
+  const [historicalData, setHistoricalData] = useState([]);
   
   // Use the enhanced pipeline flow hook
   const {
@@ -47,6 +50,25 @@ const EnhancedPipelineDashboard = () => {
   const onNodeHover = (event, node) => {
     handleNodeHover(event, node);
   };
+  
+  // Collect historical data for performance monitoring
+  React.useEffect(() => {
+    if (pipelineStats) {
+      const newDataPoint = {
+        time: new Date().toLocaleTimeString(),
+        cpu: pipelineStats.cpuUsage,
+        memory: pipelineStats.memoryUsage,
+        gpu: pipelineStats.gpuUtilization,
+        queries: pipelineStats.totalQueries,
+        responseTime: pipelineStats.avgResponseTime
+      };
+      
+      setHistoricalData(prev => {
+        const updated = [...prev, newDataPoint];
+        return updated.slice(-50); // Keep last 50 data points
+      });
+    }
+  }, [pipelineStats]);
   
   // Real-time metrics panel
   const RealTimeMetricsPanel = () => {
@@ -230,10 +252,11 @@ const EnhancedPipelineDashboard = () => {
       {/* Main content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <Tabs value={viewMode} onValueChange={setViewMode} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="flow">Pipeline Flow</TabsTrigger>
             <TabsTrigger value="metrics">Real-time Metrics</TabsTrigger>
             <TabsTrigger value="vector">Vector Visualization</TabsTrigger>
+            <TabsTrigger value="performance">Performance Monitor</TabsTrigger>
           </TabsList>
           
           <TabsContent value="flow" className="mt-6">
@@ -262,20 +285,24 @@ const EnhancedPipelineDashboard = () => {
           </TabsContent>
           
           <TabsContent value="vector" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Vector Database Visualization</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-96 w-full flex items-center justify-center text-gray-500">
-                  <div className="text-center">
-                    <div className="text-4xl mb-4">🎯</div>
-                    <div>Vector visualization coming soon...</div>
-                    <div className="text-sm mt-2">This will show Qdrant vector points and search results</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <QdrantVectorVisualization 
+              collectionName="default"
+              onPointSelect={(point) => {
+                console.log('Vector point selected:', point);
+              }}
+              showControls={true}
+              autoRefresh={true}
+              refreshInterval={10000}
+            />
+          </TabsContent>
+          
+          <TabsContent value="performance" className="mt-6">
+            <PerformanceMonitor 
+              pipelineStats={pipelineStats}
+              historicalData={historicalData}
+              showCharts={true}
+              refreshInterval={1000}
+            />
           </TabsContent>
         </Tabs>
       </div>
