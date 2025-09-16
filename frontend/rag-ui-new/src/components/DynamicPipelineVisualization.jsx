@@ -13,6 +13,52 @@ import ReactFlow, {
   MarkerType,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+
+// Error boundary component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('DynamicPipelineVisualization Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center h-full bg-gray-900 text-white">
+          <div className="text-center">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h2 className="text-2xl font-semibold mb-2">Pipeline Visualization Error</h2>
+            <p className="text-gray-400 mb-4">There was an error loading the pipeline visualization.</p>
+            <button 
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Try Again
+            </button>
+            {this.state.error && (
+              <details className="mt-4 text-left">
+                <summary className="cursor-pointer text-sm text-gray-400">Error Details</summary>
+                <pre className="mt-2 text-xs text-red-400 bg-gray-800 p-2 rounded overflow-auto">
+                  {this.state.error.toString()}
+                </pre>
+              </details>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 import AdvancedDataFlowAnimations from './AdvancedDataFlowAnimations';
 // Simple UI components to avoid import issues
 const Card = ({ children, className = '', ...props }) => (
@@ -623,6 +669,14 @@ const DynamicPipelineVisualization = ({
   const [showCustomization, setShowCustomization] = useState(false);
   const reactFlowInstance = useReactFlow();
 
+  // Debug logging
+  console.log('DynamicPipelineVisualization rendered with:', {
+    realTimeData: !!realTimeData,
+    connectionStatus,
+    nodesCount: nodes.length,
+    edgesCount: edges.length
+  });
+
   // Initialize nodes with RAG pipeline stages
   useEffect(() => {
     const initialNodes = [
@@ -905,21 +959,38 @@ const DynamicPipelineVisualization = ({
     setNodes(prevNodes => [...prevNodes, newNode]);
   }, [setNodes]);
 
+  // Error boundary fallback
+  if (nodes.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-900 text-white">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⚙️</div>
+          <h2 className="text-2xl font-semibold mb-2">Initializing Pipeline Visualization</h2>
+          <p className="text-gray-400">Setting up dynamic pipeline components...</p>
+          <div className="mt-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="dynamic-pipeline-container h-screen w-full">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onNodeClick={onNodeClick}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.1 }}
-        proOptions={{ hideAttribution: true }}
-      >
+    <ErrorBoundary>
+      <div className="dynamic-pipeline-container h-screen w-full">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onNodeClick={onNodeClick}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.1 }}
+          proOptions={{ hideAttribution: true }}
+        >
         {/* Custom Arrow Marker */}
         <defs>
           <marker
@@ -1025,7 +1096,8 @@ const DynamicPipelineVisualization = ({
           onClose={() => setShowCustomization(false)}
         />
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 };
 

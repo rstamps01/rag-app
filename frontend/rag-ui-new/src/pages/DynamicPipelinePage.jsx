@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import DynamicPipelineVisualization from '../components/DynamicPipelineVisualization';
+import SimplePipelineTest from '../components/SimplePipelineTest';
 // Simple UI components to avoid import issues
 const Card = ({ children, className = '', ...props }) => (
   <div className={`bg-white rounded-lg shadow-lg border border-gray-200 ${className}`} {...props}>
@@ -290,7 +291,9 @@ const DynamicPipelinePage = () => {
 
         {/* Main Visualization Area */}
         <div className="flex-1 relative">
-          <DynamicPipelineVisualization />
+          <div className="w-full h-full bg-gray-900">
+            <SimplePipelineTest />
+          </div>
         </div>
       </div>
 

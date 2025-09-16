@@ -15,6 +15,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import useWebSocket from '../../hooks/useWebSocket.jsx';
 import DynamicPipelineVisualization from '../DynamicPipelineVisualization';
+import SimplePipelineTest from '../SimplePipelineTest';
 
 const PipelineMonitoringDashboard = () => {
   const [debugMode, setDebugMode] = useState(false);
@@ -131,12 +132,9 @@ const PipelineMonitoringDashboard = () => {
       {/* Main Dynamic Pipeline Visualization */}
       <div className="h-[calc(100vh-80px)]">
         {connectionStatus === 'Connected' ? (
-          <DynamicPipelineVisualization 
-            realTimeData={transformedMetrics}
-            connectionStatus={connectionStatus}
-            onDebugToggle={() => setDebugMode(!debugMode)}
-            debugMode={debugMode}
-          />
+          <div className="w-full h-full bg-gray-900">
+            <SimplePipelineTest />
+          </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
             <div className="text-6xl">🔌</div>
