@@ -20,6 +20,7 @@ import PipelineGraph from '../../components/PipelineGraph';
 const PipelineMonitoringDashboard = () => {
   const [debugMode, setDebugMode] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
+  const [metrics, setMetrics] = useState(null);
   // WebSocket connection to backend
   const {
     connectionStatus,
@@ -28,7 +29,41 @@ const PipelineMonitoringDashboard = () => {
     metrics,
     pipelineState,
     reconnect,
-  } = useWebSocket('ws://10.0.0.48:8000/api/v1/ws/pipeline-monitoring');
+  } = useWebSocket('ws://10.0.0.48:8000/api/v1/ws/pipeline-monitoring', {
+    onMessage: (message) => {
+      // Transform backend data structure to frontend expected format
+      if (message.type === 'metrics_update' && message.data) {
+        const data = message.data;
+        const transformedMetrics = {
+          systemHealth: {
+            cpuUsage: data.system_health?.cpu_usage || 0,
+            memoryUsage: data.system_health?.memory_usage || 0,
+          },
+          gpuPerformance: data.gpu_performance ? [{
+            utilization: data.gpu_performance.gpu_utilization || 0,
+            memory_used: data.gpu_performance.gpu_memory_used_mib || data.gpu_performance.gpu_memory_used || 0,
+            memory_total: data.gpu_performance.gpu_memory_total_mib || data.gpu_performance.gpu_memory_total || 0,
+            temperature: data.gpu_performance.gpu_temperature || 0,
+            power_draw: data.gpu_performance.gpu_power_draw_w || 0,
+            power_limit: data.gpu_performance.gpu_power_limit_w || 0,
+          }] : [],
+          pipelineStatus: {
+            queriesPerMinute: data.query_performance?.queries_per_minute || 0,
+            avgResponseTime: data.query_performance?.average_response_time_ms || 0,
+            activeQueries: data.query_performance?.active_queries || 0,
+          },
+          connectionStatus: {
+            websocketConnections: 1, // We know we're connected
+            backendStatus: data.connection_status?.backend || 'unknown',
+            databaseStatus: data.connection_status?.database || 'unknown',
+            vectorDbStatus: data.connection_status?.vector_db || 'unknown',
+          }
+        };
+        // Update the metrics state
+        setMetrics(transformedMetrics);
+      }
+    }
+  });
   // Update timestamp when metrics arrive
   useEffect(() => {
     if (metrics) {
