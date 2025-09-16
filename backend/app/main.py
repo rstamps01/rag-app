@@ -576,6 +576,8 @@ async def ask_query(
                 
                 # Generate query embedding
                 query_embedding = embedding_model.encode(request.query).tolist()
+                logger.info(f"DEBUG: Embedding model: {embedding_model}")
+                logger.info(f"DEBUG: Model max_seq_length: {getattr(embedding_model, 'max_seq_length', 'Unknown')}")
                 
                 # Search in Qdrant
                 logger.info(f"DEBUG: Query embedding shape: {len(query_embedding)}")
@@ -591,6 +593,30 @@ async def ask_query(
                 logger.info(f"DEBUG: Raw search results count: {len(search_results)}")
                 for i, result in enumerate(search_results[:3]):
                     logger.info(f"DEBUG: Result {i}: score={result.score:.4f}, payload keys={list(result.payload.keys())}")
+                
+                # Test direct Qdrant search for comparison
+                try:
+                    import httpx
+                    with httpx.Client() as client:
+                        direct_search = {
+                            "vector": query_embedding,
+                            "limit": 5,
+                            "with_payload": True
+                        }
+                        direct_response = client.post(
+                            f"{settings.QDRANT_URL}/collections/rag/points/search",
+                            json=direct_search
+                        )
+                        if direct_response.status_code == 200:
+                            direct_results = direct_response.json()
+                            direct_points = direct_results.get("result", [])
+                            logger.info(f"DEBUG: Direct Qdrant search returned {len(direct_points)} points")
+                            for i, point in enumerate(direct_points[:3]):
+                                logger.info(f"DEBUG: Direct result {i}: score={point.get('score', 0):.4f}")
+                        else:
+                            logger.error(f"DEBUG: Direct Qdrant search failed: {direct_response.status_code}")
+                except Exception as e:
+                    logger.error(f"DEBUG: Direct Qdrant search error: {e}")
                 
                 # Process search results
                 for result in search_results:
