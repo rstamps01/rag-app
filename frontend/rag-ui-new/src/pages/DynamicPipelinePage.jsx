@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import DynamicPipelineVisualization from '../components/DynamicPipelineVisualization';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
+import { Card, Button, Badge } from '../components/ui';
 import { 
   Play, 
   Pause, 
@@ -25,6 +22,39 @@ import {
   Eye,
   MousePointer
 } from 'lucide-react';
+
+// Simple UI components
+const CardContent = ({ children, className = '' }) => (
+  <div className={`p-4 ${className}`}>{children}</div>
+);
+
+const CardHeader = ({ children, className = '' }) => (
+  <div className={`p-4 border-b border-gray-700 ${className}`}>{children}</div>
+);
+
+const CardTitle = ({ children, className = '' }) => (
+  <h3 className={`text-lg font-semibold text-white ${className}`}>{children}</h3>
+);
+
+const Tabs = ({ children, value, onValueChange, className = '' }) => (
+  <div className={className}>{children}</div>
+);
+
+const TabsList = ({ children, className = '' }) => (
+  <div className={`flex space-x-1 ${className}`}>{children}</div>
+);
+
+const TabsTrigger = ({ children, value, className = '' }) => (
+  <button className={`px-3 py-2 text-sm font-medium rounded-md ${
+    value ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+  } ${className}`}>
+    {children}
+  </button>
+);
+
+const TabsContent = ({ children, value, className = '' }) => (
+  <div className={`mt-4 ${className}`}>{children}</div>
+);
 
 /**
  * Dynamic Pipeline Visualization Sample Page

@@ -14,14 +14,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import AdvancedDataFlowAnimations from './AdvancedDataFlowAnimations';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Slider } from '../ui/slider';
-import { Switch } from '../ui/switch';
-import { Label } from '../ui/label';
-import { Input } from '../ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Card, Button, Badge, Input } from '../ui';
 import { 
   Play, 
   Pause, 
@@ -39,6 +32,40 @@ import {
   BarChart3,
   Activity
 } from 'lucide-react';
+
+// Simple UI components
+const Slider = ({ value, onValueChange, min = 0, max = 100, step = 1, className = '' }) => (
+  <input
+    type="range"
+    min={min}
+    max={max}
+    step={step}
+    value={value[0]}
+    onChange={(e) => onValueChange([parseFloat(e.target.value)])}
+    className={`w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer ${className}`}
+  />
+);
+
+const Switch = ({ checked, onCheckedChange, className = '' }) => (
+  <button
+    onClick={() => onCheckedChange(!checked)}
+    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+      checked ? 'bg-blue-600' : 'bg-gray-600'
+    } ${className}`}
+  >
+    <span
+      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+        checked ? 'translate-x-6' : 'translate-x-1'
+      }`}
+    />
+  </button>
+);
+
+const Label = ({ children, htmlFor, className = '' }) => (
+  <label htmlFor={htmlFor} className={`block text-sm font-medium text-gray-300 ${className}`}>
+    {children}
+  </label>
+);
 
 // VAST Data Color Palette
 const VAST_COLORS = {
@@ -384,7 +411,7 @@ const getSmoothStepPath = ({ sourceX, sourceY, targetX, targetY }) => {
   return [path, centerX, centerY];
 };
 
-// Node customization panel
+// Simplified Node customization panel
 const NodeCustomizationPanel = ({ selectedNode, onUpdate, onClose }) => {
   const [customization, setCustomization] = useState(selectedNode?.data?.customization || {});
 
@@ -401,7 +428,7 @@ const NodeCustomizationPanel = ({ selectedNode, onUpdate, onClose }) => {
       <div className="p-4 border-b">
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold">Customize Node</h3>
-          <Button onClick={onClose} variant="ghost" size="sm">×</Button>
+          <Button onClick={onClose} size="sm">×</Button>
         </div>
         <p className="text-sm text-gray-600">{selectedNode.data.label}</p>
       </div>
@@ -527,7 +554,6 @@ const NodeCustomizationPanel = ({ selectedNode, onUpdate, onClose }) => {
             setCustomization({});
             onUpdate(selectedNode.id, {});
           }}
-          variant="outline"
           className="w-full"
         >
           Reset to Default
