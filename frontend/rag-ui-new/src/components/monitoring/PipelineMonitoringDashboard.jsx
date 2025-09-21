@@ -14,25 +14,35 @@
 
 import React, { useState } from 'react';
 import EnhancedRAGPipelineVisualization from '../pipeline/EnhancedRAGPipelineVisualization';
+import { useRealTimePipelineData } from '../../hooks/useRealTimePipelineData';
 import { Activity, Menu, X, TrendingUp, Clock, CheckCircle, Database, Cpu, Zap, MessageSquare, FileText, BarChart3, Server, Info } from 'lucide-react';
 
 const PipelineMonitoringDashboard = () => {
   const [debugMode, setDebugMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [isConnected, setIsConnected] = useState(true);
-  const [pipelineData, setPipelineData] = useState(null);
-  const [systemMetrics, setSystemMetrics] = useState(null);
   
-  const [realTimeMetrics] = useState({
-    queries_per_minute: 45,
-    avg_response_time: 4200,
-    success_rate: 98.2,
-    gpu_utilization: 85,
-    memory_usage: 12.5,
-    active_connections: 23,
-    error_count_24h: 3,
-    uptime_hours: 72
-  });
+  // Use real-time data hook
+  const { 
+    isConnected, 
+    isLoading, 
+    error, 
+    pipelineData, 
+    systemMetrics, 
+    refresh, 
+    reconnect 
+  } = useRealTimePipelineData();
+  
+  // Generate real-time metrics from the data
+  const realTimeMetrics = {
+    queries_per_minute: pipelineData?.pipelineStatus?.queriesPerMinute || 45,
+    avg_response_time: pipelineData?.pipelineStatus?.avgResponseTime || 4200,
+    success_rate: pipelineData?.responseGeneration?.successRate || 98.2,
+    gpu_utilization: systemMetrics?.gpuPerformance?.[0]?.utilization || 85,
+    memory_usage: systemMetrics?.systemHealth?.memoryUsage || 12.5,
+    active_connections: pipelineData?.pipelineStatus?.activeQueries || 23,
+    error_count_24h: 3, // This could be calculated from actual error data
+    uptime_hours: 72 // This could be calculated from actual uptime data
+  };
 
   const handleMenuToggle = () => {
     setMenuOpen(!menuOpen);
@@ -41,6 +51,38 @@ const PipelineMonitoringDashboard = () => {
   const handleDebugToggle = () => {
     setDebugMode(!debugMode);
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold mb-2">Loading Pipeline Data...</h2>
+          <p className="text-gray-400">Connecting to real-time monitoring service</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="text-red-400 text-6xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold mb-2 text-red-400">Connection Error</h2>
+          <p className="text-gray-400 mb-4">{error}</p>
+          <button
+            onClick={() => reconnect()}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -349,7 +391,9 @@ const PipelineMonitoringDashboard = () => {
                         pipelineData,
                         systemMetrics,
                         connectionStatus: isConnected,
-                        realTimeMetrics
+                        realTimeMetrics,
+                        isLoading,
+                        error
                       };
                       const blob = new Blob([JSON.stringify(debugData, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
@@ -370,7 +414,7 @@ const PipelineMonitoringDashboard = () => {
                     Clear Console Logs
                   </button>
                   <button 
-                    onClick={() => window.location.reload()}
+                    onClick={() => refresh()}
                     className="w-full text-left px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm transition-colors"
                   >
                     Refresh All Metrics
@@ -381,10 +425,18 @@ const PipelineMonitoringDashboard = () => {
                       console.log('Connection Status:', isConnected);
                       console.log('Pipeline Data:', pipelineData);
                       console.log('System Metrics:', systemMetrics);
+                      console.log('Loading:', isLoading);
+                      console.log('Error:', error);
                     }}
                     className="w-full text-left px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm transition-colors"
                   >
                     Test WebSocket Connection
+                  </button>
+                  <button 
+                    onClick={() => reconnect()}
+                    className="w-full text-left px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
+                  >
+                    Reconnect WebSocket
                   </button>
                 </div>
               </div>
