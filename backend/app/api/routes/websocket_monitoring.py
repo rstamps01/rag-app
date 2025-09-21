@@ -116,8 +116,9 @@ class ConnectionManager:
         for client in list(self.clients):
             try:
                 await client.websocket.send_text(message)
-            except WebSocketDisconnect:
-                # Remove disconnected clients
+            except (WebSocketDisconnect, Exception) as e:
+                # Remove disconnected clients for any connection error
+                safe_log("debug", f"Removing disconnected client: {e}")
                 self.disconnect(client.websocket)
 
     def collect_metrics(self) -> Dict[str, Any]:
@@ -294,9 +295,9 @@ class ConnectionManager:
         try:
             from app.services.integrated_vector_db_service import IntegratedVectorDBService
             vector_service = IntegratedVectorDBService()
-            # Test connection by getting collections
-            collections = vector_service.get_collections()
-            status["vector_db"] = "healthy"
+            # Test connection using is_available method
+            is_available = vector_service.is_available()
+            status["vector_db"] = "healthy" if is_available else "unhealthy"
         except Exception as e:
             safe_log("warning", f"Vector DB health check failed: {e}")
             status["vector_db"] = "unhealthy"
