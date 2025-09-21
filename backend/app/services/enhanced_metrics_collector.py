@@ -333,7 +333,6 @@ class EnhancedMetricsCollector:
             
             db = next(get_db())
             try:
-            
                 # Get active connections
                 try:
                     result = db.execute(text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"))
@@ -422,7 +421,7 @@ class EnhancedMetricsCollector:
                 self.postgres_metrics.last_health_check = datetime.now()
                 
             except Exception as e:
-                logger.debug(f"PostgreSQL metrics collection failed: {e}")
+                logger.debug(f"Database operations failed: {e}")
                 self.postgres_metrics.connection_status = "disconnected"
             finally:
                 # Ensure database session is closed
@@ -430,6 +429,10 @@ class EnhancedMetricsCollector:
                     db.close()
                 except:
                     pass
+                
+        except Exception as e:
+            logger.debug(f"PostgreSQL metrics collection failed: {e}")
+            self.postgres_metrics.connection_status = "disconnected"
     
     async def _collect_pipeline_metrics(self):
         """Collect pipeline-specific metrics from actual backend data"""
