@@ -136,10 +136,11 @@ class RealTimePipelineService {
       let connected = false;
       for (const endpoint of endpoints) {
         try {
+          console.log(`🔌 Attempting to create WebSocket for: ${endpoint}`);
           this.ws = new WebSocket(endpoint);
           this.setupWebSocketHandlers(endpoint);
           connected = true;
-          console.log(`🔌 WebSocket created for: ${endpoint}`);
+          console.log(`✅ WebSocket created successfully for: ${endpoint}`);
           break;
         } catch (error) {
           console.warn(`❌ Failed to create WebSocket for ${endpoint}:`, error.message);
@@ -167,6 +168,7 @@ class RealTimePipelineService {
       this.isConnected = true;
       this.reconnectAttempts = 0;
       this.notifyListeners('connected');
+      console.log('🔔 Notified listeners of connection');
     };
 
       this.ws.onmessage = (event) => {
@@ -194,6 +196,7 @@ class RealTimePipelineService {
       console.error('❌ WebSocket error:', error);
       this.isConnected = false;
       this.notifyListeners('error', error);
+      console.log('🔔 Notified listeners of error');
     };
   }
 
