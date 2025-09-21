@@ -18,6 +18,7 @@ export const useRealTimePipelineData = () => {
   // Initialize connection and data
   useEffect(() => {
     let cleanup;
+    let timeout;
 
     const initializeService = async () => {
       try {
@@ -31,6 +32,11 @@ export const useRealTimePipelineData = () => {
         cleanup = realTimePipelineService.addListener((event, data) => {
           switch (event) {
             case 'connected':
+              console.log('✅ WebSocket connected, clearing timeout');
+              if (timeout) {
+                clearTimeout(timeout);
+                timeout = null;
+              }
               setIsConnected(true);
               setIsLoading(false);
               setError(null);
@@ -47,6 +53,12 @@ export const useRealTimePipelineData = () => {
 
             case 'data':
               if (data) {
+                // Clear timeout on first data received
+                if (timeout) {
+                  console.log('✅ Received WebSocket data, clearing timeout');
+                  clearTimeout(timeout);
+                  timeout = null;
+                }
                 setSystemMetrics(data);
                 // Generate pipeline data based on system metrics
                 const generatedData = realTimePipelineService.generatePipelineData();
@@ -70,8 +82,12 @@ export const useRealTimePipelineData = () => {
         }
 
         // Set a timeout to stop loading if WebSocket doesn't connect
-        const timeout = setTimeout(() => {
-          if (!realTimePipelineService.isConnected) {
+        timeout = setTimeout(() => {
+          // Check if we have received any data from the WebSocket
+          const hasReceivedData = realTimePipelineService.getMetrics() && 
+            realTimePipelineService.getMetrics().lastUpdate;
+          
+          if (!realTimePipelineService.isConnected && !hasReceivedData) {
             console.warn('⚠️ WebSocket connection timeout, using fallback data');
             setIsLoading(false);
             setIsConnected(false);
@@ -80,10 +96,19 @@ export const useRealTimePipelineData = () => {
             // Generate fallback data
             const fallbackData = realTimePipelineService.generatePipelineData();
             setPipelineData(fallbackData);
+          } else if (realTimePipelineService.isConnected || hasReceivedData) {
+            console.log('✅ WebSocket connection established, clearing timeout');
+            setIsLoading(false);
+            setIsConnected(true);
+            setError(null);
           }
-        }, 15000); // 15 second timeout - increased from 10 seconds
+        }, 30000); // 30 second timeout - increased to allow more time for connection
 
-        return () => clearTimeout(timeout);
+        return () => {
+          if (timeout) {
+            clearTimeout(timeout);
+          }
+        };
 
       } catch (err) {
         console.error('❌ Error initializing real-time service:', err);

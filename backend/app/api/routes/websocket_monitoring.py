@@ -38,7 +38,6 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
-# Fallback logger in case the main logger fails
 def safe_log(level, message, *args, **kwargs):
     """Safe logging function that won't fail if logger is not available."""
     try:
@@ -53,13 +52,10 @@ def safe_log(level, message, *args, **kwargs):
     except NameError:
         # Fallback to print if logger is not available
         print(f"[{level.upper()}] {message}")
-    except Exception:
-        # Silent fallback
-        pass
 
+# Attempt to import GPUtil for real GPU metrics.  If the import
+# fails, the module falls back to returning zeros for GPU stats.
 try:
-    # Attempt to import GPUtil for real GPU metrics.  If the import
-    # fails, the module falls back to returning zeros for GPU stats.
     import GPUtil  # type: ignore
 except Exception:  # pragma: no cover - fallback if GPUtil is missing
     GPUtil = None  # type: ignore
@@ -73,26 +69,34 @@ class ClientConnection:
     """Represents a single WebSocket client connection."""
 
     websocket: WebSocket
-    connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class ConnectionManager:
-    """Manages WebSocket clients and periodic metrics broadcasting."""
+class WebSocketManager:
+    """Manages WebSocket connections and broadcasts metrics to clients."""
 
-    def __init__(self) -> None:
+    def __init__(self):
         self.clients: List[ClientConnection] = []
-        # The background task that periodically broadcasts metrics
-        self._broadcast_task: Optional[asyncio.Task] = None
+        self.broadcast_task: Optional[asyncio.Task] = None
 
     async def connect(self, websocket: WebSocket) -> None:
+        """Accept a new WebSocket connection."""
         await websocket.accept()
-        self.clients.append(ClientConnection(websocket=websocket))
-        # Start the background broadcasting task on first connection
-        if self._broadcast_task is None or self._broadcast_task.done():
-            self._broadcast_task = asyncio.create_task(self._broadcast_loop())
+        self.clients.append(ClientConnection(websocket))
+        safe_log("info", f"Client connected. Total clients: {len(self.clients)}")
+
+        # Start broadcasting if this is the first client
+        if len(self.clients) == 1 and not self.broadcast_task:
+            self.broadcast_task = asyncio.create_task(self._broadcast_loop())
 
     def disconnect(self, websocket: WebSocket) -> None:
+        """Remove a WebSocket connection."""
         self.clients = [c for c in self.clients if c.websocket != websocket]
+        safe_log("info", f"Client disconnected. Total clients: {len(self.clients)}")
+
+        # Stop broadcasting if no clients remain
+        if not self.clients and self.broadcast_task:
+            self.broadcast_task.cancel()
+            self.broadcast_task = None
 
     async def _broadcast_loop(self) -> None:
         """Continuously collect metrics and broadcast to all clients."""
@@ -112,240 +116,116 @@ class ConnectionManager:
             return
 
     async def _broadcast(self, message: str) -> None:
-        """Send a JSON message to all connected clients."""
-        for client in list(self.clients):
+        """Broadcast a message to all connected clients."""
+        if not self.clients:
+            return
+
+        # Create a list of clients to remove if they fail
+        clients_to_remove = []
+        
+        for client in self.clients:
             try:
                 await client.websocket.send_text(message)
             except (WebSocketDisconnect, Exception) as e:
-                # Remove disconnected clients for any connection error
                 safe_log("debug", f"Removing disconnected client: {e}")
-                self.disconnect(client.websocket)
+                clients_to_remove.append(client)
+
+        # Remove failed clients
+        for client in clients_to_remove:
+            self.clients.remove(client)
 
     def collect_metrics(self) -> Dict[str, Any]:
-        """Collect system and GPU metrics.
-
-        Returns a dictionary structured to match the front‑end's
-        expectations.  Metrics keys include:
-
-        - system_health: CPU and memory utilisation.
-        - gpu_performance: GPU utilisation, memory and temperature.
-        - query_performance: Placeholders for query throughput and latency.
-        - connection_status: Placeholders for backend component statuses.
-        """
-        system_metrics = self._get_system_metrics()
-        gpu_metrics = self._get_gpu_metrics()
-        query_metrics = self._get_query_metrics()
-        connection_status = self._get_connection_status()
-        return {
-            "system_health": system_metrics,
-            "gpu_performance": gpu_metrics,
-            "query_performance": query_metrics,
-            "connection_status": connection_status,
+        """Collect system and GPU metrics."""
+        metrics = {
+            "timestamp": time.time(),
+            "system": self._get_system_metrics(),
+            "gpu": self._get_gpu_metrics(),
         }
+        return metrics
 
-    @staticmethod
-    def _get_system_metrics() -> Dict[str, Any]:
-        """Retrieve CPU and memory utilisation using psutil."""
-        cpu_percent: float = psutil.cpu_percent(interval=0.1)
-        mem = psutil.virtual_memory()
-        memory_percent: float = mem.percent
-        return {
-            "cpu_usage": round(cpu_percent, 2),
-            "memory_usage": round(memory_percent, 2),
-        }
-
-    @staticmethod
-    def _get_gpu_metrics() -> Dict[str, Any]:
-        """Retrieve GPU utilisation, memory stats and temperature.
-
-        The function first attempts to query ``nvidia-smi`` directly for
-        rich metrics including power draw and power limit.  If
-        ``nvidia-smi`` is unavailable or returns no output, it falls
-        back to ``GPUtil``.  When neither tool is available or no
-        GPU is detected, zeroed metrics are returned.  Only the first
-        GPU is used; modify this logic if you wish to aggregate
-        multiple GPUs.
-        """
-        # Attempt to use nvidia-smi for detailed metrics
+    def _get_system_metrics(self) -> Dict[str, Any]:
+        """Get system metrics using psutil."""
         try:
-            import shutil
-            import subprocess
-            nvsmi = shutil.which("nvidia-smi")
-            if nvsmi:
-                # Query selected metrics without units for easier parsing
-                query_fields = [
-                    "name",
-                    "utilization.gpu",
-                    "utilization.memory",
-                    "memory.total",
-                    "memory.used",
-                    "temperature.gpu",
-                    "power.draw",
-                    "power.limit",
-                ]
-                cmd = [
-                    nvsmi,
-                    f"--query-gpu={','.join(query_fields)}",
-                    "--format=csv,noheader,nounits",
-                ]
-                result = subprocess.run(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    check=True,
-                )
-                output = result.stdout.strip()
-                if output:
-                    # Take the first line (first GPU)
-                    line = output.splitlines()[0]
-                    parts = [part.strip() for part in line.split(',')]
-                    # Assign each field; note: memory values are reported in MiB
-                    name = parts[0]
-                    util_gpu = float(parts[1])
-                    util_mem = float(parts[2])
-                    mem_total_mib = float(parts[3])
-                    mem_used_mib = float(parts[4])
-                    temp_c = float(parts[5]) if parts[5] else None
-                    power_draw = float(parts[6]) if parts[6] else None
-                    power_limit = float(parts[7]) if parts[7] else None
-                    return {
-                        "gpu_name": name,
-                        "gpu_utilization": util_gpu,
-                        "gpu_memory_utilization": util_mem,
-                        "gpu_memory_total_mib": mem_total_mib,
-                        "gpu_memory_used_mib": mem_used_mib,
-                        "gpu_temperature": temp_c,
-                        "gpu_power_draw_w": power_draw,
-                        "gpu_power_limit_w": power_limit,
-                    }
-        except Exception:
-            # Ignore errors from nvidia-smi and proceed to GPUtil
-            pass
-
-        # If GPUtil is available, use it as a fallback for basic metrics
-        if GPUtil is not None:
-            try:
-                gpus = GPUtil.getGPUs()
-                if gpus:
-                    gpu = gpus[0]
-                    utilization = round(gpu.load * 100, 2)
-                    memory_total = round(gpu.memoryTotal, 2)
-                    memory_used = round(gpu.memoryUsed, 2)
-                    temperature: Optional[float] = getattr(gpu, "temperature", None)
-                    return {
-                        "gpu_name": getattr(gpu, "name", "GPU"),
-                        "gpu_utilization": utilization,
-                        "gpu_memory_total": memory_total,
-                        "gpu_memory_used": memory_used,
-                        "gpu_temperature": temperature,
-                    }
-            except Exception:
-                pass
-
-        # Final fallback: no GPU data available
-        return {
-            "gpu_name": "unknown",
-            "gpu_utilization": 0.0,
-            "gpu_memory_total": 0.0,
-            "gpu_memory_used": 0.0,
-            "gpu_temperature": None,
-        }
-
-    @staticmethod
-    def _get_query_metrics() -> Dict[str, Any]:
-        """Placeholder for query throughput and latency metrics.
-
-        The RAG application can extend this method to pull metrics
-        directly from a query tracker or database.  For now, return
-        zeroed metrics to avoid client errors.
-        """
-        return {
-            "queries_per_minute": 0,
-            "average_response_time_ms": 0.0,
-            "active_queries": 0,
-        }
-
-    @staticmethod
-    def _get_connection_status() -> Dict[str, str]:
-        """Check connection statuses of backend services.
-        
-        Performs actual health checks against the database, vector database,
-        and other components to provide real status information.
-        """
-        status = {
-            "backend": "healthy",
-            "database": "unknown",
-            "vector_db": "unknown",
-        }
-        
-        # Check PostgreSQL database connection
-        try:
-            from app.db.session import get_db
-            from sqlalchemy import text
-            db = next(get_db())
-            # Simple query to test connection
-            db.execute(text("SELECT 1"))
-            status["database"] = "healthy"
+            cpu_percent = psutil.cpu_percent(interval=1)
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            
+            return {
+                "cpu_percent": cpu_percent,
+                "memory": {
+                    "total": memory.total,
+                    "available": memory.available,
+                    "percent": memory.percent,
+                    "used": memory.used,
+                    "free": memory.free,
+                },
+                "disk": {
+                    "total": disk.total,
+                    "used": disk.used,
+                    "free": disk.free,
+                    "percent": (disk.used / disk.total) * 100,
+                },
+            }
         except Exception as e:
-            safe_log("warning", f"Database health check failed: {e}")
-            status["database"] = "unhealthy"
-        
-        # Check Qdrant vector database connection
+            safe_log("error", f"Failed to collect system metrics: {e}")
+            return {
+                "cpu_percent": 0.0,
+                "memory": {"total": 0, "available": 0, "percent": 0.0, "used": 0, "free": 0},
+                "disk": {"total": 0, "used": 0, "free": 0, "percent": 0.0},
+            }
+
+    def _get_gpu_metrics(self) -> Dict[str, Any]:
+        """Get GPU metrics using GPUtil if available."""
+        if GPUtil is None:
+            return {
+                "available": False,
+                "count": 0,
+                "gpus": [],
+            }
+
         try:
-            from app.services.integrated_vector_db_service import IntegratedVectorDBService
-            vector_service = IntegratedVectorDBService()
-            # Test connection using is_available method
-            is_available = vector_service.is_available()
-            status["vector_db"] = "healthy" if is_available else "unhealthy"
+            gpus = GPUtil.getGPUs()
+            gpu_data = []
+            
+            for gpu in gpus:
+                gpu_data.append({
+                    "id": gpu.id,
+                    "name": gpu.name,
+                    "load": gpu.load * 100,  # Convert to percentage
+                    "memory_used": gpu.memoryUsed,
+                    "memory_total": gpu.memoryTotal,
+                    "memory_percent": (gpu.memoryUsed / gpu.memoryTotal) * 100,
+                    "temperature": gpu.temperature,
+                })
+            
+            return {
+                "available": True,
+                "count": len(gpus),
+                "gpus": gpu_data,
+            }
         except Exception as e:
-            safe_log("warning", f"Vector DB health check failed: {e}")
-            status["vector_db"] = "unhealthy"
-        
-        return status
+            safe_log("error", f"Failed to collect GPU metrics: {e}")
+            return {
+                "available": False,
+                "count": 0,
+                "gpus": [],
+            }
 
 
-manager = ConnectionManager()
+# Global WebSocket manager instance
+websocket_manager = WebSocketManager()
 
 
 @router.websocket("/ws/pipeline-monitoring")
-async def websocket_endpoint(websocket: WebSocket) -> None:
-    """Handle incoming WebSocket connections and messages.
-
-    Currently the monitoring channel is uni‑directional: the server
-    pushes metrics to the client.  If you need to support
-    client‑initiated commands (e.g. pausing or resuming the monitor),
-    you can handle them in the ``while True`` loop below.
-    """
-    await manager.connect(websocket)
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for pipeline monitoring."""
+    await websocket_manager.connect(websocket)
     try:
         while True:
-            # Await messages from the client and handle ping/pong
-            try:
-                message = await websocket.receive_text()
-                safe_log("debug", f"Received WebSocket message: {message[:100]}...")
-                
-                # Handle ping messages
-                if message == "ping":
-                    await websocket.send_text("pong")
-                    safe_log("debug", "Sent pong response")
-                elif message.startswith('{"type":"ping"'):
-                    await websocket.send_text('{"type":"pong","timestamp":"' + str(int(time.time() * 1000)) + '"}')
-                    safe_log("debug", "Sent JSON pong response")
-                else:
-                    safe_log("debug", f"Ignoring message: {message}")
-                    
-            except WebSocketDisconnect:
-                safe_log("info", "WebSocket disconnected by client")
-                break
-            except Exception as e:
-                safe_log("warning", f"Error processing WebSocket message: {e}")
-                # Continue the loop instead of breaking
-                continue
-                
+            # Keep the connection alive
+            await websocket.receive_text()
     except WebSocketDisconnect:
-        safe_log("info", "WebSocket disconnected")
+        websocket_manager.disconnect(websocket)
     except Exception as e:
         safe_log("error", f"WebSocket error: {e}")
-    finally:
-        manager.disconnect(websocket)
+        websocket_manager.disconnect(websocket)
