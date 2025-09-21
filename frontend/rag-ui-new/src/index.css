@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/vast-data-theme.css";
+@import "./styles/scrollbar.css";
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);

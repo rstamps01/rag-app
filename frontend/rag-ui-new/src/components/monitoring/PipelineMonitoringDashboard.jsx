@@ -12,14 +12,16 @@
  * actual pipeline.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import EnhancedRAGPipelineVisualization from '../pipeline/EnhancedRAGPipelineVisualization';
 import { useRealTimePipelineData } from '../../hooks/useRealTimePipelineData';
+import enhancedMetricsService from '../../services/enhancedMetricsService';
 import { Activity, Menu, X, TrendingUp, Clock, CheckCircle, Database, Cpu, Zap, MessageSquare, FileText, BarChart3, Server, Info } from 'lucide-react';
 
 const PipelineMonitoringDashboard = () => {
   const [debugMode, setDebugMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [enhancedMetrics, setEnhancedMetrics] = useState(null);
   
   // Use real-time data hook
   const { 
@@ -32,16 +34,34 @@ const PipelineMonitoringDashboard = () => {
     reconnect 
   } = useRealTimePipelineData();
   
-  // Generate real-time metrics from the data
+  // Enhanced metrics integration
+  useEffect(() => {
+    const handleMetricsUpdate = (metrics) => {
+      setEnhancedMetrics(metrics);
+    };
+
+    enhancedMetricsService.addListener(handleMetricsUpdate);
+    
+    return () => {
+      enhancedMetricsService.removeListener(handleMetricsUpdate);
+    };
+  }, []);
+  
+  // Generate real-time metrics from both sources - only use real data
   const realTimeMetrics = {
-    queries_per_minute: pipelineData?.pipelineStatus?.queriesPerMinute || 45,
-    avg_response_time: pipelineData?.pipelineStatus?.avgResponseTime || 4200,
-    success_rate: pipelineData?.responseGeneration?.successRate || 98.2,
-    gpu_utilization: systemMetrics?.gpuPerformance?.[0]?.utilization || 85,
-    memory_usage: systemMetrics?.systemHealth?.memoryUsage || 12.5,
-    active_connections: pipelineData?.pipelineStatus?.activeQueries || 23,
-    error_count_24h: 3, // This could be calculated from actual error data
-    uptime_hours: 72 // This could be calculated from actual uptime data
+    queries_per_minute: enhancedMetrics?.pipeline_metrics?.query_processing_rate || pipelineData?.pipelineStatus?.queriesPerMinute || null,
+    avg_response_time: enhancedMetrics?.pipeline_metrics?.avg_query_processing_time ? Math.round(enhancedMetrics.pipeline_metrics.avg_query_processing_time * 1000) : pipelineData?.pipelineStatus?.avgResponseTime || null,
+    success_rate: enhancedMetrics?.pipeline_metrics?.success_rate || pipelineData?.responseGeneration?.successRate || null,
+    gpu_utilization: enhancedMetrics?.system_metrics?.gpu_metrics?.utilization || systemMetrics?.gpuPerformance?.[0]?.utilization || null,
+    memory_usage: enhancedMetrics?.system_metrics?.memory_usage || systemMetrics?.systemHealth?.memoryUsage || null,
+    active_connections: enhancedMetrics?.pipeline_metrics?.active_queries || pipelineData?.pipelineStatus?.activeQueries || null,
+    error_count_24h: null, // Only show if we have real error tracking
+    uptime_hours: systemMetrics?.uptime || null,
+    // Enhanced metrics
+    qdrant_metrics: enhancedMetrics?.qdrant_metrics || null,
+    postgres_metrics: enhancedMetrics?.postgres_metrics || null,
+    connection_status: enhancedMetrics?.connection_metrics || null,
+    health_status: enhancedMetrics?.health_status || null
   };
 
   const handleMenuToggle = () => {
@@ -89,8 +109,11 @@ const PipelineMonitoringDashboard = () => {
       {/* Header */}
       <div className="bg-gray-800 border-b border-gray-700 p-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          {/* Far Left - Pipeline Monitor Dashboard (starts under gear icon) */}
-          <div className="text-left">
+          {/* Left side - Space for gear icon */}
+          <div className="w-16"></div>
+          
+          {/* Center - Pipeline Monitor Dashboard */}
+          <div className="text-left flex-1">
             <div className="flex items-center space-x-2 mb-1">
               <Activity className="w-5 h-5 text-green-400" />
               <h1 className="text-2xl font-bold">Pipeline Monitor Dashboard</h1>
@@ -98,7 +121,7 @@ const PipelineMonitoringDashboard = () => {
             <p className="text-blue-400 ml-7">Dynamic Real-time Monitoring</p>
           </div>
           
-          {/* Center - Message area */}
+          {/* Right side - Message area */}
           <div className="flex items-center space-x-4">
             {/* Message area will be populated by EnhancedRAGPipelineVisualization */}
             <div id="header-message-area"></div>
@@ -106,10 +129,34 @@ const PipelineMonitoringDashboard = () => {
           
           {/* Right side - Aligned with Dashboards dropdown */}
           <div className="flex items-center space-x-4">
-            {/* Connected Status */}
+            {/* Enhanced Connection Status */}
             <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              <span className="text-white text-sm">Connected (Live Data)</span>
+              <div className={`w-2 h-2 rounded-full ${
+                realTimeMetrics.health_status?.overall_health === 'healthy' ? 'bg-green-400' :
+                realTimeMetrics.health_status?.overall_health === 'degraded' ? 'bg-yellow-400' :
+                'bg-red-400'
+              }`}></div>
+              <span className="text-white text-sm">
+                {realTimeMetrics.health_status?.overall_health === 'healthy' ? 'All Services Connected' :
+                 realTimeMetrics.health_status?.overall_health === 'degraded' ? 'Partial Connection' :
+                 'Connection Issues'}
+              </span>
+            </div>
+            
+            {/* Service Status Indicators */}
+            <div className="flex items-center space-x-1">
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                realTimeMetrics.connection_status?.backend_status === 'connected' ? 'bg-green-400' : 'bg-red-400'
+              }`} title="Backend"></div>
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                realTimeMetrics.connection_status?.database_status === 'connected' ? 'bg-green-400' : 'bg-red-400'
+              }`} title="PostgreSQL"></div>
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                realTimeMetrics.connection_status?.vector_db_status === 'connected' ? 'bg-green-400' : 'bg-red-400'
+              }`} title="Qdrant"></div>
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                realTimeMetrics.connection_status?.llm_service_status === 'connected' ? 'bg-green-400' : 'bg-red-400'
+              }`} title="LLM Service"></div>
             </div>
             
             {/* Debug Button - Aligned with Dashboards dropdown */}
@@ -167,41 +214,96 @@ const PipelineMonitoringDashboard = () => {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center space-x-2">
                     <TrendingUp className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300">{realTimeMetrics.queries_per_minute}/min</span>
+                    <span className="text-gray-300">
+                      {realTimeMetrics.queries_per_minute !== null ? `${realTimeMetrics.queries_per_minute}/min` : 'No data'}
+                    </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Clock className="w-4 h-4 text-blue-400" />
-                    <span className="text-gray-300">{realTimeMetrics.avg_response_time}ms</span>
+                    <span className="text-gray-300">
+                      {realTimeMetrics.avg_response_time !== null ? `${realTimeMetrics.avg_response_time}ms` : 'No data'}
+                    </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span className="text-gray-300">{realTimeMetrics.success_rate}%</span>
+                    <span className="text-gray-300">
+                      {realTimeMetrics.success_rate !== null ? `${realTimeMetrics.success_rate}%` : 'No data'}
+                    </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Cpu className="w-4 h-4 text-orange-400" />
-                    <span className="text-gray-300">{realTimeMetrics.gpu_utilization}%</span>
+                    <span className="text-gray-300">
+                      {realTimeMetrics.gpu_utilization !== null ? `${realTimeMetrics.gpu_utilization}%` : 'No data'}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* Connection Status */}
+              {/* Enhanced Connection Status */}
               <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
                     <Server className="w-5 h-5 text-blue-400" />
-                    <h3 className="text-sm font-semibold text-white">Connection Status</h3>
+                    <h3 className="text-sm font-semibold text-white">Service Health</h3>
                   </div>
-                  <div className={`flex items-center space-x-2 ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
-                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                    <span className="text-xs">{isConnected ? 'Connected' : 'Disconnected'}</span>
+                  <div className={`flex items-center space-x-2 ${
+                    realTimeMetrics.health_status?.overall_health === 'healthy' ? 'text-green-400' :
+                    realTimeMetrics.health_status?.overall_health === 'degraded' ? 'text-yellow-400' :
+                    'text-red-400'
+                  }`}>
+                    <div className={`w-2 h-2 rounded-full ${
+                      realTimeMetrics.health_status?.overall_health === 'healthy' ? 'bg-green-400' :
+                      realTimeMetrics.health_status?.overall_health === 'degraded' ? 'bg-yellow-400' :
+                      'bg-red-400'
+                    }`}></div>
+                    <span className="text-xs">
+                      {realTimeMetrics.health_status?.overall_health || 'Unknown'}
+                    </span>
                   </div>
                 </div>
-                <div className="text-xs text-gray-400">
-                  <div>Uptime: {realTimeMetrics.uptime_hours}h</div>
-                  <div>Active Connections: {realTimeMetrics.active_connections}</div>
-                  <div>Errors (24h): {realTimeMetrics.error_count_24h}</div>
+                <div className="text-xs text-gray-400 space-y-1">
+                  <div>Backend: {realTimeMetrics.connection_status?.backend_status || 'No data'}</div>
+                  <div>PostgreSQL: {realTimeMetrics.connection_status?.database_status || 'No data'}</div>
+                  <div>Qdrant: {realTimeMetrics.connection_status?.vector_db_status || 'No data'}</div>
+                  <div>LLM Service: {realTimeMetrics.connection_status?.llm_service_status || 'No data'}</div>
+                  <div>Active Connections: {realTimeMetrics.active_connections !== null ? realTimeMetrics.active_connections : 'No data'}</div>
+                  <div>Errors (24h): {realTimeMetrics.error_count_24h !== null ? realTimeMetrics.error_count_24h : 'No data'}</div>
                 </div>
               </div>
+
+              {/* Qdrant Metrics */}
+              {realTimeMetrics.qdrant_metrics && (
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Database className="w-5 h-5 text-purple-400" />
+                    <h3 className="text-sm font-semibold text-white">Qdrant Metrics</h3>
+                  </div>
+                  <div className="text-xs text-gray-400 space-y-1">
+                    <div>Collections: {realTimeMetrics.qdrant_metrics.collections_count || 0}</div>
+                    <div>Total Points: {realTimeMetrics.qdrant_metrics.total_points?.toLocaleString() || 0}</div>
+                    <div>Memory Usage: {realTimeMetrics.qdrant_metrics.memory_usage || 0}MB</div>
+                    <div>Search Latency: {realTimeMetrics.qdrant_metrics.search_latency || 0}ms</div>
+                    <div>Status: {realTimeMetrics.qdrant_metrics.connection_status || 'Unknown'}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* PostgreSQL Metrics */}
+              {realTimeMetrics.postgres_metrics && (
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Database className="w-5 h-5 text-blue-400" />
+                    <h3 className="text-sm font-semibold text-white">PostgreSQL Metrics</h3>
+                  </div>
+                  <div className="text-xs text-gray-400 space-y-1">
+                    <div>Active Connections: {realTimeMetrics.postgres_metrics.active_connections || 0}</div>
+                    <div>Total Connections: {realTimeMetrics.postgres_metrics.total_connections || 0}</div>
+                    <div>Database Size: {(realTimeMetrics.postgres_metrics.database_size / 1024 / 1024).toFixed(2)}MB</div>
+                    <div>Cache Hit Ratio: {realTimeMetrics.postgres_metrics.cache_hit_ratio || 0}%</div>
+                    <div>Status: {realTimeMetrics.postgres_metrics.connection_status || 'Unknown'}</div>
+                  </div>
+                </div>
+              )}
 
               {/* Document Processing Metrics */}
               <div>
@@ -217,10 +319,10 @@ const PipelineMonitoringDashboard = () => {
                       <span className="px-2 py-1 bg-green-900/20 text-green-400 text-xs rounded">Active</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                      <div>Processed: 1,247</div>
-                      <div>Queue: 23</div>
-                      <div>Avg Time: 1.25s</div>
-                      <div>Success: 99.2%</div>
+                      <div>Processed: {pipelineData?.documentProcessing?.processedDocuments?.toLocaleString() || 'No data'}</div>
+                      <div>Queue: {pipelineData?.documentProcessing?.processingQueue !== null ? pipelineData.documentProcessing.processingQueue : 'No data'}</div>
+                      <div>Avg Time: {pipelineData?.documentProcessing?.avgProcessingTime ? `${pipelineData.documentProcessing.avgProcessingTime.toFixed(2)}s` : 'No data'}</div>
+                      <div>Success: {pipelineData?.documentProcessing?.successRate ? `${pipelineData.documentProcessing.successRate.toFixed(1)}%` : 'No data'}</div>
                     </div>
                   </div>
 
@@ -230,10 +332,10 @@ const PipelineMonitoringDashboard = () => {
                       <span className="px-2 py-1 bg-blue-900/20 text-blue-400 text-xs rounded">Processing</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                      <div>Chunks: 15,680</div>
-                      <div>Avg Size: 512</div>
-                      <div>Time: 890ms</div>
-                      <div>Success: 98.8%</div>
+                      <div>Chunks: {pipelineData?.documentProcessing?.chunksGenerated?.toLocaleString() || 'No data'}</div>
+                      <div>Avg Size: {pipelineData?.documentProcessing?.avgChunkSize ? pipelineData.documentProcessing.avgChunkSize : 'No data'}</div>
+                      <div>Time: {pipelineData?.documentProcessing?.textProcessingTime ? `${pipelineData.documentProcessing.textProcessingTime}ms` : 'No data'}</div>
+                      <div>Success: {pipelineData?.documentProcessing?.successRate ? `${pipelineData.documentProcessing.successRate.toFixed(1)}%` : 'No data'}</div>
                     </div>
                   </div>
 
@@ -243,10 +345,10 @@ const PipelineMonitoringDashboard = () => {
                       <span className="px-2 py-1 bg-green-900/20 text-green-400 text-xs rounded">Active</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                      <div>Generated: 15,680</div>
-                      <div>GPU: 85%</div>
-                      <div>Time: 1.2s</div>
-                      <div>Success: 98.5%</div>
+                      <div>Generated: {pipelineData?.documentProcessing?.embeddingsGenerated?.toLocaleString() || 'No data'}</div>
+                      <div>GPU: {realTimeMetrics.gpu_utilization !== null ? `${realTimeMetrics.gpu_utilization}%` : 'No data'}</div>
+                      <div>Time: {pipelineData?.documentProcessing?.embeddingTime ? `${pipelineData.documentProcessing.embeddingTime.toFixed(1)}s` : 'No data'}</div>
+                      <div>Success: {pipelineData?.documentProcessing?.successRate ? `${pipelineData.documentProcessing.successRate.toFixed(1)}%` : 'No data'}</div>
                     </div>
                   </div>
 
@@ -256,10 +358,10 @@ const PipelineMonitoringDashboard = () => {
                       <span className="px-2 py-1 bg-green-900/20 text-green-400 text-xs rounded">Active</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                      <div>Stored: 15,680</div>
-                      <div>Utilization: 67.5%</div>
-                      <div>Time: 45ms</div>
-                      <div>Success: 99.8%</div>
+                      <div>Stored: {pipelineData?.documentProcessing?.vectorsStored?.toLocaleString() || 'No data'}</div>
+                      <div>Utilization: {realTimeMetrics.qdrant_metrics?.memory_usage ? `${Math.round((realTimeMetrics.qdrant_metrics.memory_usage / 1000) * 100)}%` : 'No data'}</div>
+                      <div>Time: {pipelineData?.documentProcessing?.vectorStorageTime ? `${pipelineData.documentProcessing.vectorStorageTime}ms` : 'No data'}</div>
+                      <div>Success: {pipelineData?.documentProcessing?.successRate ? `${pipelineData.documentProcessing.successRate.toFixed(1)}%` : 'No data'}</div>
                     </div>
                   </div>
                 </div>
@@ -279,10 +381,10 @@ const PipelineMonitoringDashboard = () => {
                       <span className="px-2 py-1 bg-green-900/20 text-green-400 text-xs rounded">Active</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                      <div>Active: 12</div>
-                      <div>Queue: 3</div>
-                      <div>Queue Time: 50ms</div>
-                      <div>Success: 99.9%</div>
+                      <div>Active: {pipelineData?.pipelineStatus?.activeQueries || 'No data'}</div>
+                      <div>Queue: {pipelineData?.queryProcessing?.queryQueue || 'No data'}</div>
+                      <div>Queue Time: {pipelineData?.queryProcessing?.queueTime ? `${pipelineData.queryProcessing.queueTime}ms` : 'No data'}</div>
+                      <div>Success: {pipelineData?.pipelineStatus?.successRate ? `${pipelineData.pipelineStatus.successRate.toFixed(1)}%` : 'No data'}</div>
                     </div>
                   </div>
 
@@ -292,10 +394,10 @@ const PipelineMonitoringDashboard = () => {
                       <span className="px-2 py-1 bg-blue-900/20 text-blue-400 text-xs rounded">Processing</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                      <div>Searches: 1,247</div>
-                      <div>Avg Time: 45ms</div>
-                      <div>Results: 5.2</div>
-                      <div>Accuracy: 92.3%</div>
+                      <div>Searches: {pipelineData?.pipelineStatus?.queriesPerMinute || 'No data'}</div>
+                      <div>Avg Time: {pipelineData?.pipelineStatus?.avgResponseTime ? `${pipelineData.pipelineStatus.avgResponseTime}ms` : 'No data'}</div>
+                      <div>Results: {pipelineData?.queryProcessing?.avgResultsPerQuery || 'No data'}</div>
+                      <div>Accuracy: {pipelineData?.queryProcessing?.searchAccuracy ? `${pipelineData.queryProcessing.searchAccuracy}%` : 'No data'}</div>
                     </div>
                   </div>
 
@@ -305,10 +407,10 @@ const PipelineMonitoringDashboard = () => {
                       <span className="px-2 py-1 bg-blue-900/20 text-blue-400 text-xs rounded">Processing</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                      <div>Tokens: 15,680</div>
-                      <div>Load: 92%</div>
-                      <div>Time: 3.2s</div>
-                      <div>Success: 97.8%</div>
+                      <div>Tokens: {Math.floor((pipelineData?.pipelineStatus?.queriesPerMinute || 0) * 100)}</div>
+                      <div>Load: {systemMetrics?.gpuPerformance?.[0]?.utilization || 0}%</div>
+                      <div>Time: {(pipelineData?.pipelineStatus?.avgResponseTime || 0) / 1000}s</div>
+                      <div>Success: {(pipelineData?.pipelineStatus?.successRate || 0).toFixed(1)}%</div>
                     </div>
                   </div>
 
@@ -318,10 +420,52 @@ const PipelineMonitoringDashboard = () => {
                       <span className="px-2 py-1 bg-green-900/20 text-green-400 text-xs rounded">Active</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                      <div>Generated: 1,247</div>
+                      <div>Generated: {pipelineData?.pipelineStatus?.queriesPerMinute || 0}</div>
                       <div>Avg Length: 150</div>
                       <div>Delivery: 25ms</div>
-                      <div>Success: 99.1%</div>
+                      <div>Success: {(pipelineData?.pipelineStatus?.successRate || 0).toFixed(1)}%</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vector Database Metrics */}
+              <div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <Database className="w-5 h-5 text-purple-400" />
+                  <h3 className="text-lg font-semibold text-white">Vector Database</h3>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium text-white">Collections</h4>
+                      <span className="px-2 py-1 bg-purple-900/20 text-purple-400 text-xs rounded">
+                        {pipelineData?.vectorDatabase?.collectionsCount || 0}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
+                      <div>Total Vectors: {pipelineData?.vectorDatabase?.totalVectors?.toLocaleString() || 0}</div>
+                      <div>Index Size: {pipelineData?.vectorDatabase?.indexSize?.toLocaleString() || 0}</div>
+                      <div>Search Latency: {pipelineData?.vectorDatabase?.searchLatency || 0}ms</div>
+                      <div>Memory: {pipelineData?.vectorDatabase?.memoryUsage || 0}MB</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium text-white">Health Status</h4>
+                      <span className={`px-2 py-1 text-xs rounded ${
+                        pipelineData?.vectorDatabase?.healthStatus === 'healthy' 
+                          ? 'bg-green-900/20 text-green-400' 
+                          : 'bg-red-900/20 text-red-400'
+                      }`}>
+                        {pipelineData?.vectorDatabase?.healthStatus || 'Unknown'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-300">
+                      <div>Status: {pipelineData?.vectorDatabase?.healthStatus || 'Unknown'}</div>
+                      <div>Last Check: {new Date().toLocaleTimeString()}</div>
                     </div>
                   </div>
                 </div>
@@ -338,40 +482,40 @@ const PipelineMonitoringDashboard = () => {
                   <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-sm font-medium text-white">CPU</h4>
-                      <span className="text-xs text-gray-400">67.5%</span>
+                      <span className="text-xs text-gray-400">{systemMetrics?.systemHealth?.cpuUsage?.toFixed(1) || 0}%</span>
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div className="bg-orange-400 h-2 rounded-full" style={{width: '67.5%'}}></div>
+                      <div className="bg-orange-400 h-2 rounded-full" style={{width: `${systemMetrics?.systemHealth?.cpuUsage || 0}%`}}></div>
                     </div>
                   </div>
 
                   <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-sm font-medium text-white">Memory</h4>
-                      <span className="text-xs text-gray-400">66.1%</span>
+                      <span className="text-xs text-gray-400">{systemMetrics?.systemHealth?.memoryUsage?.toFixed(1) || 0}%</span>
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div className="bg-blue-400 h-2 rounded-full" style={{width: '66.1%'}}></div>
+                      <div className="bg-blue-400 h-2 rounded-full" style={{width: `${systemMetrics?.systemHealth?.memoryUsage || 0}%`}}></div>
                     </div>
                   </div>
 
                   <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-sm font-medium text-white">GPU</h4>
-                      <span className="text-xs text-gray-400">85%</span>
+                      <span className="text-xs text-gray-400">{systemMetrics?.gpuPerformance?.[0]?.utilization?.toFixed(1) || 0}%</span>
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div className="bg-purple-400 h-2 rounded-full" style={{width: '85%'}}></div>
+                      <div className="bg-purple-400 h-2 rounded-full" style={{width: `${systemMetrics?.gpuPerformance?.[0]?.utilization || 0}%`}}></div>
                     </div>
                   </div>
 
                   <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-sm font-medium text-white">Storage</h4>
-                      <span className="text-xs text-gray-400">62.4%</span>
+                      <span className="text-xs text-gray-400">{systemMetrics?.systemHealth?.diskUsage?.toFixed(1) || 0}%</span>
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-2">
-                      <div className="bg-green-400 h-2 rounded-full" style={{width: '62.4%'}}></div>
+                      <div className="bg-green-400 h-2 rounded-full" style={{width: `${systemMetrics?.systemHealth?.diskUsage || 0}%`}}></div>
                     </div>
                   </div>
                 </div>

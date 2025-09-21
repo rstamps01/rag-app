@@ -367,6 +367,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Services initialization failed: {e}")
     
+    # Start enhanced metrics collector
+    try:
+        from app.services.enhanced_metrics_collector import enhanced_metrics_collector
+        await enhanced_metrics_collector.start()
+        logger.info("✅ Enhanced metrics collector started")
+    except Exception as e:
+        logger.error(f"⚠️ Enhanced metrics collector warning: {e}")
+    
     yield
     logger.info("🛑 Shutting down Enhanced RAG Application...")
 
@@ -378,20 +386,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-@app.on_event("startup")
-async def startup_event():
-    """Application startup with GPU optimization"""
-    print("🚀 Starting Enhanced RAG Application with GPU optimization...")
-    
-    # Apply GPU memory optimization
-    try:
-        import torch
-        if torch.cuda.is_available():
-            torch.cuda.set_per_process_memory_fraction(0.7)
-            torch.cuda.empty_cache()
-            print("✅ GPU memory optimization applied at startup")
-    except Exception as e:
-        print(f"⚠️ GPU optimization warning: {e}")
 
 
 # Configure CORS
@@ -1044,6 +1038,152 @@ async def get_system_status():
             "file_validation": True
         }
     }
+
+# Enhanced Metrics Endpoints
+@app.get("/api/v1/metrics/comprehensive")
+async def get_comprehensive_metrics():
+    """Get comprehensive metrics including Qdrant, PostgreSQL, Pipeline, and Connection Status"""
+    try:
+        from app.services.enhanced_metrics_collector import enhanced_metrics_collector
+        from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor
+        
+        # Get all metrics from the enhanced collector
+        all_metrics = enhanced_metrics_collector.get_all_metrics()
+        
+        # Get pipeline metrics
+        pipeline_metrics = enhanced_pipeline_monitor.get_comprehensive_metrics()
+        
+        # Combine all metrics
+        comprehensive_metrics = {
+            "timestamp": enhanced_metrics_collector.connection_metrics.last_health_check.isoformat() if enhanced_metrics_collector.connection_metrics.last_health_check else None,
+            "qdrant_metrics": all_metrics["qdrant_metrics"],
+            "postgres_metrics": all_metrics["postgres_metrics"],
+            "pipeline_metrics": all_metrics["pipeline_metrics"],
+            "connection_metrics": all_metrics["connection_metrics"],
+            "system_metrics": all_metrics["system_metrics"],
+            "pipeline_state": pipeline_metrics["pipeline_state"],
+            "stage_metrics": pipeline_metrics["stage_metrics"],
+            "aggregated_metrics": pipeline_metrics["aggregated_metrics"],
+            "service_health": pipeline_metrics["service_health"]
+        }
+        
+        return comprehensive_metrics
+        
+    except Exception as e:
+        logger.error(f"Failed to get comprehensive metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get comprehensive metrics: {str(e)}")
+
+@app.get("/api/v1/metrics/qdrant")
+async def get_qdrant_metrics():
+    """Get Qdrant-specific metrics"""
+    try:
+        from app.services.enhanced_metrics_collector import enhanced_metrics_collector
+        metrics = enhanced_metrics_collector.get_all_metrics()
+        return {
+            "timestamp": enhanced_metrics_collector.qdrant_metrics.last_health_check.isoformat() if enhanced_metrics_collector.qdrant_metrics.last_health_check else None,
+            "metrics": metrics["qdrant_metrics"]
+        }
+    except Exception as e:
+        logger.error(f"Failed to get Qdrant metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get Qdrant metrics: {str(e)}")
+
+@app.get("/api/v1/metrics/postgres")
+async def get_postgres_metrics():
+    """Get PostgreSQL-specific metrics"""
+    try:
+        from app.services.enhanced_metrics_collector import enhanced_metrics_collector
+        metrics = enhanced_metrics_collector.get_all_metrics()
+        return {
+            "timestamp": enhanced_metrics_collector.postgres_metrics.last_health_check.isoformat() if enhanced_metrics_collector.postgres_metrics.last_health_check else None,
+            "metrics": metrics["postgres_metrics"]
+        }
+    except Exception as e:
+        logger.error(f"Failed to get PostgreSQL metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get PostgreSQL metrics: {str(e)}")
+
+@app.get("/api/v1/metrics/pipeline")
+async def get_pipeline_metrics():
+    """Get pipeline-specific metrics"""
+    try:
+        from app.services.enhanced_metrics_collector import enhanced_metrics_collector
+        from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor
+        
+        metrics = enhanced_metrics_collector.get_all_metrics()
+        pipeline_metrics = enhanced_pipeline_monitor.get_comprehensive_metrics()
+        
+        return {
+            "timestamp": enhanced_metrics_collector.pipeline_metrics.last_health_check.isoformat() if enhanced_metrics_collector.pipeline_metrics.last_health_check else None,
+            "metrics": metrics["pipeline_metrics"],
+            "pipeline_state": pipeline_metrics["pipeline_state"],
+            "stage_metrics": pipeline_metrics["stage_metrics"],
+            "aggregated_metrics": pipeline_metrics["aggregated_metrics"]
+        }
+    except Exception as e:
+        logger.error(f"Failed to get pipeline metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get pipeline metrics: {str(e)}")
+
+@app.get("/api/v1/metrics/connection-status")
+async def get_connection_status():
+    """Get connection status for all services"""
+    try:
+        from app.services.enhanced_metrics_collector import enhanced_metrics_collector
+        metrics = enhanced_metrics_collector.get_all_metrics()
+        return {
+            "timestamp": enhanced_metrics_collector.connection_metrics.last_health_check.isoformat() if enhanced_metrics_collector.connection_metrics.last_health_check else None,
+            "connection_status": metrics["connection_metrics"]
+        }
+    except Exception as e:
+        logger.error(f"Failed to get connection status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get connection status: {str(e)}")
+
+@app.get("/api/v1/metrics/system")
+async def get_system_metrics():
+    """Get system-level metrics (CPU, Memory, Disk, Network)"""
+    try:
+        from app.services.enhanced_metrics_collector import enhanced_metrics_collector
+        metrics = enhanced_metrics_collector.get_all_metrics()
+        return {
+            "timestamp": enhanced_metrics_collector.connection_metrics.last_health_check.isoformat() if enhanced_metrics_collector.connection_metrics.last_health_check else None,
+            "system_metrics": metrics["system_metrics"]
+        }
+    except Exception as e:
+        logger.error(f"Failed to get system metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get system metrics: {str(e)}")
+
+@app.get("/api/v1/metrics/health")
+async def get_health_status():
+    """Get overall health status of all services"""
+    try:
+        from app.services.enhanced_metrics_collector import enhanced_metrics_collector
+        from app.core.enhanced_pipeline_monitor import enhanced_pipeline_monitor
+        
+        metrics = enhanced_metrics_collector.get_all_metrics()
+        pipeline_metrics = enhanced_pipeline_monitor.get_comprehensive_metrics()
+        
+        # Determine overall health
+        services = [
+            metrics["connection_metrics"]["backend_status"],
+            metrics["connection_metrics"]["database_status"],
+            metrics["connection_metrics"]["vector_db_status"],
+            metrics["connection_metrics"]["llm_service_status"]
+        ]
+        
+        healthy_services = sum(1 for status in services if status == "connected")
+        total_services = len(services)
+        
+        overall_health = "healthy" if healthy_services == total_services else "degraded" if healthy_services > 0 else "unhealthy"
+        
+        return {
+            "timestamp": enhanced_metrics_collector.connection_metrics.last_health_check.isoformat() if enhanced_metrics_collector.connection_metrics.last_health_check else None,
+            "overall_health": overall_health,
+            "healthy_services": healthy_services,
+            "total_services": total_services,
+            "service_health": pipeline_metrics["service_health"],
+            "connection_metrics": metrics["connection_metrics"]
+        }
+    except Exception as e:
+        logger.error(f"Failed to get health status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get health status: {str(e)}")
 
 # Include WebSocket router if available
 if websocket_available:

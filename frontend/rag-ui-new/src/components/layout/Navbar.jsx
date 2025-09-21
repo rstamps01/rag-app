@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, Monitor, Zap, FileText, TestTube } from 'lucide-react';
+import { ChevronDown, Monitor, Zap, FileText, TestTube, Network, Database } from 'lucide-react';
 
 const Navbar = () => {
   const location = useLocation();
@@ -37,6 +37,24 @@ const Navbar = () => {
       label: 'Test Page', 
       icon: TestTube,
       description: 'Testing and development tools'
+    },
+    { 
+      path: '/qdrant-dashboard', 
+      label: 'Qdrant Dashboard', 
+      icon: Network,
+      description: 'Vector database visualization and monitoring'
+    },
+    { 
+      path: '/qdrant-advanced', 
+      label: 'Qdrant Flow Dashboard', 
+      icon: Network,
+      description: 'Interactive React Flow visualization with real-time data'
+    },
+    { 
+      path: '/database-dashboard', 
+      label: 'Database Dashboard', 
+      icon: Database,
+      description: 'PostgreSQL & Qdrant comprehensive monitoring'
     }
   ];
 
@@ -136,30 +154,6 @@ const Navbar = () => {
                           </Link>
                         );
                       })}
-                      
-                      {/* Status Bar Section */}
-                      <div className="border-t border-gray-700 mt-3 pt-3">
-                        <div className="px-3 py-2">
-                          {/* Connected Status and Debug Button */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                              <span className="text-white text-sm">Connected (Live Data)</span>
-                            </div>
-                            
-                            <button
-                              onClick={() => {
-                                setIsDashboardsOpen(false);
-                                // Navigate to monitoring page to show debug menu
-                                window.location.href = '/monitoring';
-                              }}
-                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
-                            >
-                              Debug
-                            </button>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 )}

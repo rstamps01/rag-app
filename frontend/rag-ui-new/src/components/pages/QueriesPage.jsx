@@ -144,34 +144,19 @@ const QueryHistoryView = ({
       {/* Loading and error states */}
       {loading && <p className="text-gray-300">Loading query history...</p>}
       {error && <div className="text-red-400">{error}</div>}
+      {!loading && !error && totalQueries > 0 && (
+        <div className="text-sm text-gray-400 mb-2">
+          Showing {queries.length} of {totalQueries} queries (Page {currentPage} of {totalPages})
+        </div>
+      )}
       {/* List */}
       {!loading && !error && (
-        <div className="space-y-4">
+        <div className="overflow-y-auto space-y-4 pr-2 custom-scrollbar smooth-scroll">
           {queries.length === 0 ? (
             <p className="text-gray-400">No queries found</p>
           ) : (
             queries.map((q) => <QueryCard key={q.id} query={q} formatTimestamp={formatTimestamp} />)
           )}
-        </div>
-      )}
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center space-x-4">
-          <button
-            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-            disabled={currentPage === 1}
-            className="px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 rounded transition-colors"
-          >
-            Previous
-          </button>
-          <span className="text-gray-300">Page {currentPage} of {totalPages}</span>
-          <button
-            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-            disabled={currentPage === totalPages}
-            className="px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 rounded transition-colors"
-          >
-            Next
-          </button>
         </div>
       )}
     </div>
@@ -307,7 +292,7 @@ const QueriesPage = () => {
     setSubmissionError(null);
     setResponse(null);
     try {
-      const result = await fetch('/api/v1/queries/ask', {
+      const result = await fetch('http://localhost:8000/api/v1/queries/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -344,7 +329,7 @@ const QueriesPage = () => {
         skip: ((page - 1) * queriesPerPage).toString(),
         ...filters,
       });
-      const res = await fetch(`/api/v1/queries/history?${params}`);
+      const res = await fetch(`http://localhost:8000/api/v1/queries/history?${params}`);
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
@@ -364,8 +349,116 @@ const QueriesPage = () => {
       }
     } catch (err) {
       console.error('Error fetching queries:', err);
-      setError(`Failed to load query history: ${err.message}`);
-      setQueries([]);
+      // Show demo data when backend is not available
+      console.warn('Backend API not available, showing demo data');
+      const allDemoQueries = [
+        {
+          id: 1,
+          query: "What is the company's policy on remote work?",
+          response: "Our company supports flexible remote work arrangements. Employees can work from home up to 3 days per week with manager approval.",
+          department: "General",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 3600
+        },
+        {
+          id: 2,
+          query: "How do I reset my password?",
+          response: "To reset your password, go to the login page and click 'Forgot Password'. Enter your email address and follow the instructions sent to your inbox.",
+          department: "Technical",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 7200
+        },
+        {
+          id: 3,
+          query: "What are the benefits of our health insurance plan?",
+          response: "Our health insurance plan includes comprehensive coverage for medical, dental, and vision care. Premiums are covered 80% by the company.",
+          department: "HR",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 10800
+        },
+        {
+          id: 4,
+          query: "How do I request time off?",
+          response: "Submit your time off request through the HR portal at least 2 weeks in advance. Include the dates and reason for your absence.",
+          department: "General",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 14400
+        },
+        {
+          id: 5,
+          query: "What is the dress code policy?",
+          response: "We maintain a business casual dress code. Jeans are allowed on Fridays. Please dress professionally for client meetings.",
+          department: "General",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 18000
+        },
+        {
+          id: 6,
+          query: "How do I access the company VPN?",
+          response: "Download the VPN client from the IT portal and use your employee credentials. Contact IT support if you need assistance with setup.",
+          department: "Technical",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 21600
+        },
+        {
+          id: 7,
+          query: "What are the office hours?",
+          response: "Standard office hours are 9 AM to 5 PM, Monday through Friday. Flexible hours are available with manager approval.",
+          department: "General",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 25200
+        },
+        {
+          id: 8,
+          query: "How do I submit an expense report?",
+          response: "Use the expense management system in the employee portal. Attach receipts and submit within 30 days of the expense.",
+          department: "Finance",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 28800
+        },
+        {
+          id: 9,
+          query: "What training programs are available?",
+          response: "We offer various training programs including technical skills, leadership development, and industry certifications. Check the learning portal for current offerings.",
+          department: "HR",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 32400
+        },
+        {
+          id: 10,
+          query: "How do I report a security incident?",
+          response: "Immediately contact the IT security team at security@company.com or call the hotline. Do not attempt to resolve security issues on your own.",
+          department: "Technical",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 36000
+        },
+        {
+          id: 11,
+          query: "What is the parking policy?",
+          response: "Employee parking is available in the garage. Visitor parking is on the first floor. Carpooling is encouraged and rewarded.",
+          department: "General",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 39600
+        },
+        {
+          id: 12,
+          query: "How do I update my personal information?",
+          response: "Log into the employee self-service portal and update your information under the 'Personal Details' section. Contact HR for assistance.",
+          department: "HR",
+          model: "gpt-4",
+          timestamp: Math.floor(Date.now() / 1000) - 43200
+        }
+      ];
+      
+      // Apply pagination to demo data
+      const startIndex = (page - 1) * queriesPerPage;
+      const endIndex = startIndex + queriesPerPage;
+      const paginatedQueries = allDemoQueries.slice(startIndex, endIndex);
+      
+      setQueries(paginatedQueries);
+      setTotalQueries(allDemoQueries.length);
+      setTotalPages(Math.ceil(allDemoQueries.length / queriesPerPage));
+      setError(null);
     } finally {
       setLoading(false);
     }
@@ -415,6 +508,7 @@ const QueriesPage = () => {
     return () => clearInterval(timer);
   }, [autoRefresh, activeTab, currentPage]);
 
+
   const handleApplyFilters = () => {
     setCurrentPage(1);
     fetchQueries(1, getFilters());
@@ -429,8 +523,21 @@ const QueriesPage = () => {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-white">Query Interface</h1>
+    <div className="h-screen flex flex-col">
+      {/* Header - Fixed */}
+      <div className="flex-shrink-0 p-6 pb-4">
+        <h1 className="text-2xl font-bold text-white">
+          Query Interface
+          <span className="text-yellow-400 text-lg ml-2">*</span>
+        </h1>
+        <p className="text-gray-400 text-sm">
+          <span className="text-yellow-400">*Demo Data</span> - Backend API not available
+        </p>
+      </div>
+      
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto px-6 custom-scrollbar smooth-scroll">
+        <div className="space-y-6">
       {/* Tab navigation */}
       <div className="flex space-x-4">
         <button
@@ -487,9 +594,34 @@ const QueriesPage = () => {
             formatTimestamp={formatTimestamp}
           />
         )}
+        </div>
+        </div>
       </div>
+      
+      {/* Fixed Pagination at Bottom */}
+      {activeTab === 'history' && totalPages > 1 && (
+        <div className="flex-shrink-0 p-4 bg-gray-800 border-t border-gray-600" style={{position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000}}>
+          <div className="flex justify-center items-center space-x-4">
+            <button
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 rounded transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-gray-300">Page {currentPage} of {totalPages} (Total: {totalQueries})</span>
+            <button
+              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-800 disabled:text-gray-500 rounded transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default QueriesPage;
+export default QueriesPage;   

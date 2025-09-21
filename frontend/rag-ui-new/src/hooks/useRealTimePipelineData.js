@@ -61,9 +61,11 @@ export const useRealTimePipelineData = () => {
 
         // Get initial data
         const initialMetrics = realTimePipelineService.getMetrics();
+        console.log('🔧 Initial metrics from service:', initialMetrics);
         if (initialMetrics) {
           setSystemMetrics(initialMetrics);
           const initialPipelineData = realTimePipelineService.generatePipelineData();
+          console.log('🔧 Initial pipeline data generated:', initialPipelineData);
           setPipelineData(initialPipelineData);
         }
 

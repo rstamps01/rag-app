@@ -8,7 +8,26 @@ import PipelineMonitoringDashboard from './components/monitoring/PipelineMonitor
 import DynamicPipelinePage from './pages/DynamicPipelinePage';
 import DocumentationProcessingPage from './pages/DocumentationProcessingPage';
 import TestPage from './components/TestPage';
-import './App.css';
+import QdrantReactFlowDashboard from './components/dashboard/QdrantReactFlowDashboard';
+import AdvancedQdrantFlowDashboard from './components/dashboard/AdvancedQdrantFlowDashboard';
+import ProfessionalQdrantFlowDashboard from './components/dashboard/ProfessionalQdrantFlowDashboard';
+import DatabaseDashboard from './components/dashboard/DatabaseDashboard';
+
+// Simple test component to debug
+const TestComponent = () => {
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <h1 className="text-4xl font-bold mb-4">🎯 React App Working!</h1>
+      <p className="text-xl mb-4">If you can see this, React is rendering correctly.</p>
+      <p className="text-lg">Current time: {new Date().toLocaleString()}</p>
+      <div className="mt-8 p-4 bg-gray-800 rounded-lg">
+        <h2 className="text-2xl font-semibold mb-2">Debug Info</h2>
+        <p>URL: {window.location.pathname}</p>
+        <p>User Agent: {navigator.userAgent}</p>
+      </div>
+    </div>
+  );
+};
 
 function App() {
   return (
@@ -22,6 +41,11 @@ function App() {
           <Route path="/dynamic-pipeline" element={<DynamicPipelinePage />} />
           <Route path="/documentation-processing" element={<DocumentationProcessingPage />} />
           <Route path="/test" element={<TestPage />} />
+          <Route path="/qdrant-dashboard" element={<QdrantReactFlowDashboard />} />
+          <Route path="/qdrant-flow" element={<QdrantReactFlowDashboard />} />
+          <Route path="/qdrant-advanced" element={<AdvancedQdrantFlowDashboard />} />
+          <Route path="/qdrant-professional" element={<ProfessionalQdrantFlowDashboard />} />
+          <Route path="/database-dashboard" element={<DatabaseDashboard />} />
         </Routes>
       </Layout>
     </Router>

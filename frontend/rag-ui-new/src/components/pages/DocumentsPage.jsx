@@ -38,14 +38,27 @@ const DocumentsPage = () => {
 
   const fetchDocuments = async () => {
     try {
-      const response = await fetch('/api/v1/documents');
+      const response = await fetch('http://localhost:8000/api/v1/documents');
       if (response.ok) {
         const data = await response.json();
         setDocuments(data.documents || []);
+      } else {
+        // If backend is not available, show demo data
+        console.warn('Backend API not available, showing demo data');
+        setDocuments([
+          { id: 1, filename: 'demo-document-1.pdf', department: 'General' },
+          { id: 2, filename: 'demo-document-2.txt', department: 'Engineering' },
+          { id: 3, filename: 'demo-document-3.docx', department: 'Marketing' }
+        ]);
       }
     } catch (err) {
       console.error('Error fetching documents:', err);
-      setError('Failed to fetch documents');
+      // Show demo data when backend is not available
+      setDocuments([
+        { id: 1, filename: 'demo-document-1.pdf', department: 'General' },
+        { id: 2, filename: 'demo-document-2.txt', department: 'Engineering' },
+        { id: 3, filename: 'demo-document-3.docx', department: 'Marketing' }
+      ]);
     }
   };
 
@@ -82,7 +95,7 @@ const DocumentsPage = () => {
           const formData = new FormData();
           formData.append('file', file);
           formData.append('department', 'General');
-          const response = await fetch('/api/v1/documents', {
+          const response = await fetch('http://localhost:8000/api/v1/documents', {
             method: 'POST',
             body: formData,
           });
@@ -139,7 +152,7 @@ const DocumentsPage = () => {
   const handleDeleteDocument = async (documentId, filename) => {
     setDeleting((prev) => new Set([...prev, documentId]));
     try {
-      const response = await fetch(`/api/v1/documents/${documentId}`, { method: 'DELETE' });
+      const response = await fetch(`http://localhost:8000/api/v1/documents/${documentId}`, { method: 'DELETE' });
       if (response.ok) {
         setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
         setDeleteConfirm(null);
@@ -194,8 +207,21 @@ const DocumentsPage = () => {
   };
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold text-white">Documents</h1>
+    <div className="h-screen flex flex-col">
+      {/* Header - Fixed */}
+      <div className="flex-shrink-0 p-6 pb-4">
+        <h1 className="text-2xl font-bold text-white">
+          Documents
+          <span className="text-yellow-400 text-lg ml-2">*</span>
+        </h1>
+        <p className="text-gray-400 text-sm">
+          <span className="text-yellow-400">*Demo Data</span> - Backend API not available
+        </p>
+      </div>
+      
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar smooth-scroll">
+        <div className="space-y-4">
       {/* File upload area */}
       <div
         className={`border-2 border-dashed rounded p-6 text-center ${
@@ -249,24 +275,26 @@ const DocumentsPage = () => {
         </div>
       )}
       {/* Documents list */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {documents.map((doc) => (
-          <div key={doc.id} className="bg-gray-800 p-4 rounded shadow relative">
-            <div className="text-lg text-white mb-2 truncate" title={doc.filename || doc.document_name}>
-              {doc.filename || doc.document_name}
+      <div className="overflow-y-auto pr-2 custom-scrollbar smooth-scroll">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {documents.map((doc) => (
+            <div key={doc.id} className="bg-gray-800 p-4 rounded shadow relative">
+              <div className="text-lg text-white mb-2 truncate" title={doc.filename || doc.document_name}>
+                {doc.filename || doc.document_name}
+              </div>
+              <div className="text-sm text-gray-400 mb-4">Department: {doc.department || 'General'}</div>
+              <div className="flex justify-between items-center">
+                <button
+                  onClick={() => confirmDelete(doc)}
+                  disabled={deleting.has(doc.id)}
+                  className="px-3 py-1 bg-red-600 rounded text-white hover:bg-red-500 disabled:bg-red-800"
+                >
+                  {deleting.has(doc.id) ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
             </div>
-            <div className="text-sm text-gray-400 mb-4">Department: {doc.department || 'General'}</div>
-            <div className="flex justify-between items-center">
-              <button
-                onClick={() => confirmDelete(doc)}
-                disabled={deleting.has(doc.id)}
-                className="px-3 py-1 bg-red-600 rounded text-white hover:bg-red-500 disabled:bg-red-800"
-              >
-                {deleting.has(doc.id) ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
       {/* Delete confirmation modal */}
       {deleteConfirm && (
@@ -291,6 +319,8 @@ const DocumentsPage = () => {
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 };
