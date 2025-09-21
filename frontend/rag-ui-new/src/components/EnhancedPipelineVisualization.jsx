@@ -26,7 +26,7 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('DynamicPipelineVisualization Error:', error, errorInfo);
+    console.error('EnhancedPipelineVisualization Error:', error, errorInfo);
   }
 
   render() {
@@ -59,105 +59,6 @@ class ErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
-import * as AdvancedDataFlowAnimations from './AdvancedDataFlowAnimations';
-// Simple UI components to avoid import issues
-const Card = ({ children, className = '', ...props }) => (
-  <div className={`bg-gray-800 rounded-lg shadow-lg border border-gray-700 ${className}`} {...props}>
-    {children}
-  </div>
-);
-
-const Button = ({ children, variant = 'primary', className = '', ...props }) => {
-  const baseClasses = 'px-4 py-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
-  const variantClasses = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
-    secondary: 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500',
-    outline: 'border border-gray-600 text-gray-300 hover:bg-gray-700 focus:ring-gray-500',
-    ghost: 'text-gray-300 hover:bg-gray-700 focus:ring-gray-500'
-  };
-  
-  return (
-    <button className={`${baseClasses} ${variantClasses[variant]} ${className}`} {...props}>
-      {children}
-    </button>
-  );
-};
-
-const Badge = ({ children, variant = 'default', className = '', ...props }) => {
-  const baseClasses = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium';
-  const variantClasses = {
-    default: 'bg-gray-700 text-gray-200',
-    secondary: 'bg-gray-600 text-gray-200',
-    success: 'bg-green-600 text-white',
-    warning: 'bg-yellow-600 text-white',
-    error: 'bg-red-600 text-white',
-    info: 'bg-blue-600 text-white'
-  };
-  
-  return (
-    <span className={`${baseClasses} ${variantClasses[variant]} ${className}`} {...props}>
-      {children}
-    </span>
-  );
-};
-
-const Input = ({ className = '', ...props }) => (
-  <input 
-    className={`w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${className}`} 
-    {...props} 
-  />
-);
-import { 
-  Play, 
-  Pause, 
-  Settings, 
-  Palette, 
-  Zap, 
-  Database, 
-  Cpu, 
-  MemoryStick,
-  Network,
-  FileText,
-  Search,
-  Brain,
-  Send,
-  BarChart3,
-  Activity
-} from 'lucide-react';
-
-// Simple UI components
-const Slider = ({ value, onValueChange, min = 0, max = 100, step = 1, className = '' }) => (
-  <input
-    type="range"
-    min={min}
-    max={max}
-    step={step}
-    value={value[0]}
-    onChange={(e) => onValueChange([parseFloat(e.target.value)])}
-    className={`w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer ${className}`}
-  />
-);
-
-const Switch = ({ checked, onCheckedChange, className = '' }) => (
-  <button
-    onClick={() => onCheckedChange(!checked)}
-    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-      checked ? 'bg-blue-600' : 'bg-gray-600'
-    } ${className}`}
-  >
-    <span
-      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-        checked ? 'translate-x-6' : 'translate-x-1'
-      }`}
-    />
-  </button>
-);
-
-const Label = ({ children, htmlFor, className = '' }) => (
-  <label htmlFor={htmlFor} className={`block text-sm font-medium text-gray-300 ${className}`}>
-    {children}
-  </label>
-);
 
 // VAST Data Color Palette
 const VAST_COLORS = {
@@ -173,10 +74,9 @@ const VAST_COLORS = {
   info: '#3B82F6'
 };
 
-// Dynamic Pipeline Node Component
-const DynamicPipelineNode = ({ data, selected, isConnectable }) => {
+// Enhanced Pipeline Node Component
+const EnhancedPipelineNode = ({ data, selected, isConnectable }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [customization, setCustomization] = useState(data.customization || {});
   const animationRef = useRef(null);
 
   // Processing animation effect
@@ -202,17 +102,17 @@ const DynamicPipelineNode = ({ data, selected, isConnectable }) => {
 
   const getNodeIcon = (type) => {
     const icons = {
-      'query-input': <Search className="w-5 h-5" />,
-      'vector-search': <Database className="w-5 h-5" />,
-      'llm-processing': <Brain className="w-5 h-5" />,
-      'response': <Send className="w-5 h-5" />,
-      'resource-monitor': <BarChart3 className="w-5 h-5" />,
-      'data-processor': <Cpu className="w-5 h-5" />,
-      'memory-cache': <MemoryStick className="w-5 h-5" />,
-      'network-gateway': <Network className="w-5 h-5" />,
-      'document-store': <FileText className="w-5 h-5" />
+      'query-input': '🔍',
+      'vector-search': '🗄️',
+      'llm-processing': '🧠',
+      'response': '📤',
+      'resource-monitor': '📊',
+      'data-processor': '⚙️',
+      'memory-cache': '💾',
+      'network-gateway': '🌐',
+      'document-store': '📄'
     };
-    return icons[type] || <Activity className="w-5 h-5" />;
+    return icons[type] || '⚡';
   };
 
   const getStatusColor = (status) => {
@@ -228,21 +128,21 @@ const DynamicPipelineNode = ({ data, selected, isConnectable }) => {
   };
 
   const nodeStyle = {
-    background: `linear-gradient(135deg, ${customization.backgroundColor || getStatusColor(data.status)}, ${customization.backgroundColor || getStatusColor(data.status)}dd)`,
-    border: `2px solid ${selected ? VAST_COLORS.primary : customization.borderColor || getStatusColor(data.status)}`,
-    borderRadius: customization.borderRadius || '12px',
+    background: `linear-gradient(135deg, ${getStatusColor(data.status)}, ${getStatusColor(data.status)}dd)`,
+    border: `2px solid ${selected ? VAST_COLORS.primary : getStatusColor(data.status)}`,
+    borderRadius: '12px',
     boxShadow: selected 
       ? `0 8px 24px ${VAST_COLORS.primary}40` 
-      : `0 4px 12px ${customization.shadowColor || getStatusColor(data.status)}30`,
-    minWidth: customization.minWidth || '200px',
-    minHeight: customization.minHeight || '120px',
-    opacity: customization.opacity || 1,
+      : `0 4px 12px ${getStatusColor(data.status)}30`,
+    minWidth: '200px',
+    minHeight: '120px',
+    opacity: 1,
     transform: isProcessing ? 'scale(1.02)' : 'scale(1)',
     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   };
 
   return (
-    <div style={nodeStyle} className="dynamic-pipeline-node">
+    <div style={nodeStyle} className="enhanced-pipeline-node">
       <Handle
         type="target"
         position={Position.Left}
@@ -264,7 +164,7 @@ const DynamicPipelineNode = ({ data, selected, isConnectable }) => {
         borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
         <div className="flex items-center gap-2">
-          <div style={{ color: 'white' }}>
+          <div style={{ color: 'white', fontSize: '20px' }}>
             {getNodeIcon(data.type)}
           </div>
           <div>
@@ -283,16 +183,15 @@ const DynamicPipelineNode = ({ data, selected, isConnectable }) => {
               animation: isProcessing ? 'pulse 1s infinite' : 'none'
             }}
           />
-          <Badge 
-            variant="secondary" 
-            className="text-xs"
+          <span 
+            className="text-xs px-2 py-1 rounded-full"
             style={{ 
               backgroundColor: getStatusColor(data.status) + '20',
               color: getStatusColor(data.status)
             }}
           >
             {data.status}
-          </Badge>
+          </span>
         </div>
       </div>
 
@@ -322,7 +221,7 @@ const DynamicPipelineNode = ({ data, selected, isConnectable }) => {
           </div>
         )}
 
-        {/* Advanced Processing Indicator */}
+        {/* Processing Indicator */}
         {isProcessing && (
           <div className="processing-indicator" style={{
             display: 'flex',
@@ -333,51 +232,8 @@ const DynamicPipelineNode = ({ data, selected, isConnectable }) => {
             borderRadius: '6px',
             marginTop: '8px'
           }}>
-            <AdvancedDataFlowAnimations.ProcessingIndicator 
-              status={data.status}
-              intensity={1}
-              size={16}
-              color={getStatusColor(data.status)}
-            />
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
             <span className="text-xs text-white">Processing...</span>
-          </div>
-        )}
-
-        {/* Throughput Indicator */}
-        {data.metrics?.throughput > 0 && (
-          <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center' }}>
-            <AdvancedDataFlowAnimations.ThroughputIndicator 
-              throughput={data.metrics.throughput}
-              maxThroughput={100}
-              size={40}
-              showLabel={false}
-            />
-          </div>
-        )}
-
-        {/* Memory Usage Visualization */}
-        {data.metrics?.memory_percent && (
-          <div style={{ marginTop: '8px' }}>
-            <AdvancedDataFlowAnimations.MemoryUsageVisualization 
-              used={data.metrics.memory_percent}
-              total={100}
-              width={180}
-              height={30}
-            />
-          </div>
-        )}
-
-        {/* Custom Information */}
-        {customization.showCustomInfo && (
-          <div className="custom-info" style={{
-            marginTop: '8px',
-            padding: '8px',
-            background: 'rgba(255,255,255,0.05)',
-            borderRadius: '6px',
-            fontSize: '11px',
-            color: 'white'
-          }}>
-            {customization.customInfo || 'Custom information here'}
           </div>
         )}
       </div>
@@ -446,18 +302,6 @@ const AnimatedEdge = ({ id, sourceX, sourceY, targetX, targetY, data, selected }
         markerEnd="url(#arrowhead)"
       />
       
-      {/* Advanced Data Flow Particles */}
-      <AdvancedDataFlowAnimations.DataFlowParticles
-        sourceX={sourceX}
-        sourceY={sourceY}
-        targetX={targetX}
-        targetY={targetY}
-        isActive={isActive}
-        throughput={throughput}
-        particleCount={Math.min(Math.floor(throughput / 10) + 3, 8)}
-        speed={1 + (throughput / 100)}
-      />
-
       {/* Throughput label */}
       {throughput > 0 && (
         <text>
@@ -476,17 +320,9 @@ const AnimatedEdge = ({ id, sourceX, sourceY, targetX, targetY, data, selected }
         </text>
       )}
 
-      <AdvancedDataFlowAnimations.AnimationStyles />
       <style jsx>{`
         @keyframes dash-flow {
           to { stroke-dashoffset: -12; }
-        }
-        
-        @keyframes particle-flow {
-          0% { opacity: 0; }
-          10% { opacity: 0.8; }
-          90% { opacity: 0.8; }
-          100% { opacity: 0; }
         }
       `}</style>
     </>
@@ -503,160 +339,8 @@ const getSmoothStepPath = ({ sourceX, sourceY, targetX, targetY }) => {
   return [path, centerX, centerY];
 };
 
-// Simplified Node customization panel
-const NodeCustomizationPanel = ({ selectedNode, onUpdate, onClose }) => {
-  const [customization, setCustomization] = useState(selectedNode?.data?.customization || {});
-
-  const handleUpdate = (key, value) => {
-    const newCustomization = { ...customization, [key]: value };
-    setCustomization(newCustomization);
-    onUpdate(selectedNode.id, newCustomization);
-  };
-
-  if (!selectedNode) return null;
-
-  return (
-    <div className="fixed right-0 top-0 h-full w-80 bg-white shadow-lg z-50 border-l">
-      <div className="p-4 border-b">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold">Customize Node</h3>
-          <Button onClick={onClose} size="sm">×</Button>
-        </div>
-        <p className="text-sm text-gray-600">{selectedNode.data.label}</p>
-      </div>
-      
-      <div className="p-4 space-y-6 overflow-y-auto h-full">
-        {/* Visual Customization */}
-        <div>
-          <h4 className="font-semibold mb-3 flex items-center gap-2">
-            <Palette className="w-4 h-4" />
-            Visual Properties
-          </h4>
-          
-          <div className="space-y-4">
-            <div>
-              <Label>Background Color</Label>
-              <Input
-                type="color"
-                value={customization.backgroundColor || VAST_COLORS.primary}
-                onChange={(e) => handleUpdate('backgroundColor', e.target.value)}
-                className="w-full"
-              />
-            </div>
-            
-            <div>
-              <Label>Border Color</Label>
-              <Input
-                type="color"
-                value={customization.borderColor || VAST_COLORS.primary}
-                onChange={(e) => handleUpdate('borderColor', e.target.value)}
-                className="w-full"
-              />
-            </div>
-            
-            <div>
-              <Label>Border Radius: {customization.borderRadius || 12}px</Label>
-              <Slider
-                value={[customization.borderRadius || 12]}
-                onValueChange={([value]) => handleUpdate('borderRadius', value)}
-                min={0}
-                max={30}
-                step={1}
-                className="w-full"
-              />
-            </div>
-            
-            <div>
-              <Label>Opacity: {Math.round((customization.opacity || 1) * 100)}%</Label>
-              <Slider
-                value={[customization.opacity || 1]}
-                onValueChange={([value]) => handleUpdate('opacity', value)}
-                min={0.1}
-                max={1}
-                step={0.1}
-                className="w-full"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Size Customization */}
-        <div>
-          <h4 className="font-semibold mb-3">Size Properties</h4>
-          
-          <div className="space-y-4">
-            <div>
-              <Label>Min Width: {customization.minWidth || 200}px</Label>
-              <Slider
-                value={[parseInt(customization.minWidth || 200)]}
-                onValueChange={([value]) => handleUpdate('minWidth', value)}
-                min={150}
-                max={400}
-                step={10}
-                className="w-full"
-              />
-            </div>
-            
-            <div>
-              <Label>Min Height: {customization.minHeight || 120}px</Label>
-              <Slider
-                value={[parseInt(customization.minHeight || 120)]}
-                onValueChange={([value]) => handleUpdate('minHeight', value)}
-                min={80}
-                max={300}
-                step={10}
-                className="w-full"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Information Customization */}
-        <div>
-          <h4 className="font-semibold mb-3">Information Display</h4>
-          
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="showCustomInfo"
-                checked={customization.showCustomInfo || false}
-                onCheckedChange={(checked) => handleUpdate('showCustomInfo', checked)}
-              />
-              <Label htmlFor="showCustomInfo">Show Custom Information</Label>
-            </div>
-            
-            {customization.showCustomInfo && (
-              <div>
-                <Label>Custom Information</Label>
-                <textarea
-                  value={customization.customInfo || ''}
-                  onChange={(e) => handleUpdate('customInfo', e.target.value)}
-                  className="w-full p-2 border rounded-md text-sm"
-                  rows={3}
-                  placeholder="Enter custom information..."
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Reset Button */}
-        <Button
-          onClick={() => {
-            setCustomization({});
-            onUpdate(selectedNode.id, {});
-          }}
-          className="w-full"
-        >
-          Reset to Default
-        </Button>
-      </div>
-    </div>
-  );
-};
-
-// Main Dynamic Pipeline Visualization Component
-const DynamicPipelineVisualization = ({ 
+// Main Enhanced Pipeline Visualization Component
+const EnhancedPipelineVisualization = ({ 
   realTimeData, 
   connectionStatus, 
   onDebugToggle, 
@@ -666,11 +350,10 @@ const DynamicPipelineVisualization = ({
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isAnimating, setIsAnimating] = useState(true);
-  const [showCustomization, setShowCustomization] = useState(false);
   const reactFlowInstance = useReactFlow();
 
   // Debug logging
-  console.log('DynamicPipelineVisualization rendered with:', {
+  console.log('EnhancedPipelineVisualization rendered with:', {
     realTimeData: !!realTimeData,
     connectionStatus,
     nodesCount: nodes.length,
@@ -682,109 +365,103 @@ const DynamicPipelineVisualization = ({
     const initialNodes = [
       {
         id: 'upload',
-        type: 'dynamicNode',
+        type: 'enhancedNode',
         position: { x: 100, y: 200 },
         data: {
           label: 'Upload',
-          type: 'upload',
+          type: 'query-input',
           status: 'idle',
           health: 'unknown',
           metrics: {
             throughput: 0,
             latency: 0,
             active_uploads: 0
-          },
-          customization: {}
+          }
         }
       },
       {
         id: 'chunk',
-        type: 'dynamicNode',
+        type: 'enhancedNode',
         position: { x: 350, y: 200 },
         data: {
           label: 'Chunk',
-          type: 'chunk',
+          type: 'data-processor',
           status: 'idle',
           health: 'unknown',
           metrics: {
             throughput: 0,
             latency: 0,
             chunks_processed: 0
-          },
-          customization: {}
+          }
         }
       },
       {
         id: 'embed',
-        type: 'dynamicNode',
+        type: 'enhancedNode',
         position: { x: 600, y: 200 },
         data: {
           label: 'Embed',
-          type: 'embed',
+          type: 'llm-processing',
           status: 'idle',
           health: 'unknown',
           metrics: {
             throughput: 0,
             latency: 0,
             vectors_created: 0
-          },
-          customization: {}
+          }
         }
       },
       {
         id: 'upsert',
-        type: 'dynamicNode',
+        type: 'enhancedNode',
         position: { x: 850, y: 200 },
         data: {
           label: 'Upsert',
-          type: 'upsert',
+          type: 'vector-search',
           status: 'idle',
           health: 'unknown',
           metrics: {
             throughput: 0,
             latency: 0,
             vectors_stored: 0
-          },
-          customization: {}
+          }
         }
       },
       {
         id: 'search',
-        type: 'dynamicNode',
+        type: 'enhancedNode',
         position: { x: 100, y: 400 },
         data: {
           label: 'Search',
-          type: 'search',
+          type: 'vector-search',
           status: 'idle',
           health: 'unknown',
           metrics: {
             throughput: 0,
             latency: 0,
             search_queries: 0
-          },
-          customization: {}
+          }
         }
       },
       {
         id: 'generate',
-        type: 'dynamicNode',
+        type: 'enhancedNode',
         position: { x: 350, y: 400 },
         data: {
           label: 'Generate',
-          type: 'generate',
+          type: 'llm-processing',
           status: 'idle',
           health: 'unknown',
           metrics: {
             throughput: 0,
             latency: 0,
             responses_generated: 0
-          },
-          customization: {}
+          }
         }
       },
       {
         id: 'resource-monitor',
-        type: 'dynamicNode',
+        type: 'enhancedNode',
         position: { x: 600, y: 400 },
         data: {
           label: 'Resource Monitor',
@@ -796,8 +473,7 @@ const DynamicPipelineVisualization = ({
             memory_percent: 0,
             gpu_utilization: 0,
             gpu_temperature: 0
-          },
-          customization: {}
+          }
         }
       }
     ];
@@ -911,7 +587,7 @@ const DynamicPipelineVisualization = ({
   }, [realTimeData]);
 
   const nodeTypes = useMemo(() => ({
-    dynamicNode: DynamicPipelineNode,
+    enhancedNode: EnhancedPipelineNode,
   }), []);
 
   const edgeTypes = useMemo(() => ({
@@ -929,35 +605,8 @@ const DynamicPipelineVisualization = ({
 
   const onNodeClick = useCallback((event, node) => {
     setSelectedNode(node);
-    setShowCustomization(true);
+    console.log('Node clicked:', node);
   }, []);
-
-  const onNodeUpdate = useCallback((nodeId, customization) => {
-    setNodes(prevNodes =>
-      prevNodes.map(node =>
-        node.id === nodeId
-          ? { ...node, data: { ...node.data, customization } }
-          : node
-      )
-    );
-  }, [setNodes]);
-
-  const onAddNode = useCallback((type) => {
-    const newNode = {
-      id: `${type}-${Date.now()}`,
-      type: 'dynamicNode',
-      position: { x: Math.random() * 800 + 100, y: Math.random() * 400 + 100 },
-      data: {
-        label: type.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        type: type,
-        status: 'idle',
-        health: 'healthy',
-        metrics: {},
-        customization: {}
-      }
-    };
-    setNodes(prevNodes => [...prevNodes, newNode]);
-  }, [setNodes]);
 
   // Error boundary fallback
   if (nodes.length === 0) {
@@ -966,7 +615,7 @@ const DynamicPipelineVisualization = ({
         <div className="text-center">
           <div className="text-6xl mb-4">⚙️</div>
           <h2 className="text-2xl font-semibold mb-2">Initializing Pipeline Visualization</h2>
-          <p className="text-gray-400">Setting up dynamic pipeline components...</p>
+          <p className="text-gray-400">Setting up enhanced pipeline components...</p>
           <div className="mt-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
           </div>
@@ -977,7 +626,7 @@ const DynamicPipelineVisualization = ({
 
   return (
     <ErrorBoundary>
-      <div className="dynamic-pipeline-container h-screen w-full">
+      <div className="enhanced-pipeline-container h-screen w-full">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -1028,33 +677,28 @@ const DynamicPipelineVisualization = ({
         <Panel position="top-left" className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-4">
           <div className="space-y-4">
             <div className="flex items-center gap-4">
-              <Button
+              <button
                 onClick={() => setIsAnimating(!isAnimating)}
-                variant={isAnimating ? "default" : "outline"}
-                size="sm"
+                className={`px-3 py-2 rounded text-sm font-medium ${
+                  isAnimating 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-600 text-white hover:bg-gray-700'
+                }`}
               >
-                {isAnimating ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                {isAnimating ? 'Pause' : 'Play'}
-              </Button>
+                {isAnimating ? '⏸️ Pause' : '▶️ Play'}
+              </button>
               
-              <Button
-                onClick={() => setShowCustomization(!showCustomization)}
-                variant={showCustomization ? "default" : "outline"}
-                size="sm"
-              >
-                <Settings className="w-4 h-4" />
-                Customize
-              </Button>
-
               {onDebugToggle && (
-                <Button
+                <button
                   onClick={onDebugToggle}
-                  variant={debugMode ? "default" : "outline"}
-                  size="sm"
+                  className={`px-3 py-2 rounded text-sm font-medium ${
+                    debugMode 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-600 text-white hover:bg-gray-700'
+                  }`}
                 >
-                  <Activity className="w-4 h-4" />
-                  Debug
-                </Button>
+                  🔧 Debug
+                </button>
               )}
             </div>
 
@@ -1066,39 +710,10 @@ const DynamicPipelineVisualization = ({
             </div>
           </div>
         </Panel>
-
-        {/* Add Node Panel */}
-        <Panel position="top-right" className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-4">
-          <div className="space-y-2">
-            <h4 className="font-semibold text-sm">Add Components</h4>
-            <div className="grid grid-cols-2 gap-2">
-              {['data-processor', 'memory-cache', 'network-gateway', 'document-store'].map(type => (
-                <Button
-                  key={type}
-                  onClick={() => onAddNode(type)}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                >
-                  {type.replace('-', ' ')}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </Panel>
       </ReactFlow>
-
-      {/* Node Customization Panel */}
-      {showCustomization && (
-        <NodeCustomizationPanel
-          selectedNode={selectedNode}
-          onUpdate={onNodeUpdate}
-          onClose={() => setShowCustomization(false)}
-        />
-      )}
       </div>
     </ErrorBoundary>
   );
 };
 
-export default DynamicPipelineVisualization;
+export default EnhancedPipelineVisualization;

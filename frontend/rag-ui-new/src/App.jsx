@@ -6,7 +6,8 @@ import QueriesPage from './components/pages/QueriesPage';
 import DocumentsPage from './components/pages/DocumentsPage';
 import PipelineMonitoringDashboard from './components/monitoring/PipelineMonitoringDashboard';
 import DynamicPipelinePage from './pages/DynamicPipelinePage';
-import TestPage from './components/monitoring/TestPage';
+import DocumentationProcessingPage from './pages/DocumentationProcessingPage';
+import TestPage from './components/TestPage';
 import './App.css';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/monitoring" element={<PipelineMonitoringDashboard />} />
           <Route path="/dynamic-pipeline" element={<DynamicPipelinePage />} />
+          <Route path="/documentation-processing" element={<DocumentationProcessingPage />} />
           <Route path="/test" element={<TestPage />} />
         </Routes>
       </Layout>

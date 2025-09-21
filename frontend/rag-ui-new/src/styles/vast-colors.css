@@ -1,0 +1,490 @@
+/* Global overflow settings to prevent scrollbars */
+html, body {
+  overflow: hidden;
+  max-width: 100vw;
+  max-height: 100vh;
+}
+
+/* VAST Data Brand Colors - Dark Theme with Glowing Effects */
+:root {
+  /* Dark Theme Color Palette */
+  --vast-primary: #00FF88;      /* Bright Green for active elements */
+  --vast-secondary: #00CC6A;    /* Medium Green */
+  --vast-accent: #33FF99;       /* Light Green accent */
+  --vast-header: #006644;       /* Dark Green for headers */
+  --vast-neutral: #4A5568;      /* Dark Grey */
+  --vast-light: #2D3748;        /* Dark background */
+  --vast-dark: #1A202C;         /* Darker background */
+  
+  /* Pipeline Node Colors - Dark Theme */
+  --node-query: #00FF88;        /* Bright Green for input */
+  --node-process: #00CC6A;      /* Medium Green for processing */
+  --node-output: #33FF99;       /* Light Green for output */
+  --node-resource: #4A5568;     /* Dark Grey for monitoring */
+  --node-vector: #00CC6A;       /* Medium Green for vector operations */
+  --node-llm: #00FF88;          /* Bright Green for LLM processing */
+  
+  /* Status Colors */
+  --status-active: #00FF88;     /* Bright Green for active */
+  --status-processing: #FFB800; /* Amber for processing */
+  --status-success: #00FF88;    /* Bright Green for success */
+  --status-error: #FF4444;      /* Red for error */
+  --status-idle: #4A5568;       /* Dark Grey for idle */
+  
+  /* Edge Colors */
+  --edge-active: #3B82F6;       /* Bright Blue for active flow */
+  --edge-idle: #4A5568;         /* Dark Grey for idle */
+  --edge-error: #FF4444;        /* Red for error */
+  --edge-hover: #60A5FA;        /* Light Blue for hover */
+  
+  /* Background Colors - Dark Theme */
+  --bg-primary: #1A202C;        /* Dark background */
+  --bg-secondary: #2D3748;      /* Darker slate */
+  --bg-card: #2D3748;           /* Dark card background */
+  --bg-hover: #4A5568;          /* Dark hover background */
+  
+  /* Text Colors - Dark Theme */
+  --text-primary: #F7FAFC;      /* Light text */
+  --text-secondary: #A0AEC0;    /* Secondary text */
+  --text-muted: #718096;        /* Muted text */
+  
+  /* Glow Effects */
+  --glow-primary: rgba(30, 58, 138, 0.6);
+  --glow-secondary: rgba(30, 64, 175, 0.4);
+  --glow-accent: rgba(59, 130, 246, 0.8);
+  --glow-hover: rgba(30, 58, 138, 0.8);
+  
+  /* Shadow Colors */
+  --shadow-primary: rgba(0, 255, 136, 0.3);
+  --shadow-secondary: rgba(0, 204, 106, 0.2);
+  --shadow-accent: rgba(51, 255, 153, 0.4);
+}
+
+/* VAST Data Node Styles */
+.vast-node {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+/* Connection Handle Styles - Fixed cursor cycling */
+.react-flow__handle {
+  cursor: crosshair !important;
+  pointer-events: all !important;
+  width: 18px !important;
+  height: 18px !important;
+  border: 3px solid var(--bg-card) !important;
+  z-index: 30 !important;
+  transition: all 0.2s ease !important;
+  position: relative !important;
+}
+
+/* Override any conflicting cursor styles */
+.react-flow__handle * {
+  cursor: crosshair !important;
+  pointer-events: none !important;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.2) !important;
+  box-shadow: 0 0 15px var(--glow-primary) !important;
+  border-width: 4px !important;
+  cursor: crosshair !important;
+}
+
+.react-flow__handle:active {
+  transform: scale(1.05) !important;
+  cursor: crosshair !important;
+}
+
+/* Specific handle positioning for better accessibility */
+.react-flow__handle-top {
+  top: -9px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+.react-flow__handle-bottom {
+  bottom: -9px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+.react-flow__handle-left {
+  left: -9px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+.react-flow__handle-right {
+  right: -9px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+/* Ensure handles don't interfere with node content */
+.react-flow__handle {
+  position: absolute !important;
+}
+
+/* Ensure handles are always on top and prevent node dragging interference */
+.react-flow__handle {
+  z-index: 30 !important;
+  pointer-events: all !important;
+}
+
+/* Prevent node from interfering with handle selection */
+.vast-node {
+  pointer-events: auto !important;
+}
+
+.vast-node .react-flow__handle {
+  pointer-events: all !important;
+  cursor: crosshair !important;
+}
+
+/* Disable node dragging when hovering over handles */
+.vast-node:hover .react-flow__handle:hover {
+  pointer-events: all !important;
+  cursor: crosshair !important;
+}
+
+/* Make handles more visible with better contrast */
+.react-flow__handle::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  pointer-events: none !important;
+}
+
+.react-flow__handle:hover::before {
+  border-color: var(--glow-primary);
+  box-shadow: 0 0 8px var(--glow-primary);
+}
+
+/* Ensure handles are always clickable and prevent cursor changes */
+.react-flow__handle,
+.react-flow__handle *,
+.react-flow__handle::before,
+.react-flow__handle::after {
+  cursor: crosshair !important;
+  pointer-events: all !important;
+}
+
+/* Override React Flow's default cursor behavior */
+.react-flow__pane {
+  cursor: default !important;
+}
+
+.react-flow__node {
+  cursor: default !important;
+}
+
+.react-flow__node:hover {
+  cursor: move !important;
+}
+
+.react-flow__node:hover .react-flow__handle {
+  cursor: crosshair !important;
+}
+
+/* Prevent cursor cycling on handle hover */
+.react-flow__handle:hover,
+.react-flow__handle:focus,
+.react-flow__handle:active {
+  cursor: crosshair !important;
+  pointer-events: all !important;
+}
+
+/* Ensure handles are always on top of everything */
+.react-flow__handle {
+  z-index: 1000 !important;
+}
+
+.vast-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px var(--glow-hover), 0 8px 24px var(--shadow-primary);
+  border-color: var(--vast-primary);
+  background: var(--bg-hover);
+}
+
+/* Glowing hover effect for nodes */
+.vast-node.glow {
+  box-shadow: 0 0 25px var(--glow-primary), 0 0 50px var(--glow-secondary);
+  border-color: var(--vast-primary);
+  animation: glow-pulse 2s ease-in-out infinite alternate;
+}
+
+/* Glowing hover effect for edges */
+.vast-edge.glow {
+  stroke: var(--edge-hover);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 8px var(--glow-primary));
+  animation: edge-glow 1.5s ease-in-out infinite alternate;
+}
+
+.vast-node.active {
+  border-color: var(--status-active);
+  box-shadow: 0 0 20px var(--shadow-primary);
+}
+
+.vast-node.processing {
+  border-color: var(--status-processing);
+  box-shadow: 0 0 20px var(--shadow-accent);
+  animation: pulse 2s infinite;
+}
+
+.vast-node.error {
+  border-color: var(--status-error);
+  box-shadow: 0 0 20px rgba(231, 76, 60, 0.3);
+}
+
+/* VAST Data Edge Styles */
+.vast-edge {
+  stroke-width: 3;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.vast-edge:hover {
+  stroke-width: 4;
+  filter: drop-shadow(0 0 8px var(--glow-primary));
+}
+
+.vast-edge.selected {
+  stroke: var(--vast-primary) !important;
+  stroke-width: 5 !important;
+  filter: drop-shadow(0 0 12px var(--glow-primary)) !important;
+}
+
+.vast-edge.active {
+  stroke: var(--edge-active);
+  stroke-width: 4;
+  filter: drop-shadow(0 0 6px var(--shadow-primary));
+}
+
+.vast-edge.idle {
+  stroke: var(--edge-idle);
+  stroke-width: 2;
+  stroke-dasharray: 5,5;
+}
+
+.vast-edge.error {
+  stroke: var(--edge-error);
+  stroke-width: 3;
+  stroke-dasharray: 3,3;
+}
+
+/* Animation Keyframes */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes flow {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: 20;
+  }
+}
+
+@keyframes glow-pulse {
+  0% {
+    box-shadow: 0 0 20px var(--glow-primary), 0 0 40px var(--glow-secondary);
+  }
+  100% {
+    box-shadow: 0 0 30px var(--glow-primary), 0 0 60px var(--glow-secondary);
+  }
+}
+
+@keyframes edge-glow {
+  0% {
+    filter: drop-shadow(0 0 6px var(--glow-primary));
+  }
+  100% {
+    filter: drop-shadow(0 0 12px var(--glow-primary));
+  }
+}
+
+@keyframes data-flow {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: 20;
+  }
+}
+
+.vast-edge.flowing {
+  stroke-dasharray: 10, 5;
+  animation: data-flow 2s linear infinite;
+}
+
+/* Curved edge styles */
+.vast-edge.curved {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vast-edge.animated {
+  stroke-dasharray: 8, 4;
+  animation: data-flow 1.5s linear infinite;
+}
+
+/* VAST Data Typography */
+.vast-title {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.vast-subtitle {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.vast-body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 400;
+  color: var(--text-primary);
+}
+
+/* VAST Data Button Styles */
+.vast-button {
+  background: linear-gradient(135deg, var(--vast-primary), var(--vast-secondary));
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.vast-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px var(--shadow-primary);
+}
+
+.vast-button:active {
+  transform: translateY(0);
+}
+
+/* VAST Data Card Styles */
+.vast-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.vast-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px var(--shadow-primary);
+  border-color: var(--vast-primary);
+  background: var(--bg-hover);
+}
+
+/* VAST Data Status Indicators */
+.vast-status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.vast-status-dot.active {
+  background: var(--status-active);
+  box-shadow: 0 0 8px var(--shadow-primary);
+}
+
+.vast-status-dot.processing {
+  background: var(--status-processing);
+  box-shadow: 0 0 8px var(--shadow-accent);
+  animation: pulse 2s infinite;
+}
+
+.vast-status-dot.error {
+  background: var(--status-error);
+}
+
+.vast-status-dot.idle {
+  background: var(--status-idle);
+}
+
+/* Custom Range Slider Styles */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--vast-primary);
+  cursor: pointer;
+  border: 2px solid var(--bg-card);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 255, 136, 0.4);
+}
+
+.slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--vast-primary);
+  cursor: pointer;
+  border: 2px solid var(--bg-card);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.slider::-moz-range-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 255, 136, 0.4);
+}
+
+/* Fade-in animation for messages */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}

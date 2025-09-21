@@ -12,7 +12,7 @@ import {
 // ============================================================================
 // Main Dashboard Component
 // ============================================================================
-const TestPage = () => {
+const PipelineMonitorTestPage = () => {
     const [selectedNode, setSelectedNode] = useState(null);
     const [debugMode, setDebugMode] = useState(false);
     const [isConnected, setIsConnected] = useState(true);
@@ -167,7 +167,7 @@ const TestPage = () => {
 // ============================================================================
 // Pipeline Flow Canvas Component
 // ============================================================================
-export const PipelineFlowCanvas = ({ pipelineState, onNodeSelect, debugMode }) => {
+const PipelineFlowCanvas = ({ pipelineState, onNodeSelect, debugMode }) => {
     const nodePositions = {
         query_input: { x: 150, y: 200 },
         embedding: { x: 350, y: 200 },
@@ -261,7 +261,7 @@ const statusColors = {
     pending: 'bg-purple-600 border-purple-400 shadow-purple-500/30'
 };
 
-export const PipelineNode = ({ stage, position, onClick, debugMode }) => {
+const PipelineNode = ({ stage, position, onClick, debugMode }) => {
     const [isHovered, setIsHovered] = useState(false);
     const Icon = nodeIcons[stage.id] || Cpu;
     
@@ -351,7 +351,7 @@ export const PipelineNode = ({ stage, position, onClick, debugMode }) => {
 // ============================================================================
 // Flow Connection Component
 // ============================================================================
-export const FlowConnection = ({ from, to, active, debugMode }) => {
+const FlowConnection = ({ from, to, active, debugMode }) => {
     const midX = (from.x + to.x) / 2;
     const midY = (from.y + to.y) / 2;
     
@@ -401,7 +401,7 @@ export const FlowConnection = ({ from, to, active, debugMode }) => {
 // ============================================================================
 // Real-time Metrics Panel Component
 // ============================================================================
-export const RealTimeMetricsPanel = ({ metrics }) => {
+const RealTimeMetricsPanel = ({ metrics }) => {
     const metricCards = [
         {
             title: 'Queries/Min',
@@ -500,7 +500,7 @@ export const RealTimeMetricsPanel = ({ metrics }) => {
 // ============================================================================
 // Node Details Panel Component
 // ============================================================================
-export const NodeDetailsPanel = ({ node, onClose }) => {
+const NodeDetailsPanel = ({ node, onClose }) => {
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -568,4 +568,6 @@ export const NodeDetailsPanel = ({ node, onClose }) => {
             </div>
         </div>
     );
-};export default TestPage;
+};
+
+export default PipelineMonitorTestPage;

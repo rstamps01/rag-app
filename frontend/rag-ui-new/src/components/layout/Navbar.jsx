@@ -1,22 +1,67 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { ChevronDown, Monitor, Zap, FileText, TestTube } from 'lucide-react';
 
 const Navbar = () => {
   const location = useLocation();
+  const [isDashboardsOpen, setIsDashboardsOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   const navItems = [
     { path: '/', label: 'Home' },
     { path: '/documents', label: 'Documents' },
-    { path: '/queries', label: 'Queries' },
-    { path: '/monitoring', label: 'Pipeline Monitor' },
-    { path: '/dynamic-pipeline', label: 'Dynamic Pipeline' },
-    { path: '/test', label: 'Test Page' }
+    { path: '/queries', label: 'Queries' }
   ];
+
+  const dashboardItems = [
+    { 
+      path: '/monitoring', 
+      label: 'Pipeline Monitor', 
+      icon: Monitor,
+      description: 'Real-time pipeline monitoring with debug console'
+    },
+    { 
+      path: '/dynamic-pipeline', 
+      label: 'Dynamic Pipeline', 
+      icon: Zap,
+      description: 'Interactive pipeline visualization'
+    },
+    { 
+      path: '/documentation-processing', 
+      label: 'Documentation Processing', 
+      icon: FileText,
+      description: 'Document processing workflow'
+    },
+    { 
+      path: '/test', 
+      label: 'Test Page', 
+      icon: TestTube,
+      description: 'Testing and development tools'
+    }
+  ];
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDashboardsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const isActive = (path) => {
     if (path === '/' && location.pathname === '/') return true;
     if (path !== '/' && location.pathname.startsWith(path)) return true;
     return false;
+  };
+
+  const isDashboardActive = () => {
+    return dashboardItems.some(item => isActive(item.path));
   };
 
   return (
@@ -46,6 +91,79 @@ const Navbar = () => {
                   {item.label}
                 </Link>
               ))}
+              
+              {/* Dashboards Dropdown */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setIsDashboardsOpen(!isDashboardsOpen)}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-1 ${
+                    isDashboardActive()
+                      ? 'text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
+                  }`}
+                >
+                  <span>Dashboards</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${
+                    isDashboardsOpen ? 'rotate-180' : ''
+                  }`} />
+                </button>
+
+                {/* Dropdown Menu */}
+                {isDashboardsOpen && (
+                  <div className="absolute top-full left-0 mt-1 w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50">
+                    <div className="p-2">
+                      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">
+                        Available Dashboards
+                      </div>
+                      {dashboardItems.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <Link
+                            key={item.path}
+                            to={item.path}
+                            onClick={() => setIsDashboardsOpen(false)}
+                            className={`flex items-start space-x-3 px-3 py-3 rounded-lg transition-colors duration-200 ${
+                              isActive(item.path)
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                            }`}
+                          >
+                            <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium">{item.label}</div>
+                              <div className="text-xs text-gray-400 mt-1">{item.description}</div>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                      
+                      {/* Status Bar Section */}
+                      <div className="border-t border-gray-700 mt-3 pt-3">
+                        <div className="px-3 py-2">
+                          {/* Connected Status and Debug Button */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                              <span className="text-white text-sm">Connected (Live Data)</span>
+                            </div>
+                            
+                            <button
+                              onClick={() => {
+                                setIsDashboardsOpen(false);
+                                // Navigate to monitoring page to show debug menu
+                                window.location.href = '/monitoring';
+                              }}
+                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                            >
+                              Debug
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -94,6 +212,33 @@ const Navbar = () => {
               {item.label}
             </Link>
           ))}
+          
+          {/* Mobile Dashboard Items */}
+          <div className="border-t border-gray-700 pt-2 mt-2">
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-3">
+              Dashboards
+            </div>
+            {dashboardItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`flex items-start space-x-3 px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
+                    isActive(item.path)
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                  }`}
+                >
+                  <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div>{item.label}</div>
+                    <div className="text-xs text-gray-400 mt-1">{item.description}</div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       </div>
     </nav>
