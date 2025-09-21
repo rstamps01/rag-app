@@ -221,7 +221,7 @@ class EnhancedMetricsCollector:
         try:
             response = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: requests.get(f"{self.backend_url}/api/v1/health", timeout=5)
+                lambda: requests.get(f"{self.backend_url}/health", timeout=5)
             )
             
             if response.status_code == 200:
@@ -242,7 +242,7 @@ class EnhancedMetricsCollector:
             response = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: requests.get(
-                    f"{self.backend_url}/api/v1/health",
+                    f"{self.backend_url}/health",
                     timeout=5
                 )
             )
