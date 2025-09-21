@@ -556,7 +556,8 @@ def update_pipeline_monitoring_component(project_dir):
     old_url_patterns = [
         'ws://backend-07:8000/ws/pipeline-monitoring',
         'ws://localhost:8000/ws/pipeline-monitoring',
-        'ws://backend-07:8000/api/v1/ws/pipeline-monitoring'
+        'ws://backend-07:8000/api/v1/ws/pipeline-monitoring',
+        'ws://localhost:8000/api/v1/ws/pipeline-monitoring'
     ]
     
     new_url = 'ws://localhost:8000/api/v1/ws/pipeline-monitoring'

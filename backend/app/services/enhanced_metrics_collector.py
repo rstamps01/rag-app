@@ -327,103 +327,109 @@ class EnhancedMetricsCollector:
     async def _collect_postgres_metrics(self):
         """Collect PostgreSQL-specific metrics"""
         try:
-            import psycopg2
-            conn = psycopg2.connect(self.postgres_url)
-            cursor = conn.cursor()
+            # Use SQLAlchemy connection pool instead of direct psycopg2
+            from app.db.session import get_db
+            from sqlalchemy import text
             
-            # Get active connections
+            db = next(get_db())
             try:
-                cursor.execute("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
-                self.postgres_metrics.active_connections = cursor.fetchone()[0]
+            
+                # Get active connections
+                try:
+                    result = db.execute(text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"))
+                    self.postgres_metrics.active_connections = result.scalar()
+                except Exception as e:
+                    safe_log("debug", f"Error getting active connections: {e}")
+                    self.postgres_metrics.active_connections = 0
+                
+                # Get total connections
+                try:
+                    result = db.execute(text("SELECT count(*) FROM pg_stat_activity"))
+                    self.postgres_metrics.total_connections = result.scalar()
+                except Exception as e:
+                    safe_log("debug", f"Error getting total connections: {e}")
+                    self.postgres_metrics.total_connections = 0
+                
+                # Get database size
+                try:
+                    result = db.execute(text("SELECT pg_database_size(current_database())"))
+                    self.postgres_metrics.database_size = result.scalar()
+                except Exception as e:
+                    safe_log("debug", f"Error getting database size: {e}")
+                    self.postgres_metrics.database_size = 0
+            
+                # Get cache hit ratio
+                try:
+                    result = db.execute(text("""
+                        SELECT 
+                            round(100.0 * sum(blks_hit) / (sum(blks_hit) + sum(blks_read)), 2) as cache_hit_ratio
+                        FROM pg_stat_database 
+                        WHERE datname = current_database()
+                    """))
+                    cache_hit_ratio = result.scalar()
+                    if cache_hit_ratio:
+                        self.postgres_metrics.cache_hit_ratio = float(cache_hit_ratio)
+                except Exception as e:
+                    safe_log("debug", f"Error getting cache hit ratio: {e}")
+                    self.postgres_metrics.cache_hit_ratio = 0.0
+            
+                # Get query performance metrics (only if pg_stat_statements extension is available)
+                try:
+                    result = db.execute(text("""
+                        SELECT 
+                            round(avg(mean_exec_time), 2) as avg_query_time
+                        FROM pg_stat_statements 
+                        WHERE calls > 0
+                    """))
+                    avg_query_time = result.scalar()
+                    if avg_query_time:
+                        self.postgres_metrics.query_performance = float(avg_query_time)
+                except Exception as e:
+                    # pg_stat_statements extension not available, use fallback
+                    safe_log("debug", f"pg_stat_statements not available, using fallback: {e}")
+                    self.postgres_metrics.query_performance = 0.0
+            
+                # Get table statistics
+                try:
+                    result = db.execute(text("""
+                        SELECT 
+                            schemaname,
+                            tablename,
+                            n_tup_ins as inserts,
+                            n_tup_upd as updates,
+                            n_tup_del as deletes
+                        FROM pg_stat_user_tables 
+                        ORDER BY n_tup_ins + n_tup_upd + n_tup_del DESC
+                        LIMIT 5
+                    """))
+                    table_stats = result.fetchall()
+                    self.postgres_metrics.table_stats = [
+                        {
+                            "schema": row[0],
+                            "table": row[1],
+                            "inserts": row[2],
+                            "updates": row[3],
+                            "deletes": row[4]
+                        }
+                        for row in table_stats
+                    ]
+                except Exception as e:
+                    safe_log("debug", f"Error getting table statistics: {e}")
+                    self.postgres_metrics.table_stats = []
+            
+                # Set connection status to connected
+                self.postgres_metrics.connection_status = "connected"
+                self.postgres_metrics.last_health_check = datetime.now()
+                
             except Exception as e:
-                safe_log("debug", f"Error getting active connections: {e}")
-                self.postgres_metrics.active_connections = 0
-            
-            # Get total connections
-            try:
-                cursor.execute("SELECT count(*) FROM pg_stat_activity")
-                self.postgres_metrics.total_connections = cursor.fetchone()[0]
-            except Exception as e:
-                safe_log("debug", f"Error getting total connections: {e}")
-                self.postgres_metrics.total_connections = 0
-            
-            # Get database size
-            try:
-                cursor.execute("SELECT pg_database_size(current_database())")
-                self.postgres_metrics.database_size = cursor.fetchone()[0]
-            except Exception as e:
-                safe_log("debug", f"Error getting database size: {e}")
-                self.postgres_metrics.database_size = 0
-            
-            # Get cache hit ratio
-            try:
-                cursor.execute("""
-                    SELECT 
-                        round(100.0 * sum(blks_hit) / (sum(blks_hit) + sum(blks_read)), 2) as cache_hit_ratio
-                    FROM pg_stat_database 
-                    WHERE datname = current_database()
-                """)
-                result = cursor.fetchone()
-                if result and result[0]:
-                    self.postgres_metrics.cache_hit_ratio = float(result[0])
-            except Exception as e:
-                safe_log("debug", f"Error getting cache hit ratio: {e}")
-                self.postgres_metrics.cache_hit_ratio = 0.0
-            
-            # Get query performance metrics (only if pg_stat_statements extension is available)
-            try:
-                cursor.execute("""
-                    SELECT 
-                        round(avg(mean_exec_time), 2) as avg_query_time
-                    FROM pg_stat_statements 
-                    WHERE calls > 0
-                """)
-                result = cursor.fetchone()
-                if result and result[0]:
-                    self.postgres_metrics.query_performance = float(result[0])
-            except Exception as e:
-                # pg_stat_statements extension not available, use fallback
-                safe_log("debug", f"pg_stat_statements not available, using fallback: {e}")
-                self.postgres_metrics.query_performance = 0.0
-            
-            # Get table statistics
-            try:
-                cursor.execute("""
-                    SELECT 
-                        schemaname,
-                        tablename,
-                        n_tup_ins as inserts,
-                        n_tup_upd as updates,
-                        n_tup_del as deletes
-                    FROM pg_stat_user_tables 
-                    ORDER BY n_tup_ins + n_tup_upd + n_tup_del DESC
-                    LIMIT 5
-                """)
-                table_stats = cursor.fetchall()
-                self.postgres_metrics.table_stats = [
-                    {
-                        "schema": row[0],
-                        "table": row[1],
-                        "inserts": row[2],
-                        "updates": row[3],
-                        "deletes": row[4]
-                    }
-                    for row in table_stats
-                ]
-            except Exception as e:
-                safe_log("debug", f"Error getting table statistics: {e}")
-                self.postgres_metrics.table_stats = []
-            
-            # Set connection status to connected
-            self.postgres_metrics.connection_status = "connected"
-            self.postgres_metrics.last_health_check = datetime.now()
-            
-            cursor.close()
-            conn.close()
-            
-        except Exception as e:
-            logger.debug(f"PostgreSQL metrics collection failed: {e}")
-            self.postgres_metrics.connection_status = "disconnected"
+                logger.debug(f"PostgreSQL metrics collection failed: {e}")
+                self.postgres_metrics.connection_status = "disconnected"
+            finally:
+                # Ensure database session is closed
+                try:
+                    db.close()
+                except:
+                    pass
     
     async def _collect_pipeline_metrics(self):
         """Collect pipeline-specific metrics from actual backend data"""
