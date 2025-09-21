@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.exc import DisconnectionError, OperationalError
@@ -56,7 +56,7 @@ def get_db_with_retry(max_retries: int = 3, retry_delay: float = 1.0):
             db = SessionLocal()
             try:
                 # Test the connection
-                db.execute("SELECT 1")
+                db.execute(text("SELECT 1"))
                 yield db
                 return
             except Exception as e:
@@ -88,7 +88,7 @@ def check_database_health() -> bool:
     try:
         db = SessionLocal()
         try:
-            result = db.execute("SELECT 1").scalar()
+            result = db.execute(text("SELECT 1")).scalar()
             return result == 1
         finally:
             db.close()

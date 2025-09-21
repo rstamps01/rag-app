@@ -4,7 +4,7 @@ Enhanced Database Session Manager
 Provides connection pooling, health checks, and error handling
 """
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 from app.core.config import settings
@@ -55,7 +55,7 @@ class DatabaseManager:
         """Test database connection"""
         try:
             with self.engine.connect() as conn:
-                conn.execute("SELECT 1")
+                conn.execute(text("SELECT 1"))
             self.is_connected = True
             logger.info("✅ Database connection healthy")
         except Exception as e:
@@ -76,7 +76,7 @@ class DatabaseManager:
         """Perform database health check"""
         try:
             with self.get_session() as session:
-                session.execute("SELECT 1")
+                session.execute(text("SELECT 1"))
             return True
         except Exception:
             return False
