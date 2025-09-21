@@ -127,10 +127,10 @@ class RealTimePipelineService {
     try {
       // Try different possible WebSocket endpoints
       const endpoints = [
-        'ws://backend-07:8000/api/v1/ws/pipeline-monitoring',
         'ws://localhost:8000/api/v1/ws/pipeline-monitoring',
-        'ws://backend-07:8000/ws/pipeline-monitoring',
-        'ws://localhost:8000/ws/pipeline-monitoring'
+        'ws://backend-07:8000/api/v1/ws/pipeline-monitoring',
+        'ws://localhost:8000/ws/pipeline-monitoring',
+        'ws://backend-07:8000/ws/pipeline-monitoring'
       ];
 
       let connected = false;
