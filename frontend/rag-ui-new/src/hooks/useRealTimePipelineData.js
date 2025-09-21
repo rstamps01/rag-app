@@ -81,7 +81,7 @@ export const useRealTimePipelineData = () => {
             const fallbackData = realTimePipelineService.generatePipelineData();
             setPipelineData(fallbackData);
           }
-        }, 3000); // 3 second timeout
+        }, 10000); // 10 second timeout
 
         return () => clearTimeout(timeout);
 

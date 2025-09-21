@@ -1185,13 +1185,7 @@ async def get_health_status():
         logger.error(f"Failed to get health status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get health status: {str(e)}")
 
-# Include WebSocket router if available
-if websocket_available:
-    try:
-        app.include_router(websocket_router, prefix="/api/v1", tags=["websocket"])
-        logger.info("✅ WebSocket router included successfully")
-    except Exception as e:
-        logger.error(f"❌ Error including WebSocket router: {e}")
+# WebSocket router already included above
 
 # Include monitoring router if available  
 if monitoring_available:

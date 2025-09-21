@@ -49,6 +49,7 @@ class PipelineMetrics:
     active_queries: int = 0
     success_rate: float = 0.0
     error_rate: float = 0.0
+    last_health_check: Optional[datetime] = None
 
 @dataclass
 class ConnectionStatusMetrics:

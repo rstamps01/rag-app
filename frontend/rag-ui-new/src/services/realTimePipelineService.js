@@ -139,15 +139,15 @@ class RealTimePipelineService {
           this.ws = new WebSocket(endpoint);
           this.setupWebSocketHandlers(endpoint);
           connected = true;
-          console.log(`🔌 Connected to WebSocket: ${endpoint}`);
+          console.log(`🔌 WebSocket created for: ${endpoint}`);
           break;
         } catch (error) {
-          console.warn(`❌ Failed to connect to ${endpoint}:`, error.message);
+          console.warn(`❌ Failed to create WebSocket for ${endpoint}:`, error.message);
         }
       }
 
       if (!connected) {
-        throw new Error('Could not connect to any WebSocket endpoint');
+        throw new Error('Could not create WebSocket connection to any endpoint');
       }
 
     } catch (error) {
