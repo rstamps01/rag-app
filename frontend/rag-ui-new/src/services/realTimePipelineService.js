@@ -207,9 +207,9 @@ class RealTimePipelineService {
     console.log('📊 Received WebSocket data:', data);
 
     if (data.type === 'metrics_update' && data.data) {
-      this.updateMetrics(data.data);
+      this.updateBackendMetrics(data.data);
     } else if (data.type === 'initial_state' && data.data) {
-      this.updateMetrics(data.data);
+      this.updateBackendMetrics(data.data);
     }
 
     this.notifyListeners('data', this.metrics);
