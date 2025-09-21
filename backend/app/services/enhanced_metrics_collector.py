@@ -237,13 +237,13 @@ class EnhancedMetricsCollector:
     async def _check_llm_service_health(self):
         """Check LLM service health"""
         try:
-            # Test LLM service by checking if it can process a simple query
+            # Test LLM service by checking if the endpoint is available
+            # (without actually submitting a query to avoid spam)
             response = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: requests.post(
-                    f"{self.backend_url}/api/v1/queries/ask",
-                    json={"query": "test", "department": "General"},
-                    timeout=10
+                lambda: requests.get(
+                    f"{self.backend_url}/api/v1/health",
+                    timeout=5
                 )
             )
             

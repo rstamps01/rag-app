@@ -281,9 +281,10 @@ class ConnectionManager:
         # Check PostgreSQL database connection
         try:
             from app.db.session import get_db
+            from sqlalchemy import text
             db = next(get_db())
             # Simple query to test connection
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))
             status["database"] = "healthy"
         except Exception as e:
             safe_log("warning", f"Database health check failed: {e}")
@@ -291,10 +292,10 @@ class ConnectionManager:
         
         # Check Qdrant vector database connection
         try:
-            from app.services.vector_search import get_qdrant_client
-            qdrant = get_qdrant_client()
-            # Check if we can list collections
-            collections = qdrant.get_collections()
+            from app.services.integrated_vector_db_service import IntegratedVectorDBService
+            vector_service = IntegratedVectorDBService()
+            # Test connection by getting collections
+            collections = vector_service.get_collections()
             status["vector_db"] = "healthy"
         except Exception as e:
             safe_log("warning", f"Vector DB health check failed: {e}")
