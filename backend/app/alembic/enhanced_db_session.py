@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 engine = create_engine(
     settings.DATABASE_URL,
     poolclass=QueuePool,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=20,
+    max_overflow=40,
     pool_pre_ping=True,
     pool_recycle=3600,  # Recycle connections every hour
     pool_timeout=30,
