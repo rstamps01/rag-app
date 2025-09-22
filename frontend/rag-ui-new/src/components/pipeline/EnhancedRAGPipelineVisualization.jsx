@@ -478,17 +478,20 @@ const initialEdges = [
   }
 ];
 
-const EnhancedRAGPipelineVisualization = ({ debugMode = false }) => {
+const EnhancedRAGPipelineVisualization = ({ debugMode = false, pipelineData: externalPipelineData = null }) => {
   // Real-time data hook
   const { 
     isConnected, 
     isLoading, 
     error, 
-    pipelineData, 
+    pipelineData: hookPipelineData, 
     systemMetrics, 
     refresh, 
     reconnect 
   } = useRealTimePipelineData();
+
+  // Use external pipeline data if provided, otherwise use hook data
+  const pipelineData = externalPipelineData || hookPipelineData;
 
   // Debug logging
   React.useEffect(() => {

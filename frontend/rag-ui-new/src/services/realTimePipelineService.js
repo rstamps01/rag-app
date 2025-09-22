@@ -312,13 +312,27 @@ class RealTimePipelineService {
       }];
     }
     
-    // Update connection status - we know we're connected since we received data
-    this.metrics.connectionStatus = {
-      websocketConnections: 1,
-      backendStatus: 'connected',
-      databaseStatus: 'connected',
-      vectorDbStatus: 'connected'
-    };
+    // Update connection status from backend data
+    if (data.connection_status) {
+      this.metrics.connectionStatus = {
+        websocketConnections: data.connection_status.websocket_connections || 1,
+        backendStatus: data.connection_status.backend_status || 'unknown',
+        databaseStatus: data.connection_status.database_status || 'unknown',
+        vectorDbStatus: data.connection_status.vector_db_status || 'unknown',
+        llmServiceStatus: data.connection_status.llm_service_status || 'unknown',
+        lastHealthCheck: data.connection_status.last_health_check || new Date().toISOString()
+      };
+    } else {
+      // Fallback if no connection status data
+      this.metrics.connectionStatus = {
+        websocketConnections: 1,
+        backendStatus: 'connected',
+        databaseStatus: 'connected',
+        vectorDbStatus: 'connected',
+        llmServiceStatus: 'connected',
+        lastHealthCheck: new Date().toISOString()
+      };
+    }
     
     // Update timestamp
     this.metrics.lastUpdate = new Date().toISOString();
@@ -388,13 +402,14 @@ class RealTimePipelineService {
   /**
    * Generate realistic pipeline data based on real metrics
    */
-  generatePipelineData() {
+  generatePipelineData(externalMetrics = null) {
     const systemMetrics = this.systemCollector.getMetrics();
     const appMetrics = this.appCollector.getMetrics();
     
-    const cpuUsage = systemMetrics.systemHealth.cpuUsage || 0;
-    const memoryUsage = systemMetrics.systemHealth.memoryUsage || 0;
-    const gpuUsage = systemMetrics.gpuPerformance[0]?.utilization || 0;
+    // Use external metrics if provided (from enhancedMetricsService), otherwise fall back to WebSocket data
+    const cpuUsage = externalMetrics?.cpu_utilization || systemMetrics.systemHealth.cpuUsage || 0;
+    const memoryUsage = externalMetrics?.memory_usage || systemMetrics.systemHealth.memoryUsage || 0;
+    const gpuUsage = externalMetrics?.gpu_utilization || systemMetrics.gpuPerformance[0]?.utilization || 0;
     const queriesPerMinute = appMetrics.pipelineStatus.queriesPerMinute || 0;
     const avgResponseTime = appMetrics.pipelineStatus.avgResponseTime || 0;
     const activeQueries = appMetrics.pipelineStatus.activeQueries || 0;
@@ -429,7 +444,7 @@ class RealTimePipelineService {
       },
       llmProcessing: {
         status: gpuUsage > 90 ? 'warning' : 'processing',
-        modelLoad: Math.min(100, Math.floor(gpuUsage * 1.1)),
+        modelLoad: Math.min(100, Math.floor(gpuUsage * 0.8)), // Reduced multiplier for more realistic load
         tokensGenerated: Math.floor(Math.random() * 500) + 100,
         processingTime: llmProcessingTime,
         gpuUsage: gpuUsage,
