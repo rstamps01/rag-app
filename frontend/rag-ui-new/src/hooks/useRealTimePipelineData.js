@@ -63,6 +63,10 @@ export const useRealTimePipelineData = () => {
                 // Generate pipeline data based on system metrics
                 const generatedData = realTimePipelineService.generatePipelineData();
                 setPipelineData(generatedData);
+                // Set loading to false when we receive data
+                setIsLoading(false);
+                setIsConnected(true);
+                setError(null);
               }
               break;
 
