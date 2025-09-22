@@ -361,7 +361,7 @@ class EnhancedMetricsCollector:
                 try:
                     result = db.execute(text("""
                         SELECT 
-                            round(100.0 * sum(blks_hit) / (sum(blks_hit) + sum(blks_read)), 2) as cache_hit_ratio
+                            round((100.0 * sum(blks_hit) / (sum(blks_hit) + sum(blks_read)))::numeric, 2) as cache_hit_ratio
                         FROM pg_stat_database 
                         WHERE datname = current_database()
                     """))
@@ -376,7 +376,7 @@ class EnhancedMetricsCollector:
                 try:
                     result = db.execute(text("""
                         SELECT 
-                            round(avg(mean_exec_time), 2) as avg_query_time
+                            round(avg(mean_exec_time)::numeric, 2) as avg_query_time
                         FROM pg_stat_statements 
                         WHERE calls > 0
                     """))
