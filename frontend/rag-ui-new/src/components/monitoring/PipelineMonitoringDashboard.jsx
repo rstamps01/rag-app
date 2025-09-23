@@ -24,8 +24,8 @@ const PipelineMonitoringDashboard = () => {
   const [enhancedMetrics, setEnhancedMetrics] = useState(null);
   
   // Use real-time data hook
-  const { 
-    isConnected, 
+  const {
+    isConnected,
     isLoading, 
     error, 
     pipelineData, 
@@ -107,14 +107,14 @@ const PipelineMonitoringDashboard = () => {
 
   // Show loading state
   if (isLoading) {
-    return (
+  return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
           <h2 className="text-xl font-semibold mb-2">Loading Pipeline Data...</h2>
           <p className="text-gray-400">Connecting to real-time monitoring service</p>
         </div>
-      </div>
+          </div>
     );
   }
 
@@ -227,7 +227,7 @@ const PipelineMonitoringDashboard = () => {
                   <h2 className="text-lg font-bold text-white">Metrics & Debug</h2>
                   <p className="text-xs text-gray-400">Last updated: {new Date().toLocaleTimeString()}</p>
                 </div>
-              </div>
+          </div>
               <button
                 onClick={() => setMenuOpen(false)}
                 className="text-gray-400 hover:text-white transition-colors"
@@ -318,8 +318,8 @@ const PipelineMonitoringDashboard = () => {
                     <div>Search Latency: {realTimeMetrics.qdrant_metrics.search_latency || 0}ms</div>
                     <div>Status: {realTimeMetrics.qdrant_metrics.connection_status || 'Unknown'}</div>
                   </div>
-                </div>
-              )}
+              </div>
+            )}
 
               {/* PostgreSQL Metrics */}
               {realTimeMetrics.postgres_metrics && (
@@ -335,16 +335,16 @@ const PipelineMonitoringDashboard = () => {
                     <div>Cache Hit Ratio: {realTimeMetrics.postgres_metrics.cache_hit_ratio || 0}%</div>
                     <div>Status: {realTimeMetrics.postgres_metrics.connection_status || 'Unknown'}</div>
                   </div>
-                </div>
-              )}
+          </div>
+        )}
 
               {/* Document Processing Metrics */}
               <div>
                 <div className="flex items-center space-x-2 mb-4">
                   <FileText className="w-5 h-5 text-blue-400" />
                   <h3 className="text-lg font-semibold text-white">Document Processing</h3>
-                </div>
-                
+      </div>
+
                 <div className="space-y-3">
                   <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
