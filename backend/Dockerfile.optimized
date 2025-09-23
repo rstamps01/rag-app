@@ -2,23 +2,23 @@
 FROM rag-app-07-backend-base:latest
 
 # Copy only requirements first for better caching
-COPY requirements.txt .
+COPY backend/requirements.txt .
 
 # Install remaining dependencies (much faster now)
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY app/ ./app/
-COPY alembic.ini .
-COPY .env* ./
+COPY backend/app/ ./app/
+COPY backend/alembic.ini .
+COPY backend/.env* ./
 
 # Setup directories
 RUN mkdir -p /app/models_cache /app/scripts /app/logs /app/config /app/data/logs /app/data/uploads /tmp/triton_cache \
     && chmod 755 /app/models_cache /app/logs
 
 # Copy scripts
-COPY scripts/model_cache_utils.py /app/scripts/
-COPY scripts/initialize_model_cache.py /app/scripts/
+COPY backend/scripts/model_cache_utils.py /app/scripts/
+COPY backend/scripts/initialize_model_cache.py /app/scripts/
 
 # Setup cache config
 RUN if [ ! -f config/cache_config.json ]; then \

@@ -17,10 +17,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Install Python dependencies
-RUN pip3 install --no-cache-dir \
+# Create Python symlinks
+RUN if [ ! -f /usr/bin/python ]; then ln -s /usr/bin/python3 /usr/bin/python; fi
+RUN if [ ! -f /usr/bin/pip ]; then ln -s /usr/bin/pip3 /usr/bin/pip; fi
+
+# Install PyTorch with CUDA support first
+RUN pip install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/cu129 \
-    pytorch-triton --index-url https://download.pytorch.org/whl/nightly/cu129 \
+    pytorch-triton --index-url https://download.pytorch.org/whl/nightly/cu129
+
+# Install other ML dependencies from PyPI
+RUN pip install --no-cache-dir \
     transformers==4.53.2 \
     sentence-transformers==5.0.0 \
     qdrant-client==1.7.0 \

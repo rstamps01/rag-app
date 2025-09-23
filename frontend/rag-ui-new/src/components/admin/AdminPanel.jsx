@@ -31,8 +31,9 @@ const AdminPanel = () => {
       try {
         setInitialLoading(true);
         setError(null);
-        // Don't load data immediately, let user click to load
-        console.log('Admin panel initialized');
+        // Load initial data
+        await Promise.all([loadStats(), loadDocuments()]);
+        console.log('Admin panel initialized with data');
       } catch (err) {
         console.error('Failed to initialize admin panel:', err);
         setError('Failed to initialize admin panel: ' + err.message);
@@ -208,33 +209,6 @@ const AdminPanel = () => {
     );
   }
 
-  // Simple test to see if component renders
-  if (!stats && !error) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">🔧 Admin Panel</h1>
-            <p className="text-gray-600 mb-4">Admin panel is working! Click the buttons below to test functionality.</p>
-            <div className="space-y-4">
-              <button 
-                onClick={loadStats}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-              >
-                Load Statistics
-              </button>
-              <button 
-                onClick={loadDocuments}
-                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 ml-4"
-              >
-                Load Documents
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // Show error state
   if (error) {

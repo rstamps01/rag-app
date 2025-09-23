@@ -375,7 +375,7 @@ async def admin_stats_overview(db: Session = Depends(get_db)):
             "documents": {
                 "total": db.query(Document).count(),
                 "with_files": db.query(Document).filter(Document.path.isnot(None)).count(),
-                "vector_stored": db.query(Document).filter(Document.vector_stored == True).count()
+                "processed": db.query(Document).filter(Document.status == "completed").count()
             },
             "queries": {
                 "total": db.query(QueryHistory).count(),

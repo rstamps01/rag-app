@@ -6,14 +6,40 @@ This guide explains how to use the staged build approach to significantly reduce
 ## 🏗️ **Staged Build Architecture**
 
 ### Base Image (Dockerfile.base)
-- Contains all heavy ML dependencies (PyTorch, Transformers, etc.)
-- Built once and reused across multiple builds
-- ~2-3 minutes to build initially, then cached
+**Purpose**: Contains heavy, stable dependencies that rarely change
+**What it includes**:
+- **System Dependencies**: Python 3, build tools, system libraries
+- **Heavy ML Libraries**: PyTorch, CUDA support, Transformers, Sentence-Transformers
+- **Core ML Dependencies**: NumPy, Pandas, SciPy, Qdrant client
+- **Python Symlinks**: `python` → `python3`, `pip` → `pip3`
+
+**Size**: ~3-4 GB (mostly ML libraries)
+**Build Time**: ~4 minutes (first time only)
+**When it changes**: Rarely - only when ML library versions change
 
 ### Optimized Image (Dockerfile.optimized)
-- Uses pre-built base image
-- Only installs application-specific dependencies
-- ~30-60 seconds to build
+**Purpose**: Contains application-specific code and dependencies
+**What it includes**:
+- **Application Code**: Your RAG app source code (`/app/`)
+- **Web Framework**: FastAPI, Uvicorn, WebSockets
+- **Database Libraries**: SQLAlchemy, Alembic, PostgreSQL drivers
+- **Document Processing**: PyPDF2, python-docx, pytesseract
+- **Development Tools**: pytest, black, flake8
+- **Configuration**: Environment files, scripts, health checks
+
+**Size**: ~500MB-1GB (mostly application code)
+**Build Time**: ~30 seconds (uses cached base image)
+**When it changes**: Frequently - every code change
+
+## 🔄 **Functional Workflow**
+
+```
+Code Change Made?
+├── Application Code → Build Optimized Image Only (30s)
+├── ML Libraries → Rebuild Base Image + Optimized (4-5min)
+├── System Dependencies → Rebuild Base Image + Optimized (4-5min)
+└── Development → Use Hot Reload Mode (instant updates)
+```
 
 ## 🚀 **Quick Start**
 
@@ -34,8 +60,149 @@ This guide explains how to use the staged build approach to significantly reduce
 
 ### 3. Development Mode
 ```bash
-# Hot reloading for development
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up backend-07
+# Hot reloading for development (detached mode)
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d backend-07
+
+# To stop development mode
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
+```
+
+## 📋 **Detailed Usage Scenarios**
+
+### **Scenario 1: First Time Setup**
+**When**: Setting up the project for the first time
+**What happens**: Downloads and installs all ML dependencies
+**Time**: ~4-5 minutes
+```bash
+# Build everything from scratch
+./scripts/build-backend.sh --rebuild-base
+```
+
+### **Scenario 2: Code Changes (Most Common)**
+**When**: Making changes to application code, API routes, or configuration
+**What happens**: Only rebuilds optimized image using cached base
+**Time**: ~30 seconds
+```bash
+# Fast rebuild for code changes
+./scripts/build-backend.sh
+```
+
+### **Scenario 3: ML Library Updates**
+**When**: Updating PyTorch, Transformers, or other ML dependencies
+**What happens**: Rebuilds base image with new ML libraries
+**Time**: ~4-5 minutes
+```bash
+# Rebuild base image with updated ML libraries
+./scripts/build-backend.sh --rebuild-base
+```
+
+### **Scenario 4: System Dependency Changes**
+**When**: Updating Python version, CUDA, or system libraries
+**What happens**: Rebuilds base image with new system dependencies
+**Time**: ~4-5 minutes
+```bash
+# Rebuild base image with updated system dependencies
+./scripts/build-backend.sh --rebuild-base
+```
+
+### **Scenario 5: Development with Hot Reload**
+**When**: Active development with frequent code changes
+**What happens**: Mounts source code for instant updates
+**Time**: ~30 seconds initial + instant updates
+```bash
+# Development mode with hot reload (detached)
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d backend-07
+
+# To stop development mode
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
+```
+
+### **Scenario 6: Clean Build (Troubleshooting)**
+**When**: Encountering build issues or wanting a completely fresh build
+**What happens**: Rebuilds everything from scratch
+**Time**: ~4-5 minutes
+```bash
+# Clean build - removes all cached layers
+docker system prune -f
+./scripts/build-backend.sh --rebuild-base
+```
+
+### **Scenario 7: CI/CD Pipeline**
+**When**: Automated builds in CI/CD
+**What happens**: Uses cached base image, builds optimized image
+**Time**: ~30 seconds
+```bash
+# CI/CD build (assumes base image exists)
+./scripts/build-backend.sh
+```
+
+## 🎯 **Decision Tree: Which Command to Use?**
+
+```
+Code Change Made?
+├── Yes → Application code/API/config?
+│   ├── Yes → ./scripts/build-backend.sh
+│   └── No → ML libraries/system deps?
+│       ├── Yes → ./scripts/build-backend.sh --rebuild-base
+│       └── No → ./scripts/build-backend.sh
+├── No → Development mode?
+│   ├── Yes → docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d backend-07
+│   └── No → ./scripts/build-backend.sh
+└── Build issues?
+    └── Yes → docker system prune -f && ./scripts/build-backend.sh --rebuild-base
+```
+
+## 💡 **Practical Examples**
+
+### **Example 1: Daily Development**
+**Situation**: You're working on the admin panel and make 10 code changes
+```bash
+# First change
+./scripts/build-backend.sh  # 30 seconds
+
+# Second change  
+./scripts/build-backend.sh  # 30 seconds
+
+# ... 8 more changes
+./scripts/build-backend.sh  # 30 seconds each
+
+# Total time: 10 × 30s = 5 minutes
+# vs Full rebuild: 10 × 8min = 80 minutes
+# Time saved: 75 minutes (94% faster!)
+```
+
+### **Example 2: ML Library Update**
+**Situation**: Updating Transformers from 4.53.2 to 4.56.1
+```bash
+# Update requirements.txt
+echo "transformers==4.56.1" >> backend/requirements.txt
+
+# Rebuild base image with new version
+./scripts/build-backend.sh --rebuild-base  # 4-5 minutes
+
+# All subsequent builds use new base
+./scripts/build-backend.sh  # 30 seconds
+```
+
+### **Example 3: CI/CD Pipeline**
+**Situation**: Automated build in GitHub Actions
+```yaml
+# .github/workflows/build.yml
+- name: Build Backend
+  run: ./scripts/build-backend.sh  # 30 seconds
+  # Assumes base image is cached or pulled from registry
+```
+
+### **Example 4: Team Onboarding**
+**Situation**: New developer joining the project
+```bash
+# First time setup
+git clone <repository>
+cd rag-app-07
+./scripts/build-backend.sh --rebuild-base  # 4-5 minutes
+
+# Ready to develop!
+./scripts/build-backend.sh  # 30 seconds for any changes
 ```
 
 ## 📋 **Available Scripts**
