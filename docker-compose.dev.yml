@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  backend-07:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.optimized
+    volumes:
+      # Mount source code for hot reloading
+      - ./backend/app:/app/app
+      - ./backend/scripts:/app/scripts
+    environment:
+      - PYTHONPATH=/app
+      - RELOAD=true
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    depends_on:
+      - postgres-07
+      - qdrant-07
+      - redis-07

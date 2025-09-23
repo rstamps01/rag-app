@@ -1,0 +1,54 @@
+# Use pre-built base image
+FROM rag-app-07-backend-base:latest
+
+# Copy only requirements first for better caching
+COPY requirements.txt .
+
+# Install remaining dependencies (much faster now)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY app/ ./app/
+COPY alembic.ini .
+COPY .env* ./
+
+# Setup directories
+RUN mkdir -p /app/models_cache /app/scripts /app/logs /app/config /app/data/logs /app/data/uploads /tmp/triton_cache \
+    && chmod 755 /app/models_cache /app/logs
+
+# Copy scripts
+COPY scripts/model_cache_utils.py /app/scripts/
+COPY scripts/initialize_model_cache.py /app/scripts/
+
+# Setup cache config
+RUN if [ ! -f config/cache_config.json ]; then \
+        echo '{"cache_dir": "/app/models_cache", "models": ["sentence-transformers/all-MiniLM-L6-v2", "mistralai/Mistral-7B-Instruct-v0.2"], "settings": {"validate_on_startup": true, "create_completion_marker": true}}' > /app/config/cache_config.json; \
+    fi
+
+RUN python3 -m json.tool /app/config/cache_config.json > /dev/null || (echo "ERROR: Invalid JSON in cache_config.json"; exit 1)
+RUN chmod +x /app/scripts/*.py
+RUN chown -R root:root /app && chmod -R 755 /app
+
+# Health check
+COPY <<EOF /app/healthcheck.py
+#!/usr/bin/env python3
+import requests
+import sys
+try:
+    response = requests.get('http://localhost:8000/health', timeout=5)
+    if response.status_code == 200:
+        print("Health check passed")
+        sys.exit(0)
+    else:
+        print(f"Health check failed: {response.status_code}")
+        sys.exit(1)
+except Exception as e:
+    print(f"Health check error: {e}")
+    sys.exit(1)
+EOF
+
+RUN chmod +x /app/healthcheck.py
+
+EXPOSE 8000 9090
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
