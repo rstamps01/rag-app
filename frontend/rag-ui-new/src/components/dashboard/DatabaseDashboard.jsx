@@ -29,6 +29,7 @@ const DatabaseDashboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [postgresMetrics, setPostgresMetrics] = useState(null);
   const [qdrantMetrics, setQdrantMetrics] = useState(null);
+  const [systemMetrics, setSystemMetrics] = useState(null);
   const [refreshInterval, setRefreshInterval] = useState(5000);
   const [backendAvailable, setBackendAvailable] = useState(false);
   const [qdrantAvailable, setQdrantAvailable] = useState(false);
@@ -41,7 +42,7 @@ const DatabaseDashboard = () => {
   const checkServiceAvailability = async () => {
     // Check backend availability
     try {
-      const response = await fetch(`${backendBaseUrl}/monitoring/health`, {
+      const response = await fetch(`http://localhost:8000/health`, {
         method: 'HEAD',
         timeout: 2000
       });
@@ -52,7 +53,7 @@ const DatabaseDashboard = () => {
 
     // Check Qdrant availability
     try {
-      const response = await fetch(`${qdrantBaseUrl}/health`, {
+      const response = await fetch(`${qdrantBaseUrl}/`, {
         method: 'HEAD',
         timeout: 2000
       });
@@ -78,14 +79,12 @@ const DatabaseDashboard = () => {
       const promises = [];
       if (backendAvailable) {
         promises.push(fetchPostgresMetrics());
+        promises.push(fetchQdrantMetrics());
+        promises.push(fetchSystemMetrics());
       } else {
         setPostgresMetrics(getDemoPostgresMetrics());
-      }
-      
-      if (qdrantAvailable) {
-        promises.push(fetchQdrantMetrics());
-      } else {
         setQdrantMetrics(getDemoQdrantMetrics());
+        setSystemMetrics(getDemoSystemMetrics());
       }
       
       if (promises.length > 0) {
@@ -96,6 +95,7 @@ const DatabaseDashboard = () => {
       // Set demo data on error
       setPostgresMetrics(getDemoPostgresMetrics());
       setQdrantMetrics(getDemoQdrantMetrics());
+      setSystemMetrics(getDemoSystemMetrics());
     } finally {
       setIsLoading(false);
     }
@@ -132,45 +132,58 @@ const DatabaseDashboard = () => {
     }
   });
 
+  const getDemoSystemMetrics = () => ({
+    cpu: { usage: 45 },
+    memory: { usage: 29, available: 23010185216 },
+    disk: { usage: 16.7 },
+    gpu: { utilization: 5, memoryUsed: 16541, memoryTotal: 32607 },
+    network: { bytesSent: 21471168, bytesRecv: 30883088 }
+  });
+
   const fetchPostgresMetrics = async () => {
     try {
-      const [healthResponse, documentsResponse, queriesResponse] = await Promise.all([
-        fetch(`${backendBaseUrl}/monitoring/health`),
+      const [comprehensiveResponse, documentsResponse, queriesResponse] = await Promise.all([
+        fetch(`${backendBaseUrl}/metrics/comprehensive`),
         fetch(`${backendBaseUrl}/documents?limit=1000`),
         fetch(`${backendBaseUrl}/queries/history?limit=1000`)
       ]);
       
-      if (!healthResponse.ok || !documentsResponse.ok || !queriesResponse.ok) {
+      if (!comprehensiveResponse.ok || !documentsResponse.ok || !queriesResponse.ok) {
         throw new Error('One or more API calls failed');
       }
       
-      const healthData = await healthResponse.json();
+      const comprehensiveData = await comprehensiveResponse.json();
       const documentsData = await documentsResponse.json();
       const queriesData = await queriesResponse.json();
       
-      // Calculate PostgreSQL metrics
-      const documentsCount = Array.isArray(documentsData) ? documentsData.length : 0;
-      const queriesCount = Array.isArray(queriesData) ? queriesData.length : 0;
+      // Calculate real PostgreSQL metrics
+      const documentsCount = documentsData.documents?.length || 0;
+      const queriesCount = queriesData.queries?.length || 0;
       
       const postgresData = {
         health: {
-          status: healthData.database_status || healthData.database || 'unknown',
-          lastCheck: new Date().toISOString()
+          status: comprehensiveData.connection_metrics.database_status === 'connected' ? 'healthy' : 'unhealthy',
+          lastCheck: comprehensiveData.timestamp
         },
         tables: {
-          users: { count: Math.floor(Math.random() * 50) + 10, size: Math.floor(Math.random() * 10) + 5 },
-          documents: { count: documentsCount, size: Math.floor(documentsCount * 0.5) },
-          queryHistory: { count: queriesCount, size: Math.floor(queriesCount * 0.1) }
+          documents: { 
+            count: documentsCount, 
+            size: Math.floor(documentsCount * 0.5) 
+          },
+          queryHistory: { 
+            count: queriesCount, 
+            size: Math.floor(queriesCount * 0.1) 
+          }
         },
         performance: {
           totalQueries: queriesCount,
-          avgResponseTime: Math.floor(Math.random() * 100) + 50,
-          cacheHitRatio: 85 + Math.random() * 10,
-          activeConnections: Math.floor(Math.random() * 20) + 5
+          avgResponseTime: Math.round(comprehensiveData.postgres_metrics.query_performance * 1000),
+          cacheHitRatio: comprehensiveData.postgres_metrics.cache_hit_ratio,
+          activeConnections: comprehensiveData.postgres_metrics.active_connections
         },
         storage: {
-          databaseSize: Math.floor(documentsCount * 0.5) + Math.floor(queriesCount * 0.1) + 20,
-          freeSpace: Math.floor(Math.random() * 1000) + 500
+          databaseSize: Math.round(comprehensiveData.postgres_metrics.database_size / 1024 / 1024), // Convert bytes to MB
+          freeSpace: 1000 // Placeholder - would need separate endpoint for actual free space
         }
       };
       
@@ -184,48 +197,34 @@ const DatabaseDashboard = () => {
 
   const fetchQdrantMetrics = async () => {
     try {
-      const [collectionsResponse, healthResponse] = await Promise.all([
-        fetch(`${qdrantBaseUrl}/collections`),
-        fetch(`${qdrantBaseUrl}/health`)
+      const [comprehensiveResponse, collectionsResponse] = await Promise.all([
+        fetch(`${backendBaseUrl}/metrics/comprehensive`),
+        fetch(`${qdrantBaseUrl}/collections`)
       ]);
       
-      if (!collectionsResponse.ok || !healthResponse.ok) {
-        throw new Error('Qdrant API calls failed');
+      if (!comprehensiveResponse.ok || !collectionsResponse.ok) {
+        throw new Error('API calls failed');
       }
       
+      const comprehensiveData = await comprehensiveResponse.json();
       const collectionsData = await collectionsResponse.json();
-      const healthData = await healthResponse.json();
       
-      let totalVectors = 0;
-      if (collectionsData.result?.collections) {
-        for (const collection of collectionsData.result.collections) {
-          try {
-            const collectionInfo = await fetch(`${qdrantBaseUrl}/collections/${collection.name}`);
-            const infoData = await collectionInfo.json();
-            if (infoData.result?.points_count) {
-              totalVectors += infoData.result.points_count;
-            }
-          } catch (error) {
-            console.warn(`Error fetching collection ${collection.name} info:`, error);
-          }
-        }
-      }
-      
+      // Use real Qdrant metrics from comprehensive endpoint
       const qdrantData = {
         health: {
-          status: healthData.title === 'ok' ? 'healthy' : 'unhealthy',
-          lastCheck: new Date().toISOString()
+          status: comprehensiveData.connection_metrics.vector_db_status === 'connected' ? 'healthy' : 'unhealthy',
+          lastCheck: comprehensiveData.timestamp
         },
         collections: {
-          count: collectionsData.result?.collections?.length || 0,
-          totalVectors,
-          avgVectorsPerCollection: collectionsData.result?.collections?.length ? 
-            Math.floor(totalVectors / collectionsData.result.collections.length) : 0
+          count: comprehensiveData.qdrant_metrics.collections_count,
+          totalVectors: comprehensiveData.qdrant_metrics.total_points,
+          avgVectorsPerCollection: comprehensiveData.qdrant_metrics.collections_count > 0 ? 
+            Math.floor(comprehensiveData.qdrant_metrics.total_points / comprehensiveData.qdrant_metrics.collections_count) : 0
         },
         performance: {
-          searchLatency: Math.floor(Math.random() * 50) + 10,
-          memoryUsage: Math.floor(Math.random() * 100) + 50,
-          indexSize: Math.floor(totalVectors * 0.8)
+          searchLatency: comprehensiveData.qdrant_metrics.search_latency,
+          memoryUsage: comprehensiveData.qdrant_metrics.memory_usage,
+          indexSize: comprehensiveData.qdrant_metrics.total_points
         }
       };
       
@@ -234,6 +233,46 @@ const DatabaseDashboard = () => {
       console.error('Error fetching Qdrant metrics:', error);
       setQdrantAvailable(false);
       setQdrantMetrics(getDemoQdrantMetrics());
+    }
+  };
+
+  const fetchSystemMetrics = async () => {
+    try {
+      const response = await fetch(`${backendBaseUrl}/metrics/comprehensive`);
+      
+      if (!response.ok) {
+        throw new Error('System metrics API call failed');
+      }
+      
+      const comprehensiveData = await response.json();
+      
+      // Extract real system metrics
+      const systemData = {
+        cpu: { 
+          usage: comprehensiveData.system_metrics.cpu_usage 
+        },
+        memory: { 
+          usage: comprehensiveData.system_metrics.memory_usage,
+          available: comprehensiveData.system_metrics.memory_available
+        },
+        disk: { 
+          usage: comprehensiveData.system_metrics.disk_usage 
+        },
+        gpu: {
+          utilization: comprehensiveData.system_metrics.gpu_metrics.utilization,
+          memoryUsed: comprehensiveData.system_metrics.gpu_metrics.memory_used,
+          memoryTotal: comprehensiveData.system_metrics.gpu_metrics.memory_total
+        },
+        network: {
+          bytesSent: comprehensiveData.system_metrics.network_bytes_sent,
+          bytesRecv: comprehensiveData.system_metrics.network_bytes_recv
+        }
+      };
+      
+      setSystemMetrics(systemData);
+    } catch (error) {
+      console.error('Error fetching system metrics:', error);
+      setSystemMetrics(getDemoSystemMetrics());
     }
   };
 
@@ -270,6 +309,11 @@ const DatabaseDashboard = () => {
       id: 'qdrant', 
       label: `Qdrant${!qdrantAvailable ? ' *' : ''}`, 
       icon: Layers 
+    },
+    { 
+      id: 'system', 
+      label: `System${!backendAvailable ? ' *' : ''}`, 
+      icon: Cpu 
     },
     { 
       id: 'performance', 
@@ -631,6 +675,125 @@ const DatabaseDashboard = () => {
                   title="Qdrant Dashboard"
                   sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
                 />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'system' && (
+          <div className="space-y-6">
+            {/* System Metrics Overview */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* CPU and Memory */}
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
+                  <Cpu className="w-5 h-5 text-blue-400" />
+                  <span>CPU & Memory</span>
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-sm text-gray-400 mb-1">
+                      <span>CPU Usage</span>
+                      <span>{systemMetrics?.cpu?.usage?.toFixed(1) || 0}%</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-blue-400 h-2 rounded-full" 
+                        style={{width: `${systemMetrics?.cpu?.usage || 0}%`}}
+                      ></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-sm text-gray-400 mb-1">
+                      <span>Memory Usage</span>
+                      <span>{systemMetrics?.memory?.usage?.toFixed(1) || 0}%</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-green-400 h-2 rounded-full" 
+                        style={{width: `${systemMetrics?.memory?.usage || 0}%`}}
+                      ></div>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    Available: {systemMetrics?.memory?.available ? (systemMetrics.memory.available / 1024 / 1024 / 1024).toFixed(1) : 0} GB
+                  </div>
+                </div>
+              </div>
+
+              {/* GPU Metrics */}
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
+                  <HardDrive className="w-5 h-5 text-purple-400" />
+                  <span>GPU Metrics</span>
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-sm text-gray-400 mb-1">
+                      <span>GPU Utilization</span>
+                      <span>{systemMetrics?.gpu?.utilization || 0}%</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-purple-400 h-2 rounded-full" 
+                        style={{width: `${systemMetrics?.gpu?.utilization || 0}%`}}
+                      ></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-sm text-gray-400 mb-1">
+                      <span>GPU Memory</span>
+                      <span>{systemMetrics?.gpu?.memoryUsed || 0}MB / {systemMetrics?.gpu?.memoryTotal || 0}MB</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-orange-400 h-2 rounded-full" 
+                        style={{width: `${systemMetrics?.gpu?.memoryTotal ? (systemMetrics.gpu.memoryUsed / systemMetrics.gpu.memoryTotal) * 100 : 0}%`}}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Disk and Network */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
+                  <HardDrive className="w-5 h-5 text-yellow-400" />
+                  <span>Disk Usage</span>
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-sm text-gray-400 mb-1">
+                      <span>Disk Usage</span>
+                      <span>{systemMetrics?.disk?.usage?.toFixed(1) || 0}%</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-yellow-400 h-2 rounded-full" 
+                        style={{width: `${systemMetrics?.disk?.usage || 0}%`}}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
+                  <Activity className="w-5 h-5 text-cyan-400" />
+                  <span>Network Activity</span>
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Bytes Sent</span>
+                    <span className="font-semibold">{(systemMetrics?.network?.bytesSent / 1024 / 1024).toFixed(1) || 0} MB</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Bytes Received</span>
+                    <span className="font-semibold">{(systemMetrics?.network?.bytesRecv / 1024 / 1024).toFixed(1) || 0} MB</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
