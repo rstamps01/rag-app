@@ -117,7 +117,7 @@ const PipelineFlowCanvas = ({
 
     // Development helper - simulate events
     const handleNodeDoubleClick = (node) => {
-        if (debugMode && process.env.NODE_ENV === 'development') {
+        if (debugMode && import.meta.env.MODE === 'development') {
             simulateEvent?.({
                 pipeline_id: 'debug_pipeline',
                 stage: node.id,

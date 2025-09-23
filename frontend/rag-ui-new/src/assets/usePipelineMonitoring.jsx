@@ -235,7 +235,7 @@ const usePipelineMonitoring = () => {
 
     // Simulate pipeline events for development
     const simulateEvent = useCallback((eventData) => {
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.MODE === 'development') {
             fetch('/api/v1/monitoring/pipeline/simulate-event', {
                 method: 'POST',
                 headers: {

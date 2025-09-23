@@ -4,7 +4,7 @@
 import axios from 'axios';
 
 // ✅ CORRECTED: Use proper backend URL configuration
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
+const API_BASE_URL = import.meta.env.MODE === 'production' 
   ? '' // Use relative URLs in production (nginx proxy handles routing)
   : 'http://localhost:8000'; // Direct backend URL in development
 
@@ -100,7 +100,7 @@ const formatApiError = (error) => {
 api.interceptors.request.use(
   (config) => {
     // ✅ FIX: Add cache busting for GET requests in development to prevent 304 responses
-    if (process.env.NODE_ENV === 'development' && config.method === 'get') {
+    if (import.meta.env.MODE === 'development' && config.method === 'get') {
       config.params = {
         ...config.params,
         _t: Date.now() // Add timestamp to prevent caching
@@ -108,7 +108,7 @@ api.interceptors.request.use(
     }
     
     // Log API requests in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.MODE === 'development') {
       console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`);
       if (config.data && config.method !== 'get') {
         console.log('📤 Request Data:', config.data);
@@ -133,7 +133,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     // Log API responses in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.MODE === 'development') {
       console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url} - ${response.status}`);
       console.log('📥 Response Data:', response.data);
     }
@@ -146,7 +146,7 @@ api.interceptors.response.use(
     console.error('❌ API Error:', errorMessage);
     
     // Log detailed error information in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.MODE === 'development') {
       console.error('🔍 Error Details:', {
         url: error.config?.url,
         method: error.config?.method,

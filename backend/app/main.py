@@ -437,6 +437,16 @@ except Exception as e:
     logger.error(f"⚠️  Admin router import failed: {e}")
     admin_available = False
 
+# Collection Management Router
+try:
+    from app.api.routes.collection_management import router as collection_router
+    app.include_router(collection_router, tags=["collection-management"])
+    collection_management_available = True
+    logger.info("✅ Collection management router imported and registered successfully")
+except Exception as e:
+    logger.error(f"⚠️ Collection management router import failed: {e}")
+    collection_management_available = False
+
 # Root endpoints
 @app.get("/")
 async def root():
