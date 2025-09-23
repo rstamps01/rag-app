@@ -1289,7 +1289,7 @@ const DatabaseDashboard = () => {
                   )}
                   
                   {quickActionResults.data.collections.length > 0 ? (
-                    <div className="space-y-3">
+                    <div className="max-h-96 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                       {quickActionResults.data.collections.map((collection, index) => (
                         <div key={index} className="bg-gray-600 rounded-lg p-4">
                           <div className="flex justify-between items-start mb-3">
