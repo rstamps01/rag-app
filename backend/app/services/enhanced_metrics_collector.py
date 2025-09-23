@@ -372,20 +372,16 @@ class EnhancedMetricsCollector:
                     safe_log("debug", f"Error getting cache hit ratio: {e}")
                     self.postgres_metrics.cache_hit_ratio = 0.0
             
-                # Get query performance metrics (only if pg_stat_statements extension is available)
+                # Get query performance metrics using alternative approach
                 try:
-                    result = db.execute(text("""
-                        SELECT 
-                            round(avg(mean_exec_time)::numeric, 2) as avg_query_time
-                        FROM pg_stat_statements 
-                        WHERE calls > 0
-                    """))
-                    avg_query_time = result.scalar()
-                    if avg_query_time:
-                        self.postgres_metrics.query_performance = float(avg_query_time)
+                    # Use a simple query timing approach instead of pg_stat_statements
+                    start_time = time.time()
+                    result = db.execute(text("SELECT 1"))
+                    end_time = time.time()
+                    query_time_ms = (end_time - start_time) * 1000
+                    self.postgres_metrics.query_performance = round(query_time_ms, 2)
                 except Exception as e:
-                    # pg_stat_statements extension not available, use fallback
-                    safe_log("debug", f"pg_stat_statements not available, using fallback: {e}")
+                    safe_log("debug", f"Error getting query performance: {e}")
                     self.postgres_metrics.query_performance = 0.0
             
                 # Get table statistics
@@ -393,7 +389,7 @@ class EnhancedMetricsCollector:
                     result = db.execute(text("""
                         SELECT 
                             schemaname,
-                            tablename,
+                            relname as tablename,
                             n_tup_ins as inserts,
                             n_tup_upd as updates,
                             n_tup_del as deletes

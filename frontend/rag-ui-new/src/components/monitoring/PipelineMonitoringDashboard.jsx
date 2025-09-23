@@ -47,6 +47,12 @@ const PipelineMonitoringDashboard = () => {
     };
   }, []);
   
+  // Utility function to round GPU values to 1 decimal place
+  const roundGpuValue = (value) => {
+    if (value === null || value === undefined) return 0;
+    return Math.round(Number(value) * 10) / 10;
+  };
+
   // Generate real-time metrics from both sources - only use real data
   const realTimeMetrics = {
     queries_per_minute: enhancedMetrics?.pipeline_metrics?.query_processing_rate || pipelineData?.pipelineStatus?.queriesPerMinute || null,
@@ -89,12 +95,6 @@ const PipelineMonitoringDashboard = () => {
   const formatPercentage = (value) => {
     if (value === null || value === undefined) return 'No data';
     return `${Number(value).toFixed(1)}%`;
-  };
-
-  // Utility function to round GPU values to 1 decimal place
-  const roundGpuValue = (value) => {
-    if (value === null || value === undefined) return 0;
-    return Math.round(Number(value) * 10) / 10;
   };
 
   const handleMenuToggle = () => {
