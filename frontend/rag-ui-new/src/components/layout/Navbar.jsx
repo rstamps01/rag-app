@@ -1,17 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, Monitor, Zap, FileText, TestTube, Network, Database, Shield } from 'lucide-react';
+import { ChevronDown, Monitor, Zap, FileText, TestTube, Network, Database, Shield, BarChart3, TrendingUp } from 'lucide-react';
 
 const Navbar = () => {
   const location = useLocation();
   const [isDashboardsOpen, setIsDashboardsOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const analyticsRef = useRef(null);
 
   const navItems = [
     { path: '/', label: 'Home' },
     { path: '/documents', label: 'Documents' },
     { path: '/queries', label: 'Queries' },
     { path: '/admin', label: 'Admin', icon: Shield }
+  ];
+
+  const analyticsItems = [
+    { 
+      path: '/qdrant-collection-graph', 
+      label: 'Qdrant Collection Graph', 
+      icon: BarChart3,
+      description: 'Interactive vector relationship visualization'
+    },
+    { 
+      path: '/database-dashboard', 
+      label: 'Database Analytics', 
+      icon: TrendingUp,
+      description: 'PostgreSQL & Qdrant comprehensive analytics'
+    }
   ];
 
   const dashboardItems = [
@@ -50,12 +67,6 @@ const Navbar = () => {
       label: 'Qdrant Flow Dashboard', 
       icon: Network,
       description: 'Interactive React Flow visualization with real-time data'
-    },
-    { 
-      path: '/database-dashboard', 
-      label: 'Database Dashboard', 
-      icon: Database,
-      description: 'PostgreSQL & Qdrant comprehensive monitoring'
     }
   ];
 
@@ -64,6 +75,9 @@ const Navbar = () => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDashboardsOpen(false);
+      }
+      if (analyticsRef.current && !analyticsRef.current.contains(event.target)) {
+        setIsAnalyticsOpen(false);
       }
     };
 
@@ -81,6 +95,10 @@ const Navbar = () => {
 
   const isDashboardActive = () => {
     return dashboardItems.some(item => isActive(item.path));
+  };
+
+  const isAnalyticsActive = () => {
+    return analyticsItems.some(item => isActive(item.path));
   };
 
   return (
@@ -163,6 +181,55 @@ const Navbar = () => {
                   </div>
                 )}
               </div>
+
+              {/* Analytics Dropdown */}
+              <div className="relative" ref={analyticsRef}>
+                <button
+                  onClick={() => setIsAnalyticsOpen(!isAnalyticsOpen)}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-1 ${
+                    isAnalyticsActive()
+                      ? 'text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
+                  }`}
+                >
+                  <span>Analytics</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${
+                    isAnalyticsOpen ? 'rotate-180' : ''
+                  }`} />
+                </button>
+
+                {/* Dropdown Menu */}
+                {isAnalyticsOpen && (
+                  <div className="absolute top-full left-0 mt-1 w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50">
+                    <div className="p-2">
+                      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-2">
+                        Analytics & Visualizations
+                      </div>
+                      {analyticsItems.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <Link
+                            key={item.path}
+                            to={item.path}
+                            onClick={() => setIsAnalyticsOpen(false)}
+                            className={`flex items-start space-x-3 px-3 py-3 rounded-lg transition-colors duration-200 ${
+                              isActive(item.path)
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                            }`}
+                          >
+                            <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium">{item.label}</div>
+                              <div className="text-xs text-gray-400 mt-1">{item.description}</div>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -216,6 +283,33 @@ const Navbar = () => {
             );
           })}
           
+          {/* Mobile Analytics Items */}
+          <div className="border-t border-gray-700 pt-2 mt-2">
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-3">
+              Analytics
+            </div>
+            {analyticsItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`flex items-start space-x-3 px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
+                    isActive(item.path)
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                  }`}
+                >
+                  <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div>{item.label}</div>
+                    <div className="text-xs text-gray-400 mt-1">{item.description}</div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+
           {/* Mobile Dashboard Items */}
           <div className="border-t border-gray-700 pt-2 mt-2">
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-3">

@@ -13,6 +13,7 @@ import AdvancedQdrantFlowDashboard from './components/dashboard/AdvancedQdrantFl
 import ProfessionalQdrantFlowDashboard from './components/dashboard/ProfessionalQdrantFlowDashboard';
 import DatabaseDashboard from './components/dashboard/DatabaseDashboard';
 import AdminPanel from './components/admin/AdminPanel';
+import QdrantCollectionGraphPage from './pages/QdrantCollectionGraphPage';
 
 // Simple test component to debug
 const TestComponent = () => {
@@ -47,6 +48,7 @@ function App() {
           <Route path="/qdrant-advanced" element={<AdvancedQdrantFlowDashboard />} />
           <Route path="/qdrant-professional" element={<ProfessionalQdrantFlowDashboard />} />
           <Route path="/database-dashboard" element={<DatabaseDashboard />} />
+          <Route path="/qdrant-collection-graph" element={<QdrantCollectionGraphPage />} />
           <Route path="/admin" element={<AdminPanel />} />
         </Routes>
       </Layout>
