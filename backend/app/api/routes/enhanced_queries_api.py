@@ -13,7 +13,7 @@ from datetime import datetime
 from app.db.session import get_db
 from app.models.models import QueryHistory, User
 from app.services.enhanced_llm_service import enhanced_llm_service
-from backend.app.services.integrated_vector_db_service import enhanced_vector_db_service
+from app.services.integrated_vector_db_service import enhanced_vector_db_service
 from app.core.config import settings
 from pydantic import BaseModel
 

@@ -37,7 +37,7 @@ try:
     import PyPDF2
     from sentence_transformers import SentenceTransformer
     from qdrant_client import QdrantClient
-    from qdrant_client.models import Distance, VectorParams, PointStruct
+    from qdrant_client.models import Distance, VectorParams, PointStruct, FilterSelector, Filter, FieldCondition, MatchValue
     vector_processing_available = True
     logger = logging.getLogger(__name__)
     logger.info("✅ Vector processing dependencies imported successfully")
@@ -426,6 +426,16 @@ try:
 except Exception as e:
     logger.error(f"⚠️  Qdrant proxy router import failed: {e}")
     qdrant_proxy_available = False
+
+# Admin router
+try:
+    from app.api.routes.admin import router as admin_router
+    app.include_router(admin_router, prefix="/api/v1/admin", tags=["admin"])
+    admin_available = True
+    logger.info("✅ Admin router imported and registered successfully")
+except Exception as e:
+    logger.error(f"⚠️  Admin router import failed: {e}")
+    admin_available = False
 
 # Root endpoints
 @app.get("/")
@@ -919,19 +929,19 @@ async def delete_document(
         # Delete from vector database (Qdrant)
         if qdrant_client is not None:
             try:
-                # Delete all chunks for this document
+                # Delete all chunks for this document using proper Qdrant models
                 qdrant_client.delete(
                     collection_name="rag",
-                    points_selector={
-                        "filter": {
-                            "must": [
-                                {
-                                    "key": "document_id",
-                                    "match": {"value": document_id}
-                                }
+                    points_selector=FilterSelector(
+                        filter=Filter(
+                            must=[
+                                FieldCondition(
+                                    key="document_id",
+                                    match=MatchValue(value=document_id)
+                                )
                             ]
-                        }
-                    }
+                        )
+                    )
                 )
                 logger.info(f"Removed document {document_id} from vector database")
             except Exception as e:

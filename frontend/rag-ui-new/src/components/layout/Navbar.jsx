@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, Monitor, Zap, FileText, TestTube, Network, Database } from 'lucide-react';
+import { ChevronDown, Monitor, Zap, FileText, TestTube, Network, Database, Shield } from 'lucide-react';
 
 const Navbar = () => {
   const location = useLocation();
@@ -10,7 +10,8 @@ const Navbar = () => {
   const navItems = [
     { path: '/', label: 'Home' },
     { path: '/documents', label: 'Documents' },
-    { path: '/queries', label: 'Queries' }
+    { path: '/queries', label: 'Queries' },
+    { path: '/admin', label: 'Admin', icon: Shield }
   ];
 
   const dashboardItems = [
@@ -96,19 +97,23 @@ const Navbar = () => {
           {/* Navigation Links */}
           <div className="hidden md:block">
             <div className="ml-10 flex items-baseline space-x-4">
-              {navItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
-                    isActive(item.path)
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-1 ${
+                      isActive(item.path)
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    {Icon && <Icon className="w-4 h-4" />}
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
               
               {/* Dashboards Dropdown */}
               <div className="relative" ref={dropdownRef}>
@@ -193,19 +198,23 @@ const Navbar = () => {
       {/* Mobile menu */}
       <div className="md:hidden" id="mobile-menu">
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
-                isActive(item.path)
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
+                  isActive(item.path)
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                }`}
+              >
+                {Icon && <Icon className="w-4 h-4" />}
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
           
           {/* Mobile Dashboard Items */}
           <div className="border-t border-gray-700 pt-2 mt-2">

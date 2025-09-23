@@ -5,7 +5,7 @@ import time
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 import numpy as np
 from app.services.integrated_vector_db_service import IntegratedVectorDBService, integrated_vector_db_service
-from backend.app.services.integrated_document_processor import DocumentProcessor
+from app.services.integrated_document_processor import DocumentProcessor
 from app.services.gpu_accelerator import GPUAccelerator
 
 logger = logging.getLogger(__name__)

@@ -6,7 +6,7 @@ from datetime import datetime
 import asyncpg
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
-from backend.app.services.integrated_document_processor import document_processor
+from app.services.integrated_document_processor import document_processor
 
 class EnhancedQueryProcessor:
     def __init__(self):

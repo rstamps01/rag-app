@@ -13,8 +13,16 @@ from sqlalchemy.orm import Session
 from app.schemas.documents import DocumentCreate, DocumentUpdate, Document
 from app.crud.crud_document import create_document, get_documents, get_document, update_document
 from app.db.session import get_db
-from backend.app.services.integrated_document_processor import process_and_store_document
+from app.services.integrated_document_processor import process_and_store_document
 from app.core.config import settings
+
+# Vector database imports for document deletion
+try:
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import FilterSelector, Filter, FieldCondition, MatchValue
+    vector_db_available = True
+except ImportError:
+    vector_db_available = False
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +30,16 @@ router = APIRouter()
 
 # ENHANCED: Department validation
 VALID_DEPARTMENTS = ["General", "IT", "HR", "Finance", "Legal"]
+
+# Initialize Qdrant client for vector database operations
+qdrant_client = None
+if vector_db_available:
+    try:
+        qdrant_client = QdrantClient(url="http://qdrant-07:6333")
+        logger.info("✅ Qdrant client initialized for document deletion")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to initialize Qdrant client: {e}")
+        qdrant_client = None
 
 # In-memory storage for immediate status tracking (placeholder DB)
 documents_db = {}
@@ -329,7 +347,7 @@ def get_document_by_id(document_id: str, db: Session = Depends(get_db)):
 @router.delete("/{document_id}")
 def delete_document_by_id(document_id: str, db: Session = Depends(get_db)):
     """
-    Delete a document by ID.
+    Delete a document by ID from database, vector store, and file system.
     
     Args:
         document_id: Document ID
@@ -343,6 +361,27 @@ def delete_document_by_id(document_id: str, db: Session = Depends(get_db)):
         db_document = get_document(db, doc_id=document_id)
         if not db_document:
             raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Delete from vector database (Qdrant) if available
+        if qdrant_client is not None:
+            try:
+                # Delete all chunks for this document using proper Qdrant models
+                qdrant_client.delete(
+                    collection_name="rag",
+                    points_selector=FilterSelector(
+                        filter=Filter(
+                            must=[
+                                FieldCondition(
+                                    key="document_id",
+                                    match=MatchValue(value=document_id)
+                                )
+                            ]
+                        )
+                    )
+                )
+                logger.info(f"Removed document {document_id} from vector database")
+            except Exception as e:
+                logger.warning(f"Failed to remove from vector database: {e}")
         
         # Delete file if it exists
         if hasattr(db_document, 'path') and db_document.path and os.path.exists(db_document.path):
