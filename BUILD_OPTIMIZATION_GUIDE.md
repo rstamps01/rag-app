@@ -67,6 +67,21 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d backend-07
 docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
 
+### 4. Quick Reference - Common Commands
+```bash
+# Normal code changes
+./scripts/build-backend.sh
+
+# Docker cache issues (code not updated)
+docker rmi rag-app-07-backend-07:latest && docker-compose down backend-07 && docker-compose up -d backend-07
+
+# ML library updates
+./scripts/build-backend.sh --rebuild-base
+
+# Complete clean build
+docker system prune -f && ./scripts/build-backend.sh --rebuild-base
+```
+
 ## 📋 **Detailed Usage Scenarios**
 
 ### **Scenario 1: First Time Setup**
@@ -127,7 +142,20 @@ docker system prune -f
 ./scripts/build-backend.sh --rebuild-base
 ```
 
-### **Scenario 7: CI/CD Pipeline**
+### **Scenario 7: Refresh Optimized Build (Docker Cache Issues)**
+**When**: Docker cache prevents new code from being included in optimized build
+**What happens**: Forces rebuild of optimized image with latest code
+**Time**: ~30 seconds
+```bash
+# Remove old optimized image
+docker rmi rag-app-07-backend-07:latest
+
+# Stop and restart backend service
+docker-compose down backend-07
+docker-compose up -d backend-07
+```
+
+### **Scenario 8: CI/CD Pipeline**
 **When**: Automated builds in CI/CD
 **What happens**: Uses cached base image, builds optimized image
 **Time**: ~30 seconds
@@ -147,6 +175,9 @@ Code Change Made?
 │       └── No → ./scripts/build-backend.sh
 ├── No → Development mode?
 │   ├── Yes → docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d backend-07
+│   └── No → ./scripts/build-backend.sh
+├── Docker cache issues?
+│   ├── Yes → docker rmi rag-app-07-backend-07:latest && docker-compose down backend-07 && docker-compose up -d backend-07
 │   └── No → ./scripts/build-backend.sh
 └── Build issues?
     └── Yes → docker system prune -f && ./scripts/build-backend.sh --rebuild-base
@@ -193,7 +224,27 @@ echo "transformers==4.56.1" >> backend/requirements.txt
   # Assumes base image is cached or pulled from registry
 ```
 
-### **Example 4: Team Onboarding**
+### **Example 4: Docker Cache Issues**
+**Situation**: Code changes not appearing in container despite successful build
+```bash
+# Normal build (but code not updated in container)
+./scripts/build-backend.sh  # 30 seconds
+
+# Check if code is in container
+docker exec backend-07 ls -la /app/app/api/routes/ | grep collection_management
+# Result: File not found (Docker cache issue)
+
+# Refresh optimized build
+docker rmi rag-app-07-backend-07:latest
+docker-compose down backend-07
+docker-compose up -d backend-07  # 30 seconds
+
+# Verify code is now in container
+docker exec backend-07 ls -la /app/app/api/routes/ | grep collection_management
+# Result: collection_management.py found ✅
+```
+
+### **Example 5: Team Onboarding**
 **Situation**: New developer joining the project
 ```bash
 # First time setup
@@ -270,6 +321,20 @@ docker builder prune -a
 
 # Rebuild everything from scratch
 ./scripts/build-backend.sh --rebuild-base --clean
+```
+
+### Docker Cache Issues (Code Not Updated)
+```bash
+# Check if code is in container
+docker exec backend-07 ls -la /app/app/api/routes/ | grep your_new_file
+
+# If file not found, refresh optimized build
+docker rmi rag-app-07-backend-07:latest
+docker-compose down backend-07
+docker-compose up -d backend-07
+
+# Verify code is now in container
+docker exec backend-07 ls -la /app/app/api/routes/ | grep your_new_file
 ```
 
 ### Development Issues
