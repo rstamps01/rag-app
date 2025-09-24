@@ -26,7 +26,8 @@ import {
   Filter,
   Layers,
   Pin,
-  PinOff
+  PinOff,
+  Network
 } from 'lucide-react';
 
 const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost:6333', height = '500px', fullWidth = false }) => {
@@ -49,12 +50,12 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
     sizeMode: 'fixed', // fixed, content_length, chunk_index, department, file_type
     nodeShape: 'circle', // circle, square, diamond, text
     showTooltips: true,
-    showClustering: false,
+    showClustering: true,
     showAnimations: true,
-    enableFiltering: false,
+    enableFiltering: true,
     multiSelect: false,
-    showText: true, // Show/hide text labels
-    showInterconnectivity: false, // Show node connections
+    showText: false, // Show/hide text labels
+    showInterconnectivity: true, // Show node connections
     maxSeparationLevels: 3, // Maximum levels of separation to show
     highlightSelected: true, // Highlight selected node and connections
     useVariableDistance: true, // Use variable distance based on similarity
@@ -63,15 +64,20 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
     maxDistance: 200, // Maximum distance between nodes
     similarityThreshold: 0.7, // Threshold for considering nodes similar
     graphType: 'force-directed', // force-directed, disjoint-force, force-tree, qdrant-native, hierarchical-cluster
-    showAnchors: false, // Show central anchor points
+    showAnchors: true, // Show central anchor points
     anchorStrength: 0.02, // Strength of anchor connections
-    maintainInterconnectivity: true // Maintain interconnectivity
+    maintainInterconnectivity: true, // Maintain interconnectivity
+    hubSpokeMode: true, // Enable hub and spoke model
+    spokesPerHub: 5, // Number of spokes per hub
+    maxHubs: 10 // Maximum number of hubs allowed
   });
   const [selectedNode, setSelectedNode] = useState(null);
   const [selectedNodes, setSelectedNodes] = useState([]);
   const [nodeConnections, setNodeConnections] = useState({});
   const [highlightedNodes, setHighlightedNodes] = useState(new Set());
   const [highlightedLinks, setHighlightedLinks] = useState(new Set());
+  const [hubs, setHubs] = useState([]); // Track created hubs
+  const [hubConnections, setHubConnections] = useState([]); // Track hub-to-hub connections
   const [nodePositions, setNodePositions] = useState(new Map()); // Track stable positions
   const [isHovering, setIsHovering] = useState(false);
   const [hoveredNode, setHoveredNode] = useState(null);
@@ -80,6 +86,13 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
   const [showNodeContent, setShowNodeContent] = useState(false);
   const [selectedNodeContent, setSelectedNodeContent] = useState(null);
+  const [showContentFlag, setShowContentFlag] = useState(false);
+  const [doubleClickTest, setDoubleClickTest] = useState(false);
+  const [initialHubConfig, setInitialHubConfig] = useState({
+    numberOfHubs: 1,
+    nodesPerHub: 5, // Will be overridden by visualizationSettings.spokesPerHub
+    autoGenerate: false // Disabled - Qdrant should start with single node only
+  });
   const graphRef = useRef();
   const containerRef = useRef();
 
@@ -361,6 +374,124 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
         
         return factors > 0 ? similarity / factors : 0.0;
     }
+  };
+
+  // Generate initial hub and spoke objects based on configuration
+  const generateInitialHubSpokeObjects = (nodes) => {
+    if (!initialHubConfig.autoGenerate || nodes.length === 0) return { hubs: [], links: [] };
+    
+    // Use Hub & Spoke Model settings from Visualization Options
+    const numberOfHubs = initialHubConfig.numberOfHubs; // Default to 1
+    const nodesPerHub = visualizationSettings.spokesPerHub; // Use spokes per hub from Hub & Spoke Model
+    const generatedHubs = [];
+    const generatedLinks = [];
+    
+    console.log(`Generating ${numberOfHubs} initial hubs with ${nodesPerHub} nodes each`);
+    
+    // Create multiple independent hub clusters
+    const shuffledNodes = [...nodes].sort(() => Math.random() - 0.5);
+    const usedNodes = new Set();
+    
+    for (let hubIndex = 0; hubIndex < numberOfHubs; hubIndex++) {
+      // Find an unused node as hub center
+      const centerNode = shuffledNodes.find(node => !usedNodes.has(node.id));
+      if (!centerNode) break;
+      
+      usedNodes.add(centerNode.id);
+      
+      const hubId = `initial_hub_${hubIndex}`;
+      // Position hubs in a distributed pattern
+      const angle = (hubIndex * 2 * Math.PI) / numberOfHubs;
+      const radius = Math.min(dimensions.width, dimensions.height) * 0.3;
+      const hubX = dimensions.width / 2 + Math.cos(angle) * radius;
+      const hubY = dimensions.height / 2 + Math.sin(angle) * radius;
+      
+      const hub = {
+        id: hubId,
+        isHub: true,
+        group: `initial_hub_${hubIndex}`,
+        label: `Hub ${hubIndex + 1}`,
+        color: '#ff6b6b', // Same red color as regular hubs
+        size: (settings.nodeSize * 3), // Same 3x size as regular hubs
+        x: hubX,
+        y: hubY,
+        payload: { type: 'hub', sourceNode: centerNode.id } // Same payload type as regular hubs
+      };
+      
+      // Find most similar nodes for this hub (excluding already used nodes)
+      const availableNodes = nodes.filter(node => 
+        node.id !== centerNode.id && 
+        !usedNodes.has(node.id)
+      );
+      
+      const similarNodes = findMostSimilarNodes(centerNode, availableNodes, nodesPerHub);
+      
+      // Mark similar nodes as used to prevent overlap between hubs
+      similarNodes.forEach(node => usedNodes.add(node.id));
+      
+      // Position spoke nodes around the hub in a spoke pattern
+      const spokeAngleStep = (2 * Math.PI) / similarNodes.length;
+      similarNodes.forEach((spokeNode, spokeIndex) => {
+        const spokeAngle = spokeIndex * spokeAngleStep;
+        const spokeRadius = 100; // Distance from hub to spokes
+        const spokeX = hubX + Math.cos(spokeAngle) * spokeRadius;
+        const spokeY = hubY + Math.sin(spokeAngle) * spokeRadius;
+        
+        // Update spoke node position
+        spokeNode.x = spokeX;
+        spokeNode.y = spokeY;
+      });
+      
+      // Create hub connections (same as regular hub-spoke links)
+      const hubLinks = similarNodes.map(spokeNode => ({
+        source: hubId,
+        target: spokeNode.id,
+        value: 1,
+        distance: 80,
+        type: 'hub-spoke', // Same type as regular hub-spoke links
+        similarity: calculateNodeSimilarity(centerNode, spokeNode)
+      }));
+      
+      // Create connection to center node (same as regular hub-source links)
+      const centerLink = {
+        source: hubId,
+        target: centerNode.id,
+        value: 1,
+        distance: 60,
+        type: 'hub-source', // Same type as regular hub-source links
+        similarity: 1.0
+      };
+      
+      generatedHubs.push(hub);
+      generatedLinks.push(...hubLinks, centerLink);
+    }
+    
+    console.log(`Generated ${generatedHubs.length} initial hubs with ${generatedLinks.length} total links`);
+    return { hubs: generatedHubs, links: generatedLinks };
+  };
+
+  // Find most similar nodes for hub and spoke model
+  const findMostSimilarNodes = (sourceNode, allNodes, count) => {
+    console.log('Finding similar nodes for:', sourceNode.id, 'from', allNodes.length, 'total nodes');
+    
+    const filteredNodes = allNodes.filter(node => node.id !== sourceNode.id && !node.isHub);
+    console.log('Filtered nodes (excluding self and hubs):', filteredNodes.length);
+    
+    const similarities = filteredNodes
+      .map(node => {
+        const similarity = calculateNodeSimilarity(sourceNode, node);
+        console.log(`Similarity between ${sourceNode.id} and ${node.id}:`, similarity);
+        return {
+          node,
+          similarity
+        };
+      })
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, count);
+    
+    console.log('Top similarities:', similarities.map(s => ({ id: s.node.id, similarity: s.similarity })));
+    
+    return similarities.map(item => item.node);
   };
 
   // Calculate distance between two nodes based on similarity
@@ -744,9 +875,10 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          limit: settings.nodeLimit,
+          limit: 1, // Force only 1 node for Qdrant single node start
           with_payload: true,
-          with_vector: false // Don't fetch vectors for performance
+          with_vector: false, // Don't fetch vectors for performance
+          filter: null // Add explicit filter parameter
         })
       });
       
@@ -969,6 +1101,9 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
         console.log(`Created ${anchorLinks.length} anchor connections`);
       }
 
+      // Qdrant starts with single node only - no automatic hub generation
+      console.log('✅ Qdrant graph loaded with original nodes only');
+
       setGraphData({ nodes: finalNodes, links });
     } catch (err) {
       console.error('Error fetching graph data:', err);
@@ -1112,7 +1247,7 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
             
             // Add positioning force to arrange stars in distributed pattern
             graphRef.current.d3Force('position', () => {
-              const nodes = graphRef.current.graphData().nodes;
+              const nodes = graphData.nodes;
               const centerX = dimensions.width / 2;
               const centerY = dimensions.height / 2;
               
@@ -1196,24 +1331,84 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
     
     // Set the primary selected node for details panel
     setSelectedNode(node);
+    
+    // Show content flag when node is selected
+    setShowContentFlag(true);
   };
 
-  // Handle node click
+  // Handle double-click to create new nodes with spoke connections
+  const handleNodeDoubleClick = (node) => {
+    console.log('=== DOUBLE-CLICK EVENT TRIGGERED ===');
+    console.log('Node:', node);
+    console.log('Node ID:', node?.id);
+    console.log('Hub mode enabled:', visualizationSettings.hubSpokeMode);
+    
+    if (!visualizationSettings.hubSpokeMode) {
+      console.log('Hub & Spoke mode is disabled');
+      return;
+    }
+    
+    console.log('Creating new nodes connected to:', node.id);
+    
+    // Create new nodes with spoke connections
+    const spokesPerHub = visualizationSettings.spokesPerHub;
+    const newNodes = [];
+    const newLinks = [];
+    
+    console.log(`Creating ${spokesPerHub} new nodes with spoke connections to:`, node.id);
+    
+    // Create new spoke nodes
+    for (let i = 0; i < spokesPerHub; i++) {
+      const newNodeId = `spoke_${Date.now()}_${i}`;
+      const angle = (i * 2 * Math.PI) / spokesPerHub;
+      const radius = 150; // Distance from hub to spokes
+      const newNodeX = node.x + Math.cos(angle) * radius;
+      const newNodeY = node.y + Math.sin(angle) * radius;
+      
+      const newNode = {
+        id: newNodeId,
+        label: `Spoke ${i + 1}`,
+        color: generateNodeColor({ payload: {} }), // Use standard node color
+        size: generateNodeSize({ payload: {} }), // Use standard node size
+        x: newNodeX,
+        y: newNodeY,
+        payload: { 
+          type: 'spoke_node',
+          sourceNode: node.id,
+          content: `Spoke node ${i + 1} connected to ${node.id}`,
+          filename: `spoke_${Date.now()}_${i}`,
+          department: 'Generated',
+          file_type: 'generated'
+        }
+      };
+      
+      newNodes.push(newNode);
+      
+      // Create connection from hub to spoke
+      const spokeLink = {
+        source: node.id,
+        target: newNodeId,
+        value: 1,
+        distance: 80,
+        type: 'hub-spoke',
+        similarity: 1.0
+      };
+      
+      newLinks.push(spokeLink);
+    }
+    
+    // Update graph data
+    setGraphData(prev => ({
+      nodes: [...prev.nodes, ...newNodes],
+      links: [...prev.links, ...newLinks]
+    }));
+    
+    console.log(`Created ${newNodes.length} new spoke nodes with ${newLinks.length} connections`);
+  };
+
+  // Handle node click - only selection, no content tile
   const handleNodeClick = (node) => {
     handleNodeSelection(node);
-    
-    // Show node content tile
-    if (node && node.payload) {
-      setSelectedNodeContent({
-        id: node.id,
-        content: node.payload.content || 'No content available',
-        filename: node.payload.filename || 'Unknown file',
-        department: node.payload.department || 'Unknown',
-        file_type: node.payload.file_type || 'Unknown',
-        chunk_index: node.payload.chunk_index || 0
-      });
-      setShowNodeContent(true);
-    }
   };
 
   // Handle node hover with completely stable positioning - NO STATE UPDATES
@@ -1283,12 +1478,14 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
     setSelectedNode(null);
     setHighlightedNodes(new Set());
     setHighlightedLinks(new Set());
+    setShowContentFlag(false); // Hide flag when selections are cleared
   };
 
   // Handle background click
   const handleBackgroundClick = () => {
     if (!visualizationSettings.multiSelect) {
       clearSelections();
+      setShowContentFlag(false); // Hide flag when background is clicked
     }
   };
 
@@ -1417,6 +1614,45 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
                 max="100"
               />
             </div>
+            
+            {/* Qdrant Node Generation Configuration */}
+            <div className="bg-gray-600 rounded-lg p-3 mt-4">
+              <h4 className="text-sm font-semibold text-white mb-3">Qdrant Node Generation</h4>
+              <div className="space-y-3">
+                <div className="bg-gray-500 rounded p-2">
+                  <div className="text-xs text-gray-300 mb-1">
+                    Qdrant starts with single node only
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    No automatic hub objects are created
+                  </div>
+                </div>
+                
+                <div className="bg-gray-500 rounded p-2">
+                  <div className="text-xs text-gray-300 mb-1">
+                    Double-click behavior: Creates new nodes
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    Double-click any node to create new nodes with {visualizationSettings.spokesPerHub} connections
+                  </div>
+                </div>
+                
+                <div className="bg-gray-500 rounded p-2">
+                  <div className="text-xs text-gray-300 mb-1">
+                    Spokes per Node: {visualizationSettings.spokesPerHub}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    Controlled by Hub & Spoke Model settings in Visualization Options
+                  </div>
+                </div>
+                
+                <div className="text-xs text-gray-400">
+                  Original node acts as hub for new connections
+                </div>
+              </div>
+            </div>
+            
+            
             
             <div className="flex items-center space-x-2">
               <input
@@ -1960,6 +2196,80 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
                   </div>
                 </div>
 
+                {/* Hub and Spoke Model */}
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                    <Network className="w-4 h-4 mr-2" />
+                    Hub & Spoke Model
+                  </h3>
+                  <div className="space-y-4">
+                    <label className="flex items-start space-x-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={visualizationSettings.hubSpokeMode}
+                        onChange={(e) => setVisualizationSettings(prev => ({ ...prev, hubSpokeMode: e.target.checked }))}
+                        className="mt-1"
+                      />
+                      <div>
+                        <div className="text-white font-medium">Enable Hub & Spoke</div>
+                        <div className="text-xs text-gray-400">Double-click nodes to create hubs with similarity-based spokes</div>
+                      </div>
+                    </label>
+                    
+                    {visualizationSettings.hubSpokeMode && (
+                      <>
+                        <div>
+                          <label className="block text-sm text-gray-300 mb-1">
+                            Spokes per Hub: {visualizationSettings.spokesPerHub}
+                          </label>
+                          <input
+                            type="range"
+                            min="2"
+                            max="10"
+                            value={visualizationSettings.spokesPerHub}
+                            onChange={(e) => setVisualizationSettings(prev => ({ 
+                              ...prev, 
+                              spokesPerHub: parseInt(e.target.value) 
+                            }))}
+                            className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <div className="flex justify-between text-xs text-gray-400 mt-1">
+                            <span>2</span>
+                            <span>10</span>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm text-gray-300 mb-1">
+                            Max Hubs: {visualizationSettings.maxHubs}
+                          </label>
+                          <input
+                            type="range"
+                            min="1"
+                            max="20"
+                            value={visualizationSettings.maxHubs}
+                            onChange={(e) => setVisualizationSettings(prev => ({ 
+                              ...prev, 
+                              maxHubs: parseInt(e.target.value) 
+                            }))}
+                            className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <div className="flex justify-between text-xs text-gray-400 mt-1">
+                            <span>1</span>
+                            <span>20</span>
+                          </div>
+                        </div>
+                        
+                        <div className="text-xs text-gray-400">
+                          <div>• Double-click any node to create a hub</div>
+                          <div>• Hub connects to {visualizationSettings.spokesPerHub} most similar nodes</div>
+                          <div>• Current hubs: {hubs.length}/{visualizationSettings.maxHubs}</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
                </div>
              </div>
              
@@ -2049,6 +2359,28 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
                 }
               }
               
+              // Draw hub nodes with special styling
+              if (node.isHub) {
+                const hubSize = node.size || (settings.nodeSize * 3);
+                ctx.fillStyle = '#ff6b6b'; // Red color for hubs
+                ctx.strokeStyle = '#cc0000'; // Dark red border
+                ctx.lineWidth = 3;
+                
+                // Draw hub as a larger circle with special styling
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, hubSize, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Add hub label
+                ctx.fillStyle = 'white';
+                ctx.font = `${fontSize * 1.2}px Sans-Serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(node.label || 'HUB', node.x, node.y);
+                return; // Don't draw regular node for hubs
+              }
+
               // Draw anchor points with same shape as regular nodes but 2x Node Size setting
               if (node.isAnchor && visualizationSettings.showAnchors) {
                 // Use the anchor's actual size (2x Node Size setting)
@@ -2284,6 +2616,20 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
             linkDirectionalArrowLength={3}
             linkDirectionalArrowRelPos={1}
             onNodeClick={handleNodeClick}
+            onNodeDoubleClick={(node) => {
+              console.log('=== RAW DOUBLE-CLICK EVENT ===');
+              console.log('Event triggered at:', new Date().toISOString());
+              console.log('Node object:', node);
+              console.log('Node keys:', Object.keys(node || {}));
+              console.log('Node ID type:', typeof node?.id);
+              console.log('Node ID value:', node?.id);
+              
+              // Visual test indicator
+              setDoubleClickTest(true);
+              setTimeout(() => setDoubleClickTest(false), 2000);
+              
+              handleNodeDoubleClick(node);
+            }}
             onNodeHover={handleNodeHover}
             onNodeDrag={handleNodeDrag}
             onNodeDragEnd={handleNodeDragEnd}
@@ -2313,13 +2659,53 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
           dangerouslySetInnerHTML={{ __html: tooltip.content }}
         />
       )}
-      
-      {/* Debug info for tooltips */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed top-4 right-4 bg-black bg-opacity-75 text-white p-2 text-xs z-50">
-          <div>Tooltip visible: {tooltip.visible ? 'Yes' : 'No'}</div>
-          <div>Show tooltips: {visualizationSettings.showTooltips ? 'Yes' : 'No'}</div>
-          <div>Hovered node: {hoveredNode?.id || 'None'}</div>
+
+      {/* Double-Click Test Indicator */}
+      {doubleClickTest && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg">
+          <div className="flex items-center">
+            <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></div>
+            <span className="text-sm font-medium">Double-Click Detected!</span>
+          </div>
+        </div>
+      )}
+
+      {/* View Node Content Flag - Short Flag from Right Side */}
+      {showContentFlag && selectedNode && (
+        <div 
+          className="fixed right-0 top-40 z-50 cursor-pointer"
+          onClick={() => {
+            // Populate node content when flag is clicked
+            if (selectedNode && selectedNode.payload) {
+              setSelectedNodeContent({
+                id: selectedNode.id,
+                content: selectedNode.payload.content || 'No content available',
+                filename: selectedNode.payload.filename || 'Unknown file',
+                department: selectedNode.payload.department || 'Unknown',
+                file_type: selectedNode.payload.file_type || 'Unknown',
+                chunk_index: selectedNode.payload.chunk_index || 0
+              });
+              setShowNodeContent(true);
+            }
+          }}
+        >
+          <div className="bg-blue-600 text-white px-3 py-2 rounded-l-lg shadow-lg hover:bg-blue-700 transition-colors">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></div>
+                <span className="text-xs font-medium">View Content</span>
+              </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowContentFlag(false);
+                }}
+                className="ml-2 text-white hover:text-gray-300 text-sm"
+              >
+                ×
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
