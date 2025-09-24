@@ -1101,10 +1101,66 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
         console.log(`Created ${anchorLinks.length} anchor connections`);
       }
 
-      // Qdrant starts with single node only - no automatic hub generation
-      console.log('✅ Qdrant graph loaded with original nodes only');
-
-      setGraphData({ nodes: finalNodes, links });
+      // Create initial hub with spokes
+      if (finalNodes.length > 0 && visualizationSettings.hubSpokeMode) {
+        const hubNode = finalNodes[0]; // Use the first node as the hub
+        const spokesPerHub = visualizationSettings.spokesPerHub;
+        const spokeNodes = [];
+        const spokeLinks = [];
+        
+        console.log(`Creating initial hub with ${spokesPerHub} spokes for node:`, hubNode.id);
+        
+        // Create spoke nodes around the hub
+        for (let i = 0; i < spokesPerHub; i++) {
+          const spokeId = `initial_spoke_${i}`;
+          const angle = (i * 2 * Math.PI) / spokesPerHub;
+          const radius = 150; // Distance from hub to spokes
+          const spokeX = hubNode.x + Math.cos(angle) * radius;
+          const spokeY = hubNode.y + Math.sin(angle) * radius;
+          
+          const spokeNode = {
+            id: spokeId,
+            label: `Spoke ${i + 1}`,
+            color: generateNodeColor({ payload: {} }),
+            size: generateNodeSize({ payload: {} }),
+            x: spokeX,
+            y: spokeY,
+            payload: { 
+              type: 'initial_spoke',
+              sourceNode: hubNode.id,
+              content: `Initial spoke node ${i + 1} connected to ${hubNode.id}`,
+              filename: `initial_spoke_${i}`,
+              department: 'Generated',
+              file_type: 'generated'
+            }
+          };
+          
+          spokeNodes.push(spokeNode);
+          
+          // Create connection from hub to spoke
+          const spokeLink = {
+            source: hubNode.id,
+            target: spokeId,
+            value: 1,
+            distance: 80,
+            type: 'hub-spoke',
+            similarity: 1.0
+          };
+          
+          spokeLinks.push(spokeLink);
+        }
+        
+        // Combine hub node with spoke nodes
+        const allNodes = [...finalNodes, ...spokeNodes];
+        const allLinks = [...links, ...spokeLinks];
+        
+        console.log(`✅ Created initial hub with ${spokeNodes.length} spokes`);
+        setGraphData({ nodes: allNodes, links: allLinks });
+      } else {
+        // Qdrant starts with single node only - no automatic hub generation
+        console.log('✅ Qdrant graph loaded with original nodes only');
+        setGraphData({ nodes: finalNodes, links });
+      }
     } catch (err) {
       console.error('Error fetching graph data:', err);
       setError(err.message);
@@ -2615,20 +2671,29 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
             }}
             linkDirectionalArrowLength={3}
             linkDirectionalArrowRelPos={1}
-            onNodeClick={handleNodeClick}
-            onNodeDoubleClick={(node) => {
-              console.log('=== RAW DOUBLE-CLICK EVENT ===');
-              console.log('Event triggered at:', new Date().toISOString());
-              console.log('Node object:', node);
-              console.log('Node keys:', Object.keys(node || {}));
-              console.log('Node ID type:', typeof node?.id);
-              console.log('Node ID value:', node?.id);
+            onNodeClick={(node) => {
+              // Handle both single click and double-click detection
+              const now = Date.now();
+              const lastClickTime = node._lastClickTime || 0;
+              const timeDiff = now - lastClickTime;
               
-              // Visual test indicator
-              setDoubleClickTest(true);
-              setTimeout(() => setDoubleClickTest(false), 2000);
+              if (timeDiff < 300) { // Double-click detected (within 300ms)
+                console.log('=== DOUBLE-CLICK DETECTED ===');
+                console.log('Node:', node);
+                console.log('Time difference:', timeDiff);
+                
+                // Visual test indicator
+                setDoubleClickTest(true);
+                setTimeout(() => setDoubleClickTest(false), 2000);
+                
+                handleNodeDoubleClick(node);
+              } else {
+                // Single click
+                handleNodeClick(node);
+              }
               
-              handleNodeDoubleClick(node);
+              // Update last click time
+              node._lastClickTime = now;
             }}
             onNodeHover={handleNodeHover}
             onNodeDrag={handleNodeDrag}
