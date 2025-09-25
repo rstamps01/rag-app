@@ -7,6 +7,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
+import ForceGraph3D from 'react-force-graph-3d';
+import SpriteText from 'three-spritetext';
+import * as THREE from 'three';
 import * as d3 from 'd3';
 import { 
   RefreshCw, 
@@ -55,6 +58,7 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
     enableFiltering: true,
     multiSelect: false,
     showText: false, // Show/hide text labels
+    textSize: 'small', // small, medium, large, tiny
     showInterconnectivity: true, // Show node connections
     maxSeparationLevels: 3, // Maximum levels of separation to show
     highlightSelected: true, // Highlight selected node and connections
@@ -63,8 +67,9 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
     minDistance: 20, // Minimum distance between nodes
     maxDistance: 200, // Maximum distance between nodes
     similarityThreshold: 0.7, // Threshold for considering nodes similar
-    graphType: 'force-directed', // force-directed, disjoint-force, force-tree, qdrant-native, hierarchical-cluster
+    graphType: 'force-directed', // force-directed, disjoint-force, force-tree, qdrant-native, hierarchical-cluster, auto-colored-3d
     showAnchors: true, // Show central anchor points
+    use3D: false, // Toggle between 2D and 3D visualization
     anchorStrength: 0.02, // Strength of anchor connections
     maintainInterconnectivity: true, // Maintain interconnectivity
     hubSpokeMode: true, // Enable hub and spoke model
@@ -121,6 +126,51 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
       default:
         return node.label || node.id;
     }
+  };
+
+  // Generate automatic colors for auto-colored 3D visualization
+  const generateAutoColor = (node, index, totalNodes) => {
+    const { colorScheme } = visualizationSettings;
+    const payload = node.payload || {};
+    
+    // Create a color palette based on the scheme
+    const colorPalettes = {
+      'group': ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43'],
+      'department': ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#f1c40f'],
+      'file_type': ['#ff4757', '#3742fa', '#2ed573', '#ffa502', '#ff6348', '#5352ed', '#ff3838', '#2f3542', '#ff6b6b', '#5f27cd'],
+      'document': ['#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43', '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57'],
+      'chunk_index': ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43']
+    };
+    
+    const palette = colorPalettes[colorScheme] || colorPalettes['group'];
+    
+    // Determine color based on scheme
+    let colorIndex = 0;
+    switch (colorScheme) {
+      case 'group':
+        colorIndex = (node.group || 0) % palette.length;
+        break;
+      case 'department':
+        const dept = payload.department || 'unknown';
+        colorIndex = dept.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % palette.length;
+        break;
+      case 'file_type':
+        const fileType = payload.file_type || 'unknown';
+        colorIndex = fileType.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % palette.length;
+        break;
+      case 'document':
+        const docId = payload.document_id || node.id;
+        colorIndex = docId.toString().split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % palette.length;
+        break;
+      case 'chunk_index':
+        const chunkIdx = payload.chunk_index || 0;
+        colorIndex = chunkIdx % palette.length;
+        break;
+      default:
+        colorIndex = index % palette.length;
+    }
+    
+    return palette[colorIndex];
   };
 
   const generateNodeColor = (node) => {
@@ -875,7 +925,7 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          limit: 1, // Force only 1 node for Qdrant single node start
+          limit: visualizationSettings.graphType === 'qdrant-native' ? 1 : settings.nodeLimit, // Use Node Limit for non-Qdrant graphs
           with_payload: true,
           with_vector: false, // Don't fetch vectors for performance
           filter: null // Add explicit filter parameter
@@ -1101,14 +1151,14 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
         console.log(`Created ${anchorLinks.length} anchor connections`);
       }
 
-      // Create initial hub with spokes
-      if (finalNodes.length > 0 && visualizationSettings.hubSpokeMode) {
+      // Create initial hub with spokes (only for Qdrant graphs)
+      if (finalNodes.length > 0 && visualizationSettings.hubSpokeMode && visualizationSettings.graphType === 'qdrant-native') {
         const hubNode = finalNodes[0]; // Use the first node as the hub
         const spokesPerHub = visualizationSettings.spokesPerHub;
         const spokeNodes = [];
         const spokeLinks = [];
         
-        console.log(`Creating initial hub with ${spokesPerHub} spokes for node:`, hubNode.id);
+        console.log(`Creating initial Qdrant hub with ${spokesPerHub} spokes for node:`, hubNode.id);
         
         // Create spoke nodes around the hub
         for (let i = 0; i < spokesPerHub; i++) {
@@ -1154,11 +1204,11 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
         const allNodes = [...finalNodes, ...spokeNodes];
         const allLinks = [...links, ...spokeLinks];
         
-        console.log(`✅ Created initial hub with ${spokeNodes.length} spokes`);
+        console.log(`✅ Created initial Qdrant hub with ${spokeNodes.length} spokes`);
         setGraphData({ nodes: allNodes, links: allLinks });
       } else {
-        // Qdrant starts with single node only - no automatic hub generation
-        console.log('✅ Qdrant graph loaded with original nodes only');
+        // Non-Qdrant graphs use Node Limit setting
+        console.log(`✅ Graph loaded with ${finalNodes.length} nodes (Node Limit: ${settings.nodeLimit})`);
         setGraphData({ nodes: finalNodes, links });
       }
     } catch (err) {
@@ -1173,6 +1223,42 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
   useEffect(() => {
     fetchGraphData();
   }, [collectionName, settings.nodeLimit]);
+
+  // Keyboard shortcuts for hub management
+  useEffect(() => {
+    const handleKeyPress = (event) => {
+      // Delete key to remove selected hub
+      if (event.key === 'Delete' && selectedNode && (selectedNode.isHub || selectedNode.payload?.type === 'spoke_node')) {
+        const hubId = selectedNode.isHub ? selectedNode.id : selectedNode.payload?.sourceNode;
+        const nodesToDelete = graphData.nodes.filter(node => 
+          node.id === hubId || 
+          node.payload?.sourceNode === hubId ||
+          node.id === selectedNode.id
+        );
+        const linksToDelete = graphData.links.filter(link => 
+          nodesToDelete.some(node => node.id === link.source.id || node.id === link.target.id)
+        );
+        
+        setGraphData(prev => ({
+          nodes: prev.nodes.filter(node => !nodesToDelete.some(n => n.id === node.id)),
+          links: prev.links.filter(link => !linksToDelete.some(l => l === link))
+        }));
+        
+        setSelectedNode(null);
+        console.log(`Deleted hub and ${nodesToDelete.length - 1} associated nodes (keyboard shortcut)`);
+      }
+      
+      // Escape key to clear selection
+      if (event.key === 'Escape') {
+        setSelectedNode(null);
+        setSelectedNodes([]);
+        setShowContentFlag(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [selectedNode, graphData]);
 
   // Auto-refresh graph when visualization settings change and menu is pinned
   useEffect(() => {
@@ -1565,7 +1651,7 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
   };
 
   return (
-    <div className={`${fullWidth ? 'h-full w-full' : 'bg-gray-800 rounded-lg'} overflow-hidden`}>
+    <div className={`${fullWidth ? 'h-full w-full' : 'bg-gray-800 rounded-lg'} overflow-hidden relative`}>
       {/* Header */}
       <div className="bg-gray-700 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -1626,6 +1712,66 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
               title="Clear Selections"
             >
               <X className="w-4 h-4" />
+            </button>
+          )}
+          
+          {/* Delete Selected Hub Button */}
+          {selectedNode && (selectedNode.isHub || selectedNode.payload?.type === 'spoke_node') && (
+            <button
+              onClick={() => {
+                if (selectedNode.isHub || selectedNode.payload?.type === 'spoke_node') {
+                  // Delete the selected hub and its spokes
+                  const hubId = selectedNode.isHub ? selectedNode.id : selectedNode.payload?.sourceNode;
+                  const nodesToDelete = graphData.nodes.filter(node => 
+                    node.id === hubId || 
+                    node.payload?.sourceNode === hubId ||
+                    node.id === selectedNode.id
+                  );
+                  const linksToDelete = graphData.links.filter(link => 
+                    nodesToDelete.some(node => node.id === link.source.id || node.id === link.target.id)
+                  );
+                  
+                  setGraphData(prev => ({
+                    nodes: prev.nodes.filter(node => !nodesToDelete.some(n => n.id === node.id)),
+                    links: prev.links.filter(link => !linksToDelete.some(l => l === link))
+                  }));
+                  
+                  setSelectedNode(null);
+                  console.log(`Deleted hub and ${nodesToDelete.length - 1} associated nodes`);
+                }
+              }}
+              className="p-2 bg-orange-600 hover:bg-orange-500 rounded transition-colors"
+              title="Delete Selected Hub"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+          
+          {/* Reset All Hubs Button */}
+          {graphData.nodes.some(node => node.isHub || node.payload?.type === 'spoke_node') && (
+            <button
+              onClick={() => {
+                // Reset to original data (remove all generated hubs)
+                const originalNodes = graphData.nodes.filter(node => 
+                  !node.isHub && 
+                  !node.payload?.type?.includes('spoke') && 
+                  !node.payload?.type?.includes('generated') &&
+                  !node.id?.includes('spoke_') &&
+                  !node.id?.includes('initial_spoke_')
+                );
+                const originalLinks = graphData.links.filter(link => 
+                  !link.type?.includes('hub-spoke') &&
+                  !link.type?.includes('node-connection')
+                );
+                
+                setGraphData({ nodes: originalNodes, links: originalLinks });
+                setSelectedNode(null);
+                console.log('Reset to original data - removed all generated hubs');
+              }}
+              className="p-2 bg-purple-600 hover:bg-purple-500 rounded transition-colors"
+              title="Reset All Hubs"
+            >
+              <RefreshCw className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -1726,20 +1872,18 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
 
        {/* Visualization Menu - Slide out from left */}
        {showVisualizationMenu && (
-         <div className="fixed inset-0 z-50 overflow-hidden">
-           {/* Backdrop */}
-           <div 
-             className="absolute inset-0 bg-black bg-opacity-50"
-             onClick={() => {
-               if (!isMenuPinned) {
-                 setShowVisualizationMenu(false);
-               }
-             }}
-           />
+         <div className="fixed left-0 top-0 h-screen z-50 overflow-hidden">
+           {/* Backdrop - only show when menu is not pinned */}
+           {!isMenuPinned && (
+             <div 
+               className="fixed left-0 top-0 w-96 h-screen bg-black bg-opacity-20"
+               onClick={() => setShowVisualizationMenu(false)}
+             />
+           )}
            
            {/* Slide-out Panel */}
-           <div className="absolute left-0 top-0 h-full w-96 bg-gray-800 border-r border-gray-700 shadow-2xl transform transition-transform duration-300 ease-in-out">
-             <div className="flex flex-col h-full">
+           <div className="relative h-screen w-96 bg-gray-800 border-r border-gray-700 shadow-2xl transform transition-transform duration-300 ease-in-out">
+             <div className="flex flex-col h-screen">
                {/* Header */}
                <div className="flex items-center justify-between p-6 border-b border-gray-700">
                  <h2 className="text-xl font-semibold text-white flex items-center">
@@ -1844,7 +1988,7 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
                )}
 
                {/* Content */}
-               <div className="flex-1 overflow-y-auto p-6 pb-24 space-y-6">
+               <div className="flex-1 overflow-y-auto p-6 space-y-6" style={{ paddingBottom: '100px' }}>
                  {/* Graph Layout Options */}
                  <div className="bg-gray-700 rounded-lg p-4">
                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
@@ -1865,6 +2009,7 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
                        <option value="force-tree">3. Force-Directed Tree</option>
                        <option value="qdrant-native">4. Qdrant Native Style</option>
                        <option value="hierarchical-cluster">5. Hierarchical Clustering</option>
+                       <option value="auto-colored-3d">6. Auto-Colored 3D</option>
                      </select>
                      <p className="text-xs text-gray-400 mt-1">
                        {visualizationSettings.graphType === 'force-directed' && 'Standard D3 force-directed layout with natural clustering'}
@@ -1872,6 +2017,7 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
                        {visualizationSettings.graphType === 'force-tree' && 'Tree-like hierarchy with force-directed positioning'}
                        {visualizationSettings.graphType === 'qdrant-native' && 'Replicates Qdrant dashboard visualization style'}
                        {visualizationSettings.graphType === 'hierarchical-cluster' && 'Shows document hierarchy and semantic clustering'}
+                       {visualizationSettings.graphType === 'auto-colored-3d' && '3D visualization with automatic color assignment based on node properties'}
                      </p>
                    </div>
                  </div>
@@ -2091,6 +2237,22 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
                          </div>
                        </label>
                      ))}
+                     
+                     {/* Text Size Control */}
+                     <div className="mt-4 pt-4 border-t border-gray-600">
+                       <label className="block text-sm font-medium text-white mb-2">Text Size</label>
+                       <select
+                         value={visualizationSettings.textSize}
+                         onChange={(e) => setVisualizationSettings(prev => ({ ...prev, textSize: e.target.value }))}
+                         className="w-full px-3 py-2 bg-gray-600 text-white rounded border border-gray-500 focus:border-blue-500 focus:outline-none"
+                       >
+                         <option value="tiny">Tiny (4px)</option>
+                         <option value="small">Small (8px)</option>
+                         <option value="medium">Medium (12px)</option>
+                         <option value="large">Large (16px)</option>
+                       </select>
+                       <p className="text-xs text-gray-400 mt-1">Control the size of node text labels</p>
+                     </div>
                    </div>
                    
                    {/* Separation Levels Control */}
@@ -2230,6 +2392,7 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
                   </h3>
                   <div className="space-y-3">
                     {[
+                      { key: 'use3D', label: '3D Visualization', desc: 'Enable 3D graph with depth and rotation' },
                       { key: 'showTooltips', label: 'Show Tooltips', desc: 'Display info on hover' },
                       { key: 'showClustering', label: 'Enable Clustering', desc: 'Group related nodes' },
                       { key: 'showAnimations', label: 'Enable Animations', desc: 'Smooth transitions' },
@@ -2330,7 +2493,9 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
              </div>
              
              {/* Fixed Apply Changes Button at Bottom */}
-             <div className="absolute bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-4">
+             <div className="absolute bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-4 shadow-lg z-10">
+               {/* Gradient fade effect above button */}
+               <div className="absolute -top-4 left-0 right-0 h-4 bg-gradient-to-t from-gray-800 to-transparent pointer-events-none"></div>
                <button
                  onClick={() => {
                    // Refresh graph data to apply new visualization settings
@@ -2339,17 +2504,27 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
                      setShowVisualizationMenu(false);
                    }
                  }}
-                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded transition-colors"
+                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded transition-colors shadow-md"
                >
                  Apply Changes
                </button>
+               <div className="text-xs text-gray-400 text-center mt-2">
+                 {isMenuPinned ? 'Settings auto-apply when pinned' : 'Click to apply and close menu'}
+               </div>
              </div>
            </div>
          </div>
        )}
 
       {/* Graph Visualization */}
-      <div ref={containerRef} className="relative" style={{ height: height }}>
+      <div ref={containerRef} className="relative" style={{ height: height, backgroundColor: '#1f2937' }}>
+        {/* Interactive indicator when menu is pinned */}
+        {showVisualizationMenu && isMenuPinned && (
+          <div className="absolute top-2 right-2 z-10 bg-green-600 text-white px-2 py-1 rounded text-xs flex items-center space-x-1">
+            <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+            <span>Interactive</span>
+          </div>
+        )}
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -2378,13 +2553,137 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
               <p className="text-gray-400">No data available for visualization</p>
             </div>
           </div>
+        ) : (visualizationSettings.use3D || visualizationSettings.graphType === 'auto-colored-3d') ? (
+          <ForceGraph3D
+            ref={graphRef}
+            graphData={graphData}
+            nodeLabel={visualizationSettings.showText ? 'label' : ''}
+            nodeColor={node => {
+              if (visualizationSettings.graphType === 'auto-colored-3d') {
+                // Use auto-coloring for auto-colored 3D mode
+                const nodeIndex = graphData.nodes.indexOf(node);
+                return generateAutoColor(node, nodeIndex, graphData.nodes.length);
+              }
+              return node.color || generateNodeColor(node);
+            }}
+            nodeVal={node => node.size || generateNodeSize(node)}
+            nodeThreeObject={(node) => {
+              // Create 3D node objects based on shape
+              const size = node.size || generateNodeSize(node);
+              const color = visualizationSettings.graphType === 'auto-colored-3d' 
+                ? generateAutoColor(node, graphData.nodes.indexOf(node), graphData.nodes.length)
+                : (node.color || generateNodeColor(node));
+              
+              if (visualizationSettings.nodeShape === 'square') {
+                const geometry = new THREE.BoxGeometry(size, size, size);
+                const material = new THREE.MeshLambertMaterial({ color });
+                return new THREE.Mesh(geometry, material);
+              } else if (visualizationSettings.nodeShape === 'diamond') {
+                const geometry = new THREE.OctahedronGeometry(size / 2);
+                const material = new THREE.MeshLambertMaterial({ color });
+                return new THREE.Mesh(geometry, material);
+              } else {
+                // Circle (sphere in 3D)
+                const geometry = new THREE.SphereGeometry(size / 2, 16, 12);
+                const material = new THREE.MeshLambertMaterial({ color });
+                return new THREE.Mesh(geometry, material);
+              }
+            }}
+            linkThreeObject={(link) => {
+              // Hide link text if interconnectivity is disabled
+              if (!visualizationSettings.showInterconnectivity) {
+                return null;
+              }
+              // Create text labels for links
+              const sprite = new SpriteText(link.label || `${link.source.id} → ${link.target.id}`);
+              sprite.color = link.type === 'hub-spoke' ? '#ff6b6b' : '#fff';
+              sprite.textHeight = 4;
+              return sprite;
+            }}
+            linkThreeObjectExtend={visualizationSettings.showInterconnectivity}
+            linkPositionUpdate={(sprite, { start, end }) => {
+              // Position link text at the midpoint
+              const middlePos = Object.assign(...['x', 'y', 'z'].map(c => ({
+                [c]: start[c] + (end[c] - start[c]) / 2
+              })));
+              Object.assign(sprite.position, middlePos);
+            }}
+            linkColor={link => {
+              // Hide links if interconnectivity is disabled
+              if (!visualizationSettings.showInterconnectivity) {
+                return 'rgba(0,0,0,0)'; // Transparent
+              }
+              if (link.type === 'hub-spoke') return '#ff6b6b';
+              if (link.type === 'anchor') return '#ffd700';
+              if (selectedNode && (link.source.id === selectedNode.id || link.target.id === selectedNode.id)) {
+                return '#4CAF50';
+              }
+              return '#666';
+            }}
+            linkWidth={link => {
+              // Hide links if interconnectivity is disabled
+              if (!visualizationSettings.showInterconnectivity) {
+                return 0; // No width
+              }
+              if (selectedNode && (link.source.id === selectedNode.id || link.target.id === selectedNode.id)) {
+                return 3;
+              }
+              return settings.linkWidth;
+            }}
+            linkDirectionalArrowLength={visualizationSettings.showInterconnectivity ? 3 : 0}
+            linkDirectionalArrowRelPos={1}
+            onNodeClick={(node) => {
+              // Handle both single click and double-click detection
+              const now = Date.now();
+              const lastClickTime = node._lastClickTime || 0;
+              const timeDiff = now - lastClickTime;
+              
+              if (timeDiff < 300) { // Double-click detected (within 300ms)
+                console.log('=== 3D DOUBLE-CLICK DETECTED ===');
+                console.log('Node:', node);
+                console.log('Time difference:', timeDiff);
+                
+                // Visual test indicator
+                setDoubleClickTest(true);
+                setTimeout(() => setDoubleClickTest(false), 2000);
+                
+                handleNodeDoubleClick(node);
+              } else {
+                // Single click
+                handleNodeClick(node);
+              }
+              
+              // Update last click time
+              node._lastClickTime = now;
+            }}
+            onNodeHover={handleNodeHover}
+            onNodeDrag={handleNodeDrag}
+            onNodeDragEnd={handleNodeDragEnd}
+            onBackgroundClick={handleBackgroundClick}
+            cooldownTicks={visualizationSettings.showAnimations ? 100 : 0}
+            d3AlphaDecay={visualizationSettings.showAnimations ? 0.0228 : 0.1}
+            d3VelocityDecay={visualizationSettings.showAnimations ? 0.4 : 0.8}
+            enableZoomInteraction={true}
+            enablePanInteraction={true}
+            enableNodeDrag={true}
+            enablePointerInteraction={true}
+            showNavInfo={false}
+            controlType="orbit"
+            width={fullWidth ? dimensions.width : 800}
+            height={fullWidth ? dimensions.height : 500}
+          />
         ) : (
           <ForceGraph2D
             ref={graphRef}
             graphData={graphData}
-            nodeLabel={settings.showLabels ? 'label' : ''}
+            nodeLabel={visualizationSettings.showText ? 'label' : ''}
             nodeColor={node => node.color || generateNodeColor(node)}
             nodeVal={node => node.size || generateNodeSize(node)}
+            backgroundRender={(ctx, globalScale) => {
+              // Set background to match UI theme
+              ctx.fillStyle = '#1f2937';
+              ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            }}
             nodeCanvasObject={(node, ctx, globalScale) => {
               // Skip anchor nodes if they shouldn't be shown
               if (node.isAnchor && !visualizationSettings.showAnchors) {
@@ -2392,284 +2691,84 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
               }
               
               const label = node.label || node.id;
-              const fontSize = 12/globalScale;
+              // Calculate font size based on text size setting
+              const baseFontSize = {
+                'tiny': 4,
+                'small': 8,
+                'medium': 12,
+                'large': 16
+              }[visualizationSettings.textSize] || 8;
+              const fontSize = baseFontSize/globalScale;
               const size = node.size || generateNodeSize(node);
-              
-              // Determine node color based on selection and interconnectivity
-              let nodeColor = node.color || generateNodeColor(node);
-              
-              // Apply selection highlighting
-              if (visualizationSettings.highlightSelected) {
-                if (selectedNodes.some(n => n.id === node.id)) {
-                  nodeColor = '#ff6b6b'; // Selected node - Red
-                } else if (highlightedNodes.has(node.id)) {
-                  // Find which separation level this node belongs to
-                  let level = 0;
-                  for (const [levelKey, nodes] of Object.entries(nodeConnections.levels || {})) {
-                    if (nodes.has(node.id)) {
-                      level = parseInt(levelKey);
-                      break;
-                    }
-                  }
-                  nodeColor = getSeparationLevelColor(level);
-                }
-              }
-              
-              // Draw hub nodes with special styling
-              if (node.isHub) {
-                const hubSize = node.size || (settings.nodeSize * 3);
-                ctx.fillStyle = '#ff6b6b'; // Red color for hubs
-                ctx.strokeStyle = '#cc0000'; // Dark red border
-                ctx.lineWidth = 3;
-                
-                // Draw hub as a larger circle with special styling
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, hubSize, 0, 2 * Math.PI);
-                ctx.fill();
-                ctx.stroke();
-                
-                // Add hub label
-                ctx.fillStyle = 'white';
-                ctx.font = `${fontSize * 1.2}px Sans-Serif`;
+
+              // Handle different node shapes
+              if (visualizationSettings.nodeShape === 'text') {
+                // Text-only nodes
+                ctx.font = `${fontSize}px Arial`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(node.label || 'HUB', node.x, node.y);
-                return; // Don't draw regular node for hubs
-              }
+                ctx.fillStyle = node.color || generateNodeColor(node);
+                ctx.fillText(label, node.x, node.y);
+              } else {
+                // Shape-based nodes
+                ctx.fillStyle = node.color || generateNodeColor(node);
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1/globalScale;
 
-              // Draw anchor points with same shape as regular nodes but 2x Node Size setting
-              if (node.isAnchor && visualizationSettings.showAnchors) {
-                // Use the anchor's actual size (2x Node Size setting)
-                const anchorSize = node.size || (settings.nodeSize * 2);
-                const { nodeShape } = visualizationSettings;
-                ctx.fillStyle = '#ffd700'; // Gold color for anchors
-                ctx.strokeStyle = '#ff8c00'; // Orange border
-                ctx.lineWidth = 2;
-                
-                if (nodeShape === 'square') {
-                  ctx.fillRect(node.x - anchorSize, node.y - anchorSize, anchorSize * 2, anchorSize * 2);
-                  ctx.strokeRect(node.x - anchorSize, node.y - anchorSize, anchorSize * 2, anchorSize * 2);
-                } else if (nodeShape === 'diamond') {
-                  ctx.beginPath();
-                  ctx.moveTo(node.x, node.y - anchorSize);
-                  ctx.lineTo(node.x + anchorSize, node.y);
-                  ctx.lineTo(node.x, node.y + anchorSize);
-                  ctx.lineTo(node.x - anchorSize, node.y);
-                  ctx.closePath();
-                  ctx.fill();
-                  ctx.stroke();
-                } else if (nodeShape === 'text') {
-                  ctx.fillRect(node.x - anchorSize * 2, node.y - anchorSize, anchorSize * 4, anchorSize * 2);
-                  ctx.strokeRect(node.x - anchorSize * 2, node.y - anchorSize, anchorSize * 4, anchorSize * 2);
-                  ctx.fillStyle = 'white';
-                  ctx.font = `${fontSize * 1.2}px Sans-Serif`;
-                  ctx.textAlign = 'center';
-                  ctx.textBaseline = 'middle';
-                  ctx.fillText('ANCHOR', node.x, node.y);
+                if (visualizationSettings.nodeShape === 'square') {
+                  ctx.fillRect(node.x - size/2, node.y - size/2, size, size);
+                  ctx.strokeRect(node.x - size/2, node.y - size/2, size, size);
+                } else if (visualizationSettings.nodeShape === 'diamond') {
+                  ctx.save();
+                  ctx.translate(node.x, node.y);
+                  ctx.rotate(Math.PI / 4);
+                  ctx.fillRect(-size/2, -size/2, size, size);
+                  ctx.strokeRect(-size/2, -size/2, size, size);
+                  ctx.restore();
                 } else {
                   // Circle (default)
                   ctx.beginPath();
-                  ctx.arc(node.x, node.y, anchorSize, 0, 2 * Math.PI);
+                  ctx.arc(node.x, node.y, size/2, 0, 2 * Math.PI, false);
                   ctx.fill();
                   ctx.stroke();
                 }
-                return; // Don't draw regular node for anchors
-              }
-              
-              // Draw node shape based on visualization settings
-              const { nodeShape } = visualizationSettings;
-              ctx.fillStyle = nodeColor;
-              
-              if (nodeShape === 'square') {
-                ctx.fillRect(node.x - size, node.y - size, size * 2, size * 2);
-              } else if (nodeShape === 'diamond') {
-                ctx.beginPath();
-                ctx.moveTo(node.x, node.y - size);
-                ctx.lineTo(node.x + size, node.y);
-                ctx.lineTo(node.x, node.y + size);
-                ctx.lineTo(node.x - size, node.y);
-                ctx.closePath();
-                ctx.fill();
-              } else if (nodeShape === 'text') {
-                ctx.fillRect(node.x - size * 2, node.y - size, size * 4, size * 2);
-                ctx.fillStyle = 'white';
-                ctx.font = `${fontSize}px Sans-Serif`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(label.substring(0, 8), node.x, node.y);
-                return;
-              } else {
-                // Circle (default)
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, size, 0, 2 * Math.PI);
-                ctx.fill();
-              }
-              
-              // Draw label if enabled and showText is true
-              if (settings.showLabels && visualizationSettings.showText) {
-                ctx.fillStyle = 'white';
-                ctx.font = `${fontSize}px Sans-Serif`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(label, node.x, node.y);
+
+                // Add text label if enabled
+                if (visualizationSettings.showText) {
+                  ctx.font = `${fontSize}px Arial`;
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'middle';
+                  ctx.fillStyle = '#fff';
+                  ctx.strokeStyle = '#000';
+                  ctx.lineWidth = 0.5/globalScale;
+                  ctx.strokeText(label, node.x, node.y + size/2 + fontSize);
+                  ctx.fillText(label, node.x, node.y + size/2 + fontSize);
+                }
               }
             }}
-            linkColor={(link) => {
+            linkColor={link => {
               // Hide links if interconnectivity is disabled
               if (!visualizationSettings.showInterconnectivity) {
                 return 'rgba(0,0,0,0)'; // Transparent
               }
-              
-              if (highlightedLinks.has(link)) {
-                return 'rgba(255,255,255,0.8)';
+              if (link.type === 'hub-spoke') return '#ff6b6b';
+              if (link.type === 'anchor') return '#ffd700';
+              if (selectedNode && (link.source.id === selectedNode.id || link.target.id === selectedNode.id)) {
+                return '#4CAF50';
               }
-              // Color based on similarity if available
-              if (link.similarity !== undefined) {
-                const intensity = link.similarity;
-                return `rgba(255,255,255,${0.2 + intensity * 0.6})`;
-              }
-              return 'rgba(255,255,255,0.3)';
+              return '#666';
             }}
-            linkWidth={(link) => {
+            linkWidth={link => {
               // Hide links if interconnectivity is disabled
               if (!visualizationSettings.showInterconnectivity) {
                 return 0; // No width
               }
-              
-              if (highlightedLinks.has(link)) {
-                return settings.linkWidth * 2;
-              }
-              // Width based on similarity if available
-              if (link.similarity !== undefined) {
-                return settings.linkWidth * (0.5 + link.similarity * 1.5);
+              if (selectedNode && (link.source.id === selectedNode.id || link.target.id === selectedNode.id)) {
+                return 3;
               }
               return settings.linkWidth;
             }}
-            linkDistance={(link) => {
-              // Use variable distance based on settings
-              if (visualizationSettings.useVariableDistance && link.similarity !== undefined) {
-                const { minDistance = 20, maxDistance = 200 } = visualizationSettings;
-                const normalizedSimilarity = Math.max(0, Math.min(1, link.similarity));
-                return minDistance + (maxDistance - minDistance) * (1 - normalizedSimilarity);
-              }
-              return link.distance || settings.linkDistance;
-            }}
-            d3Force={(d3) => {
-              console.log('=== d3Force prop called ===');
-              console.log('d3 object:', d3);
-              console.log('graphType:', visualizationSettings.graphType);
-              
-              // Apply forces directly instead of returning a function
-              const { graphType } = visualizationSettings;
-              console.log('Switch statement - graphType:', graphType);
-              
-              switch (graphType) {
-                case 'force-directed':
-                  console.log('✅ Applying force-directed layout');
-                  d3.force('charge', d3.forceManyBody().strength(-800));
-                  d3.force('link', d3.forceLink().id(d => d.id).distance(80).strength(0.1));
-                  d3.force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.1));
-                  break;
-                  
-                case 'disjoint-force':
-                  console.log('✅ Applying disjoint-force layout');
-                  d3.force('charge', d3.forceManyBody().strength(-600));
-                  d3.force('link', d3.forceLink().id(d => d.id).distance(60).strength(0.3));
-                  d3.force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.2));
-                  break;
-                  
-                case 'force-tree':
-                  console.log('✅ Applying force-tree layout');
-                  d3.force('charge', d3.forceManyBody().strength(-400));
-                  d3.force('link', d3.forceLink().id(d => d.id).distance(100).strength(0.8));
-                  d3.force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.3));
-                  break;
-                  
-                case 'qdrant-native':
-                  console.log('✅ Applying qdrant-native layout');
-                  d3.force('charge', d3.forceManyBody().strength(-1000));
-                  d3.force('link', d3.forceLink().id(d => d.id).distance(60).strength(0.05));
-                  d3.force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.05));
-                  break;
-                  
-                case 'hierarchical-cluster':
-                  console.log('✅ Applying hierarchical-cluster layout');
-                  d3.force('charge', d3.forceManyBody().strength(-600));
-                  d3.force('link', d3.forceLink().id(d => d.id).distance(70).strength(0.2));
-                  d3.force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.1));
-                  break;
-                  
-                default:
-                  console.log('❌ Applying default force-directed layout (no match found)');
-                  d3.force('charge', d3.forceManyBody().strength(-800));
-                  d3.force('link', d3.forceLink().id(d => d.id).distance(80).strength(0.1));
-                  d3.force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.1));
-              }
-            }}
-            onEngineStart={() => {
-              console.log('=== onEngineStart called ===');
-              console.log('graphType:', visualizationSettings.graphType);
-              
-              // Apply forces directly in onEngineStart
-              const { graphType } = visualizationSettings;
-              console.log('Switch statement - graphType:', graphType);
-              
-              switch (graphType) {
-                case 'force-directed':
-                  console.log('✅ Applying force-directed layout');
-                  if (graphRef.current && graphRef.current.d3Force) {
-                    graphRef.current.d3Force('charge', d3.forceManyBody().strength(-800));
-                    graphRef.current.d3Force('link', d3.forceLink().id(d => d.id).distance(80).strength(0.1));
-                    graphRef.current.d3Force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.1));
-                  }
-                  break;
-                  
-                case 'disjoint-force':
-                  console.log('✅ Applying disjoint-force layout');
-                  if (graphRef.current && graphRef.current.d3Force) {
-                    graphRef.current.d3Force('charge', d3.forceManyBody().strength(-600));
-                    graphRef.current.d3Force('link', d3.forceLink().id(d => d.id).distance(60).strength(0.3));
-                    graphRef.current.d3Force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.2));
-                  }
-                  break;
-                  
-                case 'force-tree':
-                  console.log('✅ Applying force-tree layout');
-                  if (graphRef.current && graphRef.current.d3Force) {
-                    graphRef.current.d3Force('charge', d3.forceManyBody().strength(-400));
-                    graphRef.current.d3Force('link', d3.forceLink().id(d => d.id).distance(100).strength(0.8));
-                    graphRef.current.d3Force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.3));
-                  }
-                  break;
-                  
-                case 'qdrant-native':
-                  console.log('✅ Applying qdrant-native layout');
-                  if (graphRef.current && graphRef.current.d3Force) {
-                    graphRef.current.d3Force('charge', d3.forceManyBody().strength(-1000));
-                    graphRef.current.d3Force('link', d3.forceLink().id(d => d.id).distance(60).strength(0.05));
-                    graphRef.current.d3Force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.05));
-                  }
-                  break;
-                  
-                case 'hierarchical-cluster':
-                  console.log('✅ Applying hierarchical-cluster layout');
-                  if (graphRef.current && graphRef.current.d3Force) {
-                    graphRef.current.d3Force('charge', d3.forceManyBody().strength(-600));
-                    graphRef.current.d3Force('link', d3.forceLink().id(d => d.id).distance(70).strength(0.2));
-                    graphRef.current.d3Force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.1));
-                  }
-                  break;
-                  
-                default:
-                  console.log('❌ Applying default force-directed layout (no match found)');
-                  if (graphRef.current && graphRef.current.d3Force) {
-                    graphRef.current.d3Force('charge', d3.forceManyBody().strength(-800));
-                    graphRef.current.d3Force('link', d3.forceLink().id(d => d.id).distance(80).strength(0.1));
-                    graphRef.current.d3Force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2).strength(0.1));
-                  }
-              }
-            }}
-            linkDirectionalArrowLength={3}
+            linkDirectionalArrowLength={visualizationSettings.showInterconnectivity ? 3 : 0}
             linkDirectionalArrowRelPos={1}
             onNodeClick={(node) => {
               // Handle both single click and double-click detection
@@ -2774,158 +2873,52 @@ const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost
         </div>
       )}
 
-      {/* Node Details Panel */}
-      {selectedNode && (
-        <div className="bg-gray-700 px-4 py-3 border-t border-gray-500 max-h-96 overflow-y-auto">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="font-semibold text-white flex items-center">
-              <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-              Selected Node Details
-            </h4>
-            <button
-              onClick={() => setSelectedNode(null)}
-              className="text-gray-400 hover:text-white p-1"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Basic Information */}
-            <div className="space-y-2">
-              <h5 className="text-sm font-semibold text-blue-300">Basic Information</h5>
-              <div className="text-sm text-gray-300 space-y-1">
-                <p><strong>ID:</strong> {selectedNode.id}</p>
-                <p><strong>Group:</strong> {selectedNode.group}</p>
-                {selectedNode.payload?.filename && (
-                  <p><strong>Filename:</strong> {selectedNode.payload.filename}</p>
-                )}
-                {selectedNode.chunkIndex !== undefined && (
-                  <p><strong>Chunk Index:</strong> {selectedNode.chunkIndex}</p>
-                )}
-                {selectedNode.documentId && (
-                  <p><strong>Document ID:</strong> {selectedNode.documentId.substring(0, 12)}...</p>
-                )}
-                {selectedNode.payload?.department && (
-                  <p><strong>Department:</strong> {selectedNode.payload.department}</p>
-                )}
-                {selectedNode.payload?.file_type && (
-                  <p><strong>File Type:</strong> {selectedNode.payload.file_type}</p>
-                )}
-                {selectedNode.payload?.processed_at && (
-                  <p><strong>Processed:</strong> {new Date(selectedNode.payload.processed_at * 1000).toLocaleString()}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Connection Information */}
-            {visualizationSettings.showInterconnectivity && nodeConnections.levels && (
-              <div className="space-y-2">
-                <h5 className="text-sm font-semibold text-green-300">Connection Analysis</h5>
-                <div className="text-sm text-gray-300 space-y-1">
-                  <p><strong>Total Connected:</strong> {nodeConnections.allConnected.size - 1}</p>
-                  <p><strong>Direct Links:</strong> {nodeConnections.levels[1]?.size || 0}</p>
-                  <p><strong>Max Level:</strong> {Object.keys(nodeConnections.levels).length - 1}</p>
-                  
-                  {/* Separation Level Breakdown */}
-                  <div className="mt-2">
-                    <p className="text-xs font-semibold text-gray-400 mb-1">Separation Levels:</p>
-                    {Object.entries(nodeConnections.levels).map(([level, nodes]) => (
-                      <div key={level} className="flex items-center space-x-2 text-xs">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: getSeparationLevelColor(parseInt(level)) }}
-                        ></div>
-                        <span>Level {level}: {nodes.size} nodes</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Content Display */}
-          {selectedNode.payload?.content && (
-            <div className="mt-4 pt-4 border-t border-gray-600">
-              <h5 className="text-sm font-semibold text-purple-300 mb-2">Content</h5>
-              <div className="bg-gray-800 p-3 rounded-lg max-h-32 overflow-y-auto">
-                <p className="text-sm text-gray-300 leading-relaxed">
-                  {selectedNode.payload.content}
-                </p>
-              </div>
-              <div className="mt-2 text-xs text-gray-400">
-                Content Length: {selectedNode.payload.content.length} characters
-              </div>
-            </div>
-          )}
-
-          {/* Multi-Select Information */}
-          {visualizationSettings.multiSelect && selectedNodes.length > 1 && (
-            <div className="mt-4 pt-4 border-t border-gray-600">
-              <h5 className="text-sm font-semibold text-yellow-300 mb-2">
-                Multi-Select ({selectedNodes.length} nodes)
-              </h5>
-              <div className="text-sm text-gray-300">
-                <p>Selected nodes: {selectedNodes.map(n => n.id.substring(0, 8)).join(', ')}</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Node Content Tile - Slides out from right side */}
+      {/* Node Content Modal */}
       {showNodeContent && selectedNodeContent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-end">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black bg-opacity-50"
-            onClick={() => setShowNodeContent(false)}
-          />
-          
-          {/* Sliding Content Tile */}
-          <div className="relative bg-gray-800 border-l border-gray-600 rounded-l-lg shadow-2xl w-full max-w-2xl max-h-[80vh] transform transition-transform duration-300 ease-out">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-600">
-              <div className="flex items-center space-x-3">
-                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                <h3 className="text-lg font-semibold text-white">Node Content</h3>
-              </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-white">Node Content</h3>
               <button
                 onClick={() => setShowNodeContent(false)}
-                className="p-2 hover:bg-gray-700 rounded transition-colors"
+                className="text-gray-400 hover:text-white"
               >
-                <X className="w-5 h-5 text-gray-400" />
+                <X className="w-6 h-6" />
               </button>
             </div>
             
-            {/* Content */}
-            <div className="p-4 overflow-y-auto max-h-[calc(80vh-80px)]">
-              {/* Metadata */}
-              <div className="grid grid-cols-1 gap-4 mb-4 text-sm">
-                <div className="bg-gray-700 rounded p-3">
-                  <div className="text-gray-400 text-xs">Filename</div>
-                  <div className="text-white font-medium">{selectedNodeContent.filename}</div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Node ID</label>
+                <p className="text-white bg-gray-700 p-2 rounded">{selectedNodeContent.id}</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Filename</label>
+                <p className="text-white bg-gray-700 p-2 rounded">{selectedNodeContent.filename}</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Department</label>
+                  <p className="text-white bg-gray-700 p-2 rounded">{selectedNodeContent.department}</p>
                 </div>
-                <div className="bg-gray-700 rounded p-3">
-                  <div className="text-gray-400 text-xs">Department</div>
-                  <div className="text-white font-medium">{selectedNodeContent.department}</div>
-                </div>
-                <div className="bg-gray-700 rounded p-3">
-                  <div className="text-gray-400 text-xs">File Type</div>
-                  <div className="text-white font-medium">{selectedNodeContent.file_type}</div>
-                </div>
-                <div className="bg-gray-700 rounded p-3">
-                  <div className="text-gray-400 text-xs">Chunk Index</div>
-                  <div className="text-white font-medium">{selectedNodeContent.chunk_index}</div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">File Type</label>
+                  <p className="text-white bg-gray-700 p-2 rounded">{selectedNodeContent.file_type}</p>
                 </div>
               </div>
               
-              {/* Content Text */}
-              <div className="bg-gray-700 rounded p-4">
-                <div className="text-gray-400 text-xs mb-2">Content</div>
-                <div className="text-white text-sm leading-relaxed whitespace-pre-wrap">
-                  {selectedNodeContent.content}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Chunk Index</label>
+                <p className="text-white bg-gray-700 p-2 rounded">{selectedNodeContent.chunk_index}</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Content</label>
+                <div className="text-white bg-gray-700 p-3 rounded max-h-64 overflow-auto">
+                  <pre className="whitespace-pre-wrap text-sm">{selectedNodeContent.content}</pre>
                 </div>
               </div>
             </div>
