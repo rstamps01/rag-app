@@ -14,6 +14,7 @@ import ProfessionalQdrantFlowDashboard from './components/dashboard/Professional
 import DatabaseDashboard from './components/dashboard/DatabaseDashboard';
 import AdminPanel from './components/admin/AdminPanel';
 import QdrantCollectionGraphPage from './pages/QdrantCollectionGraphPage';
+import ModularGraphTest from './components/dashboard/ModularGraphTest';
 
 // Simple test component to debug
 const TestComponent = () => {
@@ -49,6 +50,7 @@ function App() {
           <Route path="/qdrant-professional" element={<ProfessionalQdrantFlowDashboard />} />
           <Route path="/database-dashboard" element={<DatabaseDashboard />} />
           <Route path="/qdrant-collection-graph" element={<QdrantCollectionGraphPage />} />
+          <Route path="/modular-graph-test" element={<ModularGraphTest />} />
           <Route path="/admin" element={<AdminPanel />} />
         </Routes>
       </Layout>

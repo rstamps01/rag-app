@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Settings, RefreshCw, HelpCircle, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import QdrantGraph from '../components/dashboard/QdrantGraph';
+import QdrantGraphWorking from '../components/dashboard/QdrantGraphWorking';
 
 const QdrantCollectionGraphPage = () => {
   const [selectedCollection, setSelectedCollection] = useState('rag');
@@ -132,7 +132,7 @@ const QdrantCollectionGraphPage = () => {
 
       {/* Main Content - Full Page Graph */}
       <div className="flex-1 bg-gray-800 h-full">
-        <QdrantGraph 
+        <QdrantGraphWorking 
           collectionName={selectedCollection}
           qdrantBaseUrl="http://localhost:6333"
           height={graphHeight}
