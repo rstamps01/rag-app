@@ -15,6 +15,8 @@ import DatabaseDashboard from './components/dashboard/DatabaseDashboard';
 import AdminPanel from './components/admin/AdminPanel';
 import QdrantCollectionGraphPage from './pages/QdrantCollectionGraphPage';
 import ModularGraphTest from './components/dashboard/ModularGraphTest';
+import SimilarityTestPage from './pages/SimilarityTestPage';
+import SimilarityDashboardPage from './pages/SimilarityDashboardPage';
 
 // Simple test component to debug
 const TestComponent = () => {
@@ -51,6 +53,8 @@ function App() {
           <Route path="/database-dashboard" element={<DatabaseDashboard />} />
           <Route path="/qdrant-collection-graph" element={<QdrantCollectionGraphPage />} />
           <Route path="/modular-graph-test" element={<ModularGraphTest />} />
+          <Route path="/similarity-test" element={<SimilarityTestPage />} />
+          <Route path="/similarity-dashboard" element={<SimilarityDashboardPage />} />
           <Route path="/admin" element={<AdminPanel />} />
         </Routes>
       </Layout>

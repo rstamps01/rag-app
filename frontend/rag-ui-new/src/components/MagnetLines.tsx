@@ -2,97 +2,106 @@ import React, { useRef, useEffect, CSSProperties } from 'react';
 import './MagnetLines.css';
 
 interface MagnetLinesProps {
-  rows?: number;
-  columns?: number;
-  containerSize?: string;
-  lineColor?: string;
-  lineWidth?: string;
-  lineHeight?: string;
-  baseAngle?: number;
+  targetNode?: any;
+  connections?: any[];
+  intensity?: number;
+  color?: string;
   className?: string;
   style?: CSSProperties;
 }
 
 const MagnetLines: React.FC<MagnetLinesProps> = ({
-  rows = 9,
-  columns = 9,
-  containerSize = '80vmin',
-  lineColor = '#efefef',
-  lineWidth = '1vmin',
-  lineHeight = '6vmin',
-  baseAngle = -10,
+  targetNode,
+  connections = [],
+  intensity = 0.8,
+  color = '#8b5cf6',
   className = '',
   style = {}
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
+    const canvas = canvasRef.current;
     const container = containerRef.current;
-    if (!container) return;
+    if (!canvas || !container || !targetNode) return;
 
-    const items = container.querySelectorAll<HTMLSpanElement>('span');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    const onPointerMove = (pointer: { x: number; y: number }) => {
-      items.forEach(item => {
-        const rect = item.getBoundingClientRect();
-        const centerX = rect.x + rect.width / 2;
-        const centerY = rect.y + rect.height / 2;
+    const resizeCanvas = () => {
+      canvas.width = container.offsetWidth;
+      canvas.height = container.offsetHeight;
+    };
 
-        const b = pointer.x - centerX;
-        const a = pointer.y - centerY;
-        const c = Math.sqrt(a * a + b * b) || 1;
-        const r = ((Math.acos(b / c) * 180) / Math.PI) * (pointer.y > centerY ? 1 : -1);
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
 
-        item.style.setProperty('--rotate', `${r}deg`);
+    const drawLines = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      if (!targetNode || connections.length === 0) return;
+
+      // Get target node position (center of container)
+      const targetX = canvas.width / 2;
+      const targetY = canvas.height / 2;
+
+      connections.forEach((connection, index) => {
+        // Calculate connection position
+        const angle = (index / connections.length) * Math.PI * 2;
+        const radius = Math.min(canvas.width, canvas.height) * 0.3;
+        const connectionX = targetX + Math.cos(angle) * radius;
+        const connectionY = targetY + Math.sin(angle) * radius;
+
+        // Draw line
+        ctx.beginPath();
+        ctx.moveTo(targetX, targetY);
+        ctx.lineTo(connectionX, connectionY);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = intensity;
+        ctx.stroke();
+
+        // Draw connection point
+        ctx.beginPath();
+        ctx.arc(connectionX, connectionY, 4, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = intensity;
+        ctx.fill();
       });
     };
 
-    const handlePointerMove = (e: PointerEvent) => {
-      onPointerMove({ x: e.x, y: e.y });
-    };
-
-    window.addEventListener('pointermove', handlePointerMove);
-
-    if (items.length) {
-      const middleIndex = Math.floor(items.length / 2);
-      const rect = items[middleIndex].getBoundingClientRect();
-      onPointerMove({ x: rect.x, y: rect.y });
-    }
+    drawLines();
 
     return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('resize', resizeCanvas);
     };
-  }, []);
+  }, [targetNode, connections, intensity, color]);
 
-  const total = rows * columns;
-  const spans = Array.from({ length: total }, (_, i) => (
-    <span
-      key={i}
-      style={
-        {
-          '--rotate': `${baseAngle}deg`,
-          backgroundColor: lineColor,
-          width: lineWidth,
-          height: lineHeight
-        } as CSSProperties
-      }
-    />
-  ));
+  if (!targetNode) return null;
 
   return (
     <div
       ref={containerRef}
-      className={`magnetLines-container ${className}`}
+      className={`magnet-lines-container ${className}`}
       style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${columns}, 1fr)`,
-        gridTemplateRows: `repeat(${rows}, 1fr)`,
-        width: containerSize,
-        height: containerSize,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 10,
         ...style
       }}
     >
-      {spans}
+      <canvas
+        ref={canvasRef}
+        style={{
+          width: '100%',
+          height: '100%'
+        }}
+      />
     </div>
   );
 };

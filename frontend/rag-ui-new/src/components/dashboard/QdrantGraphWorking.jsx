@@ -9,13 +9,29 @@ import ForceGraph2D from 'react-force-graph-2d';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
 import { RefreshCw, Palette, Eye, EyeOff, RotateCcw, ZoomIn, ZoomOut, Target, Shuffle } from 'lucide-react';
+import { 
+  calculateSimilarity, 
+  generateSimilarityLinks, 
+  filterNodesBySimilarity,
+  getSimilarityStats 
+} from '../../utils/similarityUtils';
 
 // Import specialized 3D modules
 import Highlight3DWorking from './graphs/modules/Highlight3DWorking';
 import ClickFocus3DWorking from './graphs/modules/ClickFocus3DWorking';
 
-const QdrantGraphWorking = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost:6333', height = '500px', fullWidth = false }) => {
+const QdrantGraphWorking = ({ 
+  collectionName = 'rag', 
+  qdrantBaseUrl = 'http://localhost:6333', 
+  height = '500px', 
+  fullWidth = false,
+  similarityMode = 'semantic',
+  similarityThreshold = 0.7,
+  onNodeSelect = () => {},
+  onSimilarityChange = () => {}
+}) => {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
+  const [originalGraphData, setOriginalGraphData] = useState({ nodes: [], links: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [graphType, setGraphType] = useState('force-directed-2d');
@@ -26,7 +42,59 @@ const QdrantGraphWorking = ({ collectionName = 'rag', qdrantBaseUrl = 'http://lo
   const [selectedNode, setSelectedNode] = useState(null);
   const [specialized3D, setSpecialized3D] = useState('none'); // none, highlight, click-focus
   const [movementSpeed, setMovementSpeed] = useState(2.0); // 3D movement speed multiplier
+  const [similarityStats, setSimilarityStats] = useState(null);
+  const [filteredNodes, setFilteredNodes] = useState([]);
   const current3DRef = useRef(null);
+
+  // Process similarity data
+  const processSimilarityData = useCallback((data) => {
+    if (!data.nodes || data.nodes.length === 0) return data;
+
+    // Generate similarity links
+    const similarityLinks = generateSimilarityLinks(
+      data.nodes, 
+      data, 
+      similarityMode, 
+      similarityThreshold
+    );
+
+    // Calculate similarity statistics
+    const stats = getSimilarityStats(data, similarityMode);
+    setSimilarityStats(stats);
+
+    // Combine original links with similarity links
+    const allLinks = [...(data.links || []), ...similarityLinks];
+
+    // Filter nodes based on similarity if a node is selected
+    let filteredNodes = data.nodes;
+    if (selectedNode) {
+      filteredNodes = filterNodesBySimilarity(
+        data.nodes, 
+        selectedNode, 
+        data, 
+        similarityMode, 
+        similarityThreshold
+      );
+    }
+    setFilteredNodes(filteredNodes);
+
+    // Notify parent component of similarity changes (only when stats change significantly)
+    if (stats && (stats.count > 0 || !similarityStats)) {
+      onSimilarityChange({
+        mode: similarityMode,
+        threshold: similarityThreshold,
+        stats: stats,
+        filteredCount: filteredNodes.length,
+        totalCount: data.nodes.length
+      });
+    }
+
+    return {
+      ...data,
+      nodes: filteredNodes,
+      links: allLinks
+    };
+  }, [similarityMode, similarityThreshold, selectedNode, onSimilarityChange]);
 
   // Fetch graph data from Qdrant
   const fetchGraphData = useCallback(async () => {
@@ -87,8 +155,15 @@ const QdrantGraphWorking = ({ collectionName = 'rag', qdrantBaseUrl = 'http://lo
         }
       }
 
-      setGraphData({ nodes, links });
+      const originalData = { nodes, links };
+      setOriginalGraphData(originalData);
+      
+      // Process with similarity calculations
+      const processedData = processSimilarityData(originalData);
+      setGraphData(processedData);
+      
       console.log(`✅ Graph loaded with ${nodes.length} nodes and ${links.length} links`);
+      // console.log(`🔗 Similarity processing: ${similarityMode} mode, threshold: ${similarityThreshold}`);
     } catch (err) {
       console.error('❌ Error fetching graph data:', err);
       setError(err.message);
@@ -96,6 +171,14 @@ const QdrantGraphWorking = ({ collectionName = 'rag', qdrantBaseUrl = 'http://lo
       setIsLoading(false);
     }
   }, [collectionName, qdrantBaseUrl]);
+
+  // Reprocess data when similarity settings change
+  useEffect(() => {
+    if (originalGraphData.nodes.length > 0) {
+      const processedData = processSimilarityData(originalGraphData);
+      setGraphData(processedData);
+    }
+  }, [similarityMode, similarityThreshold, selectedNode, originalGraphData]);
 
   // Load data on mount
   useEffect(() => {
@@ -295,6 +378,7 @@ const QdrantGraphWorking = ({ collectionName = 'rag', qdrantBaseUrl = 'http://lo
               onNodeClick: (node) => {
                 console.log('Node clicked:', node);
                 setSelectedNode(node);
+                onNodeSelect(node);
               },
               onBackgroundClick: () => {
                 console.log('Background clicked');
@@ -332,6 +416,7 @@ const QdrantGraphWorking = ({ collectionName = 'rag', qdrantBaseUrl = 'http://lo
                     onNodeClick={(node) => {
                       console.log('Node clicked:', node);
                       setSelectedNode(node);
+                      onNodeSelect(node);
                     }}
                     onBackgroundClick={() => {
                       console.log('Background clicked');
@@ -394,6 +479,7 @@ const QdrantGraphWorking = ({ collectionName = 'rag', qdrantBaseUrl = 'http://lo
             onNodeClick={(node) => {
               console.log('Node clicked:', node);
               setSelectedNode(node);
+              onNodeSelect(node);
             }}
             onBackgroundClick={() => {
               console.log('Background clicked');

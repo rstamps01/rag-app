@@ -79,3 +79,44 @@
 .hide-scrollbar::-webkit-scrollbar {
   display: none;  /* Safari and Chrome */
 }
+
+/* Enhanced scrollbar for slide-out panels */
+.panel-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #6b7280 #374151; /* thumb track */
+}
+
+.panel-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.panel-scrollbar::-webkit-scrollbar-track {
+  background: #374151; /* gray-700 */
+  border-radius: 3px;
+}
+
+.panel-scrollbar::-webkit-scrollbar-thumb {
+  background: #6b7280; /* gray-500 */
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.panel-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af; /* gray-400 */
+}
+
+.panel-scrollbar::-webkit-scrollbar-thumb:active {
+  background: #d1d5db; /* gray-300 */
+}
+
+/* Smooth panel transitions */
+.panel-transition {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Panel overlay for better UX */
+.panel-overlay {
+  backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.1);
+}

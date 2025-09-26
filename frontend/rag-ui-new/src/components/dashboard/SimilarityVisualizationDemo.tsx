@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import EnhancedGraphContainer from './EnhancedGraphContainer';
+import EnhancedSimilarityDemo from './EnhancedSimilarityDemo';
 import QdrantGraphWorking from './QdrantGraphWorking';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import RotatingText from '../RotatingText';
-import ElectricBorder from '../ElectricBorder';
+// import RotatingText from '../RotatingText';
+// import ElectricBorder from '../ElectricBorder';
 import { 
   Play, 
   Pause, 
@@ -22,6 +22,9 @@ const SimilarityVisualizationDemo: React.FC = () => {
   const [similarityData, setSimilarityData] = useState<any[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [demoMode, setDemoMode] = useState<'static' | 'interactive'>('static');
+  const [similarityMode, setSimilarityMode] = useState('semantic');
+  const [similarityThreshold, setSimilarityThreshold] = useState(0.7);
+  const [similarityStats, setSimilarityStats] = useState(null);
 
   // Mock similarity data for demo
   useEffect(() => {
@@ -41,12 +44,24 @@ const SimilarityVisualizationDemo: React.FC = () => {
 
   const handleNodeSelect = (node: any) => {
     setSelectedNode(node);
-    console.log('Node selected:', node);
+    // console.log('Node selected:', node);
   };
 
   const handleSettingsChange = (settings: any) => {
-    console.log('Settings changed:', settings);
-    // Here you would typically update your graph component with new settings
+    // console.log('Settings changed:', settings);
+    
+    // Update similarity settings
+    if (settings.similarityMode) {
+      setSimilarityMode(settings.similarityMode);
+    }
+    if (settings.similarityThreshold !== undefined) {
+      setSimilarityThreshold(settings.similarityThreshold);
+    }
+  };
+
+  const handleSimilarityChange = (similarityInfo: any) => {
+    setSimilarityStats(similarityInfo.stats);
+    // console.log('Similarity changed:', similarityInfo);
   };
 
   const toggleDemo = () => {
@@ -63,59 +78,59 @@ const SimilarityVisualizationDemo: React.FC = () => {
     <div className="w-full h-screen bg-gray-900 flex flex-col">
       {/* Header */}
       <div className="bg-gray-800 border-b border-gray-700 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <CardTitle className="text-2xl font-bold text-white flex items-center gap-3">
-              <BarChart3 className="h-8 w-8" />
-              <RotatingText
-                text="Enhanced Similarity Visualization Demo"
-                className="text-2xl"
-                tag="span"
-                duration={5}
-              />
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 min-w-0 flex-1">
+            <CardTitle className="text-xl lg:text-2xl font-bold text-white flex items-center gap-3 min-w-0">
+              <BarChart3 className="h-6 w-6 lg:h-8 lg:w-8 flex-shrink-0" />
+              <span className="truncate">
+                Enhanced Similarity Visualization Demo
+              </span>
             </CardTitle>
             
-            <div className="flex items-center gap-2">
-              <ElectricBorder>
-                <Badge variant="outline" className="bg-blue-900/20 border-blue-500 text-blue-300">
-                  <Zap className="h-3 w-3 mr-1" />
-                  React Bits + shadcn/ui
-                </Badge>
-              </ElectricBorder>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="outline" className="bg-blue-900/20 border-blue-500 text-blue-300 text-xs">
+                <Zap className="h-3 w-3 mr-1" />
+                React Bits + shadcn/ui
+              </Badge>
               
-              <Badge variant="secondary" className="bg-green-900/20 text-green-300">
+              <Badge variant="secondary" className="bg-green-900/20 text-green-300 text-xs">
                 <Target className="h-3 w-3 mr-1" />
                 Interactive Demo
               </Badge>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="outline"
               onClick={() => setDemoMode(demoMode === 'static' ? 'interactive' : 'static')}
-              className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+              className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600 text-sm"
+              size="sm"
             >
-              <Settings className="h-4 w-4 mr-2" />
-              {demoMode === 'static' ? 'Interactive' : 'Static'} Mode
+              <Settings className="h-4 w-4 mr-1 lg:mr-2" />
+              <span className="hidden sm:inline">{demoMode === 'static' ? 'Interactive' : 'Static'} Mode</span>
+              <span className="sm:hidden">{demoMode === 'static' ? 'Interactive' : 'Static'}</span>
             </Button>
             
             <Button
               variant="outline"
               onClick={toggleDemo}
-              className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+              className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600 text-sm"
+              size="sm"
             >
-              {isPlaying ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
-              {isPlaying ? 'Pause' : 'Play'} Demo
+              {isPlaying ? <Pause className="h-4 w-4 mr-1 lg:mr-2" /> : <Play className="h-4 w-4 mr-1 lg:mr-2" />}
+              <span className="hidden sm:inline">{isPlaying ? 'Pause' : 'Play'} Demo</span>
+              <span className="sm:hidden">{isPlaying ? 'Pause' : 'Play'}</span>
             </Button>
             
             <Button
               variant="outline"
               onClick={resetDemo}
-              className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+              className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600 text-sm"
+              size="sm"
             >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reset
+              <RotateCcw className="h-4 w-4 mr-1 lg:mr-2" />
+              <span className="hidden sm:inline">Reset</span>
             </Button>
           </div>
         </div>
@@ -123,7 +138,7 @@ const SimilarityVisualizationDemo: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
-        <EnhancedGraphContainer
+        <EnhancedSimilarityDemo
           selectedNode={selectedNode}
           similarityData={similarityData}
           onNodeSelect={handleNodeSelect}
@@ -137,9 +152,13 @@ const SimilarityVisualizationDemo: React.FC = () => {
               qdrantBaseUrl="http://localhost:6333"
               height="100%"
               fullWidth={true}
+              similarityMode={similarityMode}
+              similarityThreshold={similarityThreshold}
+              onNodeSelect={handleNodeSelect}
+              onSimilarityChange={handleSimilarityChange}
             />
           </div>
-        </EnhancedGraphContainer>
+        </EnhancedSimilarityDemo>
       </div>
 
       {/* Demo Instructions */}
