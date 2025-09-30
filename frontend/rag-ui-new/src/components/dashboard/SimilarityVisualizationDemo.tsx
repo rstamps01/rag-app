@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
+import { useState, useEffect } from 'react';
 import EnhancedSimilarityDemo from './EnhancedSimilarityDemo';
 import QdrantGraphWorking from './QdrantGraphWorking';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +26,56 @@ const SimilarityVisualizationDemo: React.FC = () => {
   const [similarityMode, setSimilarityMode] = useState('semantic');
   const [similarityThreshold, setSimilarityThreshold] = useState(0.7);
   const [similarityStats, setSimilarityStats] = useState(null);
+  const [visualizationSettings, setVisualizationSettings] = useState({
+    // Graph Layout
+    graphType: 'force-directed',
+    
+    // Node Labels
+    showTextLabels: true,
+    labelMode: 'filename',
+    
+    // Color Coding
+    colorScheme: 'group',
+    
+    // Node Size
+    nodeSizeMode: 'fixed',
+    nodeSize: 3,
+    
+    // Node Shape
+    nodeShape: 'circle',
+    
+    // Node Mobility & Interconnectivity
+    maintainInterconnectivity: true,
+    showAnchorPoints: false,
+    
+    // Display Options
+    showInterconnectivity: false,
+    highlightSelected: true,
+    
+    // Node Distance & Similarity
+    useVariableDistance: true,
+    similarityMode: 'semantic',
+    minDistance: 20,
+    maxDistance: 200,
+    similarityThreshold: 0.7,
+    
+    // Advanced Features
+    showTooltips: true,
+    enableClustering: false,
+    enableAnimations: true,
+    enableFiltering: false,
+    multiSelect: false,
+    
+    // Hub & Spoke Model
+    enableHubSpoke: false,
+    spokesPerHub: 5,
+    maxHubs: 10,
+    
+    // 3D Settings
+    is3D: false,
+    movementSpeed: 2.0,
+    linkWidth: 1
+  });
 
   // Mock similarity data for demo
   useEffect(() => {
@@ -48,7 +99,7 @@ const SimilarityVisualizationDemo: React.FC = () => {
   };
 
   const handleSettingsChange = (settings: any) => {
-    // console.log('Settings changed:', settings);
+    console.log('Settings changed:', settings);
     
     // Update similarity settings
     if (settings.similarityMode) {
@@ -57,6 +108,9 @@ const SimilarityVisualizationDemo: React.FC = () => {
     if (settings.similarityThreshold !== undefined) {
       setSimilarityThreshold(settings.similarityThreshold);
     }
+    
+    // Update visualization settings
+    setVisualizationSettings(prev => ({ ...prev, ...settings }));
   };
 
   const handleSimilarityChange = (similarityInfo: any) => {
@@ -156,6 +210,31 @@ const SimilarityVisualizationDemo: React.FC = () => {
               similarityThreshold={similarityThreshold}
               onNodeSelect={handleNodeSelect}
               onSimilarityChange={handleSimilarityChange}
+              // Pass visualization settings
+              showTextLabels={visualizationSettings.showTextLabels}
+              labelMode={visualizationSettings.labelMode}
+              colorScheme={visualizationSettings.colorScheme}
+              nodeSizeMode={visualizationSettings.nodeSizeMode}
+              nodeSize={visualizationSettings.nodeSize}
+              nodeShape={visualizationSettings.nodeShape}
+              maintainInterconnectivity={visualizationSettings.maintainInterconnectivity}
+              showAnchorPoints={visualizationSettings.showAnchorPoints}
+              showInterconnectivity={visualizationSettings.showInterconnectivity}
+              highlightSelected={visualizationSettings.highlightSelected}
+              useVariableDistance={visualizationSettings.useVariableDistance}
+              minDistance={visualizationSettings.minDistance}
+              maxDistance={visualizationSettings.maxDistance}
+              showTooltips={visualizationSettings.showTooltips}
+              enableClustering={visualizationSettings.enableClustering}
+              enableAnimations={visualizationSettings.enableAnimations}
+              enableFiltering={visualizationSettings.enableFiltering}
+              multiSelect={visualizationSettings.multiSelect}
+              enableHubSpoke={visualizationSettings.enableHubSpoke}
+              spokesPerHub={visualizationSettings.spokesPerHub}
+              maxHubs={visualizationSettings.maxHubs}
+              is3D={visualizationSettings.is3D}
+              movementSpeed={visualizationSettings.movementSpeed}
+              linkWidth={visualizationSettings.linkWidth}
             />
           </div>
         </EnhancedSimilarityDemo>

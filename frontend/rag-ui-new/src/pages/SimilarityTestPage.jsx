@@ -46,33 +46,33 @@ const SimilarityTestPage = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Header with Drawer Trigger */}
-      <div className="bg-gray-800 border-b border-gray-700 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="bg-gray-800 border-b border-gray-700 p-3 lg:p-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
             <Button
               variant="outline"
               size="sm"
               onClick={() => window.history.back()}
-              className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+              className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600 text-xs px-2 py-1 h-8 flex-shrink-0"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
+              <ArrowLeft className="h-3 w-3 mr-1" />
+              <span className="hidden sm:inline">Back</span>
             </Button>
             
-            <CardTitle className="text-2xl font-bold text-white flex items-center gap-3">
-              <TestTube className="h-8 w-8 text-blue-400" />
-              Similarity Visualization Test Suite
+            <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold text-white flex items-center gap-2 sm:gap-3 min-w-0">
+              <TestTube className="h-5 w-5 sm:h-6 sm:w-6 lg:h-8 lg:w-8 text-blue-400 flex-shrink-0" />
+              <span className="truncate">Similarity Visualization Test Suite</span>
             </CardTitle>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Drawer>
               <DrawerTrigger asChild>
-                <Button variant="outline" className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600">
-                  <Info className="h-4 w-4 mr-2" />
-                  Test Info
-                  <ChevronDown className="h-4 w-4 ml-2" />
-                </Button>
+                <button className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-gray-600 bg-gray-700 text-white hover:bg-gray-600 px-2 py-1 h-8">
+                  <Info className="h-3 w-3 mr-1" />
+                  <span className="hidden sm:inline">Test Info</span>
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </button>
               </DrawerTrigger>
               <DrawerContent className="bg-gray-800 border-gray-700 text-white">
                 <DrawerHeader>

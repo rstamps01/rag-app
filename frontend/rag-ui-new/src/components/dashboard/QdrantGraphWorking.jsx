@@ -28,20 +28,40 @@ const QdrantGraphWorking = ({
   similarityMode = 'semantic',
   similarityThreshold = 0.7,
   onNodeSelect = () => {},
-  onSimilarityChange = () => {}
+  onSimilarityChange = () => {},
+  // Visualization settings
+  showTextLabels = true,
+  labelMode = 'filename',
+  colorScheme = 'group',
+  nodeSizeMode = 'fixed',
+  nodeSize = 3,
+  nodeShape = 'circle',
+  maintainInterconnectivity = true,
+  showAnchorPoints = false,
+  showInterconnectivity = false,
+  highlightSelected = true,
+  useVariableDistance = true,
+  minDistance = 20,
+  maxDistance = 200,
+  showTooltips = true,
+  enableClustering = false,
+  enableAnimations = true,
+  enableFiltering = false,
+  multiSelect = false,
+  enableHubSpoke = false,
+  spokesPerHub = 5,
+  maxHubs = 10,
+  is3D = false,
+  movementSpeed = 2.0,
+  linkWidth = 1
 }) => {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [originalGraphData, setOriginalGraphData] = useState({ nodes: [], links: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [graphType, setGraphType] = useState('force-directed-2d');
-  const [is3D, setIs3D] = useState(false);
-  const [showLabels, setShowLabels] = useState(true);
-  const [nodeSize, setNodeSize] = useState(3);
-  const [linkWidth, setLinkWidth] = useState(1);
   const [selectedNode, setSelectedNode] = useState(null);
   const [specialized3D, setSpecialized3D] = useState('none'); // none, highlight, click-focus
-  const [movementSpeed, setMovementSpeed] = useState(2.0); // 3D movement speed multiplier
   const [similarityStats, setSimilarityStats] = useState(null);
   const [filteredNodes, setFilteredNodes] = useState([]);
   const current3DRef = useRef(null);
@@ -178,7 +198,7 @@ const QdrantGraphWorking = ({
       const processedData = processSimilarityData(originalGraphData);
       setGraphData(processedData);
     }
-  }, [similarityMode, similarityThreshold, selectedNode, originalGraphData]);
+  }, [similarityMode, similarityThreshold, selectedNode]);
 
   // Load data on mount
   useEffect(() => {
@@ -270,11 +290,10 @@ const QdrantGraphWorking = ({
           
           {/* Labels Toggle */}
           <button
-            onClick={() => setShowLabels(!showLabels)}
             className={`p-2 rounded transition-colors ${
-              showLabels ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-600 hover:bg-gray-500'
+              showTextLabels ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-600 hover:bg-gray-500'
             }`}
-            title={`${showLabels ? 'Hide' : 'Show'} labels`}
+            title={`${showTextLabels ? 'Hide' : 'Show'} labels`}
           >
             <Palette className="w-4 h-4" />
           </button>
@@ -372,11 +391,11 @@ const QdrantGraphWorking = ({
               width: fullWidth ? window.innerWidth : 800,
               height: fullWidth ? window.innerHeight - 100 : 500,
               movementSpeed,
-              showLabels,
+              showLabels: showTextLabels,
               nodeSize,
               linkWidth,
               onNodeClick: (node) => {
-                console.log('Node clicked:', node);
+                // console.log('Node clicked:', node);
                 setSelectedNode(node);
                 onNodeSelect(node);
               },
@@ -397,7 +416,7 @@ const QdrantGraphWorking = ({
                     key={`basic-3d-${graphData.nodes?.length}-${modeSwitchKey}`}
                     ref={current3DRef}
                     graphData={graphData}
-                    nodeLabel={showLabels ? "label" : ""}
+                    nodeLabel={showTextLabels ? "label" : ""}
                     nodeColor={(node) => {
                       const colors = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336'];
                       return colors[node.group % colors.length];
@@ -414,7 +433,7 @@ const QdrantGraphWorking = ({
                       center: { strength: 0.1 }
                     }}
                     onNodeClick={(node) => {
-                      console.log('Node clicked:', node);
+                      // console.log('Node clicked:', node);
                       setSelectedNode(node);
                       onNodeSelect(node);
                     }}
@@ -460,7 +479,7 @@ const QdrantGraphWorking = ({
         ) : (
           <ForceGraph2D
             graphData={graphData}
-            nodeLabel={showLabels ? "label" : ""}
+            nodeLabel={showTextLabels ? "label" : ""}
             nodeColor={(node) => {
               const colors = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336'];
               return colors[node.group % colors.length];
@@ -477,7 +496,7 @@ const QdrantGraphWorking = ({
               center: { strength: 0.1 }
             }}
             onNodeClick={(node) => {
-              console.log('Node clicked:', node);
+              // console.log('Node clicked:', node);
               setSelectedNode(node);
               onNodeSelect(node);
             }}
