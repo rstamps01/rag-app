@@ -271,50 +271,208 @@ class EnhancedMetricsCollector:
                 
                 self.qdrant_metrics.collections_count = len(collections)
                 
-                # Calculate total points
+                # Calculate total points and collect disk usage
                 total_points = 0
+                total_disk_usage = 0
+                collection_configs = {}  # Store collection configs for later use
+                
                 for collection in collections:
                     collection_name = collection.get('name', '')
                     if collection_name:
                         try:
+                            # Get collection info for points count and vector size
                             info_response = requests.get(f"{self.qdrant_url}/collections/{collection_name}", timeout=5)
                             if info_response.status_code == 200:
                                 info_data = info_response.json()
-                                points_count = info_data.get('result', {}).get('points_count', 0)
+                                result = info_data.get('result', {})
+                                points_count = result.get('points_count', 0)
                                 total_points += points_count
+                                
+                                # Store collection config for disk usage estimation
+                                config = result.get('config', {}).get('params', {})
+                                vectors_config = config.get('vectors', {})
+                                if isinstance(vectors_config, dict) and 'size' in vectors_config:
+                                    vector_size = vectors_config['size']
+                                elif isinstance(vectors_config, dict):
+                                    # Named vectors - use first vector config
+                                    first_vector = next(iter(vectors_config.values()))
+                                    vector_size = first_vector.get('size', 384) if isinstance(first_vector, dict) else 384
+                                else:
+                                    vector_size = 384  # Default fallback
+                                
+                                collection_configs[collection_name] = {
+                                    'points_count': points_count,
+                                    'vector_size': vector_size
+                                }
+                            
+                            # Get collection stats for disk usage
+                            disk_usage_found = False
+                            try:
+                                stats_response = requests.get(f"{self.qdrant_url}/collections/{collection_name}/stats", timeout=5)
+                                if stats_response.status_code == 200:
+                                    stats_data = stats_response.json()
+                                    stats_result = stats_data.get('result', {})
+                                    
+                                    # Try multiple possible paths for disk usage
+                                    disk_usage = (
+                                        stats_result.get('disk_usage') or
+                                        stats_result.get('indexes', {}).get('disk_usage') or
+                                        stats_result.get('indexes', {}).get('payload_indexes', {}).get('disk_usage') or
+                                        stats_result.get('vectors', {}).get('disk_usage') or
+                                        0
+                                    )
+                                    
+                                    if isinstance(disk_usage, (int, float)) and disk_usage > 0:
+                                        total_disk_usage += int(disk_usage)
+                                        disk_usage_found = True
+                                        logger.debug(f"Found disk usage for {collection_name}: {disk_usage} bytes")
+                            except Exception as e:
+                                logger.debug(f"Failed to get collection {collection_name} stats: {e}")
+                            
+                            # If disk_usage not found from stats, estimate from points count and vector size
+                            if not disk_usage_found and collection_name in collection_configs:
+                                config_data = collection_configs[collection_name]
+                                # Estimate: vector_size * 4 bytes (float32) * points_count * 2 (overhead for payloads/indexes)
+                                estimated_disk = config_data['points_count'] * config_data['vector_size'] * 4 * 2
+                                if estimated_disk > 0:
+                                    total_disk_usage += int(estimated_disk)
+                                    logger.debug(f"Estimated disk usage for {collection_name}: {estimated_disk} bytes (from {config_data['points_count']} points, {config_data['vector_size']}D vectors)")
+                                
                         except Exception as e:
                             logger.debug(f"Failed to get collection {collection_name} info: {e}")
                             continue
                 
                 self.qdrant_metrics.total_points = total_points
+                self.qdrant_metrics.disk_usage = total_disk_usage if total_disk_usage > 0 else 0
                 
-                # Get cluster info for memory usage
+                # Get memory usage from collection stats or system metrics
                 try:
-                    cluster_response = requests.get(f"{self.qdrant_url}/cluster", timeout=5)
-                    if cluster_response.status_code == 200:
-                        cluster_data = cluster_response.json()
-                        # Extract memory usage from cluster info
-                        self.qdrant_metrics.memory_usage = cluster_data.get('result', {}).get('memory_usage', 0)
+                    # Try to get memory from collection stats first (more accurate)
+                    memory_usage = 0
+                    for collection in collections:
+                        collection_name = collection.get('name', '')
+                        if collection_name:
+                            try:
+                                # Try collection info endpoint for memory metrics
+                                info_response = requests.get(f"{self.qdrant_url}/collections/{collection_name}", timeout=5)
+                                if info_response.status_code == 200:
+                                    info_data = info_response.json()
+                                    result = info_data.get('result', {})
+                                    
+                                    # Check for memory in various locations
+                                    collection_memory = (
+                                        result.get('memory_usage') or
+                                        result.get('stats', {}).get('memory_usage') or
+                                        result.get('optimizer_status', {}).get('memory_usage') or
+                                        0
+                                    )
+                                    if collection_memory:
+                                        memory_usage += int(collection_memory)
+                                
+                                # Also try stats endpoint
+                                try:
+                                    stats_response = requests.get(f"{self.qdrant_url}/collections/{collection_name}/stats", timeout=5)
+                                    if stats_response.status_code == 200:
+                                        stats_data = stats_response.json()
+                                        stats_result = stats_data.get('result', {})
+                                        stats_memory = (
+                                            stats_result.get('memory_usage') or
+                                            stats_result.get('indexes', {}).get('memory_usage') or
+                                            0
+                                        )
+                                        if stats_memory:
+                                            memory_usage += int(stats_memory)
+                                except:
+                                    pass
+                                
+                            except Exception as e:
+                                logger.debug(f"Failed to get memory for collection {collection_name}: {e}")
+                                continue
+                    
+                    # If no memory found from collections, try cluster endpoint (for multi-node setups)
+                    if memory_usage == 0:
+                        try:
+                            cluster_response = requests.get(f"{self.qdrant_url}/cluster", timeout=5)
+                            if cluster_response.status_code == 200:
+                                cluster_data = cluster_response.json()
+                                result = cluster_data.get('result', {})
+                                # Try multiple possible paths for memory usage
+                                cluster_memory = (
+                                    result.get('memory_usage') or
+                                    result.get('memory') or
+                                    result.get('stats', {}).get('memory_usage') or
+                                    result.get('peers', {}).get('memory_usage') or
+                                    0
+                                )
+                                if cluster_memory:
+                                    memory_usage = int(cluster_memory)
+                        except Exception as e:
+                            logger.debug(f"Failed to get Qdrant cluster info: {e}")
+                    
+                    self.qdrant_metrics.memory_usage = memory_usage if memory_usage > 0 else 0
+                    
                 except Exception as e:
-                    logger.debug(f"Failed to get Qdrant cluster info: {e}")
+                    logger.warning(f"Failed to get Qdrant memory usage: {e}")
+                    self.qdrant_metrics.memory_usage = 0
                 
                 # Get real search latency by performing a test search
                 try:
-                    if total_points > 0:
-                        search_start = time.time()
-                        search_response = requests.post(
-                            f"{self.qdrant_url}/collections/{collections[0]['name']}/points/search",
-                            json={
-                                "vector": [0.1] * 384,  # Dummy vector for testing
-                                "limit": 1
-                            },
-                            timeout=5
-                        )
-                        if search_response.status_code == 200:
-                            search_latency = (time.time() - search_start) * 1000  # Convert to ms
-                            self.qdrant_metrics.search_latency = search_latency
+                    if total_points > 0 and len(collections) > 0:
+                        collection_name = collections[0]['name']
+                        
+                        # Get actual vector size from collection config
+                        try:
+                            collection_info_response = requests.get(
+                                f"{self.qdrant_url}/collections/{collection_name}",
+                                timeout=5
+                            )
+                            if collection_info_response.status_code == 200:
+                                collection_info = collection_info_response.json()
+                                vector_config = collection_info.get('result', {}).get('config', {}).get('params', {})
+                                
+                                # Handle both single vector config and named vectors
+                                if 'vectors' in vector_config:
+                                    vectors_config = vector_config['vectors']
+                                    if isinstance(vectors_config, dict) and 'size' in vectors_config:
+                                        vector_size = vectors_config['size']
+                                    elif isinstance(vectors_config, dict):
+                                        # Named vectors - use first vector config
+                                        first_vector = next(iter(vectors_config.values()))
+                                        vector_size = first_vector.get('size', 384) if isinstance(first_vector, dict) else 384
+                                    else:
+                                        vector_size = 384  # Default fallback
+                                else:
+                                    vector_size = 384  # Default fallback
+                                
+                                # Perform test search with correct vector size
+                                search_start = time.time()
+                                search_response = requests.post(
+                                    f"{self.qdrant_url}/collections/{collection_name}/points/search",
+                                    json={
+                                        "vector": [0.1] * vector_size,
+                                        "limit": 1,
+                                        "with_payload": False,
+                                        "with_vector": False
+                                    },
+                                    timeout=10
+                                )
+                                
+                                if search_response.status_code == 200:
+                                    search_latency = (time.time() - search_start) * 1000  # Convert to ms
+                                    self.qdrant_metrics.search_latency = round(search_latency, 2)
+                                    logger.debug(f"Qdrant search latency measured: {search_latency:.2f}ms")
+                                else:
+                                    logger.debug(f"Qdrant search test returned status {search_response.status_code}")
+                                    self.qdrant_metrics.search_latency = 0.0
+                        except Exception as e:
+                            logger.warning(f"Failed to get collection config for search latency test: {e}")
+                            self.qdrant_metrics.search_latency = 0.0
+                    else:
+                        logger.debug("Skipping search latency test: no points or collections available")
+                        self.qdrant_metrics.search_latency = 0.0
                 except Exception as e:
-                    logger.debug(f"Failed to measure Qdrant search latency: {e}")
+                    logger.warning(f"Failed to measure Qdrant search latency: {e}")
+                    self.qdrant_metrics.search_latency = 0.0
                 
                 # Set connection status to connected
                 self.qdrant_metrics.connection_status = "connected"
@@ -531,22 +689,24 @@ class EnhancedMetricsCollector:
         try:
             import GPUtil
             gpus = GPUtil.getGPUs()
-            if gpus:
+            if gpus and len(gpus) > 0:
                 gpu = gpus[0]  # Use first GPU
                 return {
-                    'utilization': gpu.load * 100,
-                    'memory_used': gpu.memoryUsed,
-                    'memory_total': gpu.memoryTotal,
-                    'temperature': gpu.temperature,
-                    'name': gpu.name
+                    'utilization': float(gpu.load * 100),  # Ensure it's a float
+                    'memory_used': float(gpu.memoryUsed),
+                    'memory_total': float(gpu.memoryTotal),
+                    'temperature': float(gpu.temperature) if gpu.temperature else None,
+                    'name': str(gpu.name) if gpu.name else 'Unknown'
                 }
+            else:
+                logger.debug("No GPUs found via GPUtil")
+                return None
         except ImportError:
-            pass
-        except Exception:
-            pass
-        
-        # Return null if no real GPU data available
-        return None
+            logger.warning("GPUtil library not installed. Install with: pip install gputil")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to collect GPU metrics: {e}")
+            return None
     
     async def _update_pipeline_metrics(self):
         """Update pipeline-specific metrics"""

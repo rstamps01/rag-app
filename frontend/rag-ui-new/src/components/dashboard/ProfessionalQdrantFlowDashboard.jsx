@@ -22,9 +22,7 @@ import ReactFlow, {
   NodeResizer,
   NodeToolbar,
   Panel,
-  useReactFlow,
-  useOnSelectionChange,
-  useKeyPress
+  useReactFlow
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -522,29 +520,28 @@ const ProfessionalQdrantFlowDashboard = () => {
   const [selectedNodes, setSelectedNodes] = useState([]);
   const [zoomLevel, setZoomLevel] = useState(1);
 
-  const { fitView, zoomIn, zoomOut, zoomTo } = useReactFlow();
+  // Handle selection changes using onSelectionChange prop
+  const handleSelectionChange = useCallback(({ nodes }) => {
+    setSelectedNodes(nodes || []);
+  }, []);
 
-  // Handle selection changes
-  useOnSelectionChange({
-    onChange: ({ nodes }) => {
-      setSelectedNodes(nodes);
-    },
-  });
+  // Keyboard shortcuts handler
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Delete' && selectedNodes.length > 0) {
+        const nodeIds = selectedNodes.map(node => node.id);
+        setNodes(nodes => nodes.filter(node => !nodeIds.includes(node.id)));
+        setEdges(edges => edges.filter(edge => 
+          !nodeIds.includes(edge.source) && !nodeIds.includes(edge.target)
+        ));
+      } else if (event.key === 'Escape') {
+        setSelectedNodes([]);
+      }
+    };
 
-  // Keyboard shortcuts
-  useKeyPress('Delete', () => {
-    if (selectedNodes.length > 0) {
-      const nodeIds = selectedNodes.map(node => node.id);
-      setNodes(nodes => nodes.filter(node => !nodeIds.includes(node.id)));
-      setEdges(edges => edges.filter(edge => 
-        !nodeIds.includes(edge.source) && !nodeIds.includes(edge.target)
-      ));
-    }
-  });
-
-  useKeyPress('Escape', () => {
-    setSelectedNodes([]);
-  });
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNodes, setNodes, setEdges]);
 
   // Check if Qdrant service is available
   const [qdrantAvailable, setQdrantAvailable] = useState(false);
@@ -782,20 +779,65 @@ const ProfessionalQdrantFlowDashboard = () => {
     setIsRealTime(!isRealTime);
   };
 
-  const handleZoomIn = () => {
-    zoomIn();
+  // Zoom controls component that uses useReactFlow inside ReactFlow context
+  const ZoomControls = () => {
+    const { zoomIn, zoomOut, fitView, zoomTo, getZoom } = useReactFlow();
+    const [currentZoom, setCurrentZoom] = useState(1);
+
+    useEffect(() => {
+      const interval = setInterval(() => {
+        setCurrentZoom(getZoom());
+      }, 100);
+      return () => clearInterval(interval);
+    }, [getZoom]);
+
+    return (
+      <div className="flex items-center space-x-2">
+        <span className="text-sm text-gray-400">Zoom:</span>
+        <button onClick={() => zoomOut()} className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-white">
+          <Minus className="w-4 h-4" />
+        </button>
+        <span className="text-sm text-white min-w-[3rem] text-center">{Math.round(currentZoom * 100)}%</span>
+        <button onClick={() => zoomIn()} className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-white">
+          <Plus className="w-4 h-4" />
+        </button>
+        <button onClick={() => fitView({ padding: 0.1 })} className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-white">
+          <Maximize2 className="w-4 h-4" />
+        </button>
+      </div>
+    );
   };
 
-  const handleZoomOut = () => {
-    zoomOut();
-  };
-
-  const handleFitView = () => {
-    fitView({ padding: 0.1 });
-  };
-
-  const handleZoomTo = (level) => {
-    zoomTo(level);
+  // Quick actions panel component
+  const QuickActionsPanel = () => {
+    const { zoomTo } = useReactFlow();
+    return (
+      <Panel position="top-right">
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 shadow-lg">
+          <h3 className="text-white font-semibold mb-2">Quick Actions</h3>
+          <div className="space-y-2">
+            <button 
+              onClick={() => zoomTo(0.5)}
+              className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white text-sm"
+            >
+              50% Zoom
+            </button>
+            <button 
+              onClick={() => zoomTo(1)}
+              className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white text-sm"
+            >
+              100% Zoom
+            </button>
+            <button 
+              onClick={() => zoomTo(2)}
+              className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white text-sm"
+            >
+              200% Zoom
+            </button>
+          </div>
+        </div>
+      </Panel>
+    );
   };
 
   if (isLoading) {
@@ -834,19 +876,7 @@ const ProfessionalQdrantFlowDashboard = () => {
           </div>
           
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-400">Zoom:</span>
-              <button onClick={handleZoomOut} className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-white">
-                <Minus className="w-4 h-4" />
-              </button>
-              <span className="text-sm text-white min-w-[3rem] text-center">{Math.round(zoomLevel * 100)}%</span>
-              <button onClick={handleZoomIn} className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-white">
-                <Plus className="w-4 h-4" />
-              </button>
-              <button onClick={handleFitView} className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-white">
-                <Maximize2 className="w-4 h-4" />
-              </button>
-            </div>
+            {/* Zoom controls will be rendered inside ReactFlow context */}
             
             <button
               onClick={toggleRealTime}
@@ -899,6 +929,7 @@ const ProfessionalQdrantFlowDashboard = () => {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onSelectionChange={handleSelectionChange}
           nodeTypes={nodeTypes}
           fitView
           fitViewOptions={{ padding: 0.1 }}
@@ -923,30 +954,11 @@ const ProfessionalQdrantFlowDashboard = () => {
           <Background color="#374151" gap={20} />
           
           {/* Custom Panels */}
-          <Panel position="top-right">
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 shadow-lg">
-              <h3 className="text-white font-semibold mb-2">Quick Actions</h3>
-              <div className="space-y-2">
-                <button 
-                  onClick={() => handleZoomTo(0.5)}
-                  className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white text-sm"
-                >
-                  50% Zoom
-                </button>
-                <button 
-                  onClick={() => handleZoomTo(1)}
-                  className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white text-sm"
-                >
-                  100% Zoom
-                </button>
-                <button 
-                  onClick={() => handleZoomTo(2)}
-                  className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white text-sm"
-                >
-                  200% Zoom
-                </button>
-              </div>
-            </div>
+          <QuickActionsPanel />
+          
+          {/* Zoom Controls Panel */}
+          <Panel position="top-left">
+            <ZoomControls />
           </Panel>
 
           <Panel position="bottom-left">

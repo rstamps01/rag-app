@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, Monitor, Zap, FileText, TestTube, Network, Database, Shield, BarChart3, TrendingUp } from 'lucide-react';
+import { ChevronDown, Monitor, Zap, FileText, TestTube, Network, Database, Shield, BarChart3, TrendingUp, Layers, Target, GitBranch, Gauge } from 'lucide-react';
 
 const Navbar = () => {
   const location = useLocation();
@@ -28,6 +28,24 @@ const Navbar = () => {
       label: 'Database Analytics', 
       icon: TrendingUp,
       description: 'PostgreSQL & Qdrant comprehensive analytics'
+    },
+    { 
+      path: '/modular-graph-test', 
+      label: 'Modular Graph Test', 
+      icon: GitBranch,
+      description: 'Test page for modular graph system with side-by-side comparison'
+    },
+    { 
+      path: '/similarity-test', 
+      label: 'Similarity Test', 
+      icon: TestTube,
+      description: 'Similarity testing and visualization tools'
+    },
+    { 
+      path: '/similarity-dashboard', 
+      label: 'Similarity Dashboard', 
+      icon: Target,
+      description: 'Comprehensive similarity analysis dashboard'
     }
   ];
 
@@ -67,6 +85,18 @@ const Navbar = () => {
       label: 'Qdrant Flow Dashboard', 
       icon: Network,
       description: 'Interactive React Flow visualization with real-time data'
+    },
+    { 
+      path: '/qdrant-professional', 
+      label: 'Qdrant Professional', 
+      icon: Layers,
+      description: 'Professional-grade Qdrant flow dashboard with advanced features'
+    },
+    { 
+      path: '/metrics', 
+      label: 'Metrics Dashboard', 
+      icon: Gauge,
+      description: 'Comprehensive metrics validation and monitoring tool'
     }
   ];
 
