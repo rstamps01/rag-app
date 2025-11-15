@@ -4,7 +4,7 @@ services:
     - .env
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.optimized
     container_name: backend-07
     restart: unless-stopped
     ports:

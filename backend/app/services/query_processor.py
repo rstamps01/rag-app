@@ -75,22 +75,33 @@ class QueryProcessor:
             # Generate query embedding
             query_embedding = self.embedding_model.encode([query])[0]
             
+            # Use configuration values for search parameters
+            search_limit = limit if limit else getattr(settings, 'VECTOR_SEARCH_LIMIT', 5)
+            search_threshold = getattr(settings, 'VECTOR_SEARCH_SCORE_THRESHOLD', 0.5)
+            collection_name = settings.QDRANT_COLLECTION_NAME
+            
             # Search in vector database using configured collection name
             search_results = self.vector_client.search(
-                collection_name=settings.QDRANT_COLLECTION_NAME,  # Use "rag" collection
+                collection_name=collection_name,
                 query_vector=query_embedding.tolist(),
-                limit=limit,
+                limit=search_limit,
+                score_threshold=search_threshold,
                 with_payload=True
             )
             
-            # Format results to match expected structure
+            # Format results to match expected structure with backward compatibility
             results = []
             for result in search_results:
+                # FIXED: Handle both "content" (new) and "text" (old) for backward compatibility
+                content = result.payload.get("content") or result.payload.get("text", "")
+                
                 results.append({
-                    "content": result.payload.get("content", ""),      # Match storage format
-                    "filename": result.payload.get("filename", ""),   # Match storage format
+                    "content": content,  # FIXED: Standardized with backward compatibility
+                    "filename": result.payload.get("filename", ""),   # Now available from payload
                     "chunk_index": result.payload.get("chunk_index", 0),
-                    "score": result.score
+                    "score": result.score,
+                    "department": result.payload.get("department", "General"),  # ADDED: Now available
+                    "file_type": result.payload.get("file_type", "")  # ADDED: Now available
                 })
             
             return results

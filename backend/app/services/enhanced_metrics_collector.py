@@ -445,33 +445,52 @@ class EnhancedMetricsCollector:
                                     vector_size = 384  # Default fallback
                                 
                                 # Perform test search with correct vector size
+                                logger.info(f"Performing Qdrant search latency test on collection '{collection_name}' with {vector_size}D vector")
                                 search_start = time.time()
+                                
+                                # Create test vector
+                                test_vector = [0.1] * vector_size
+                                
                                 search_response = requests.post(
                                     f"{self.qdrant_url}/collections/{collection_name}/points/search",
                                     json={
-                                        "vector": [0.1] * vector_size,
+                                        "vector": test_vector,
                                         "limit": 1,
                                         "with_payload": False,
                                         "with_vector": False
                                     },
-                                    timeout=10
+                                    timeout=10,
+                                    headers={"Content-Type": "application/json"}
                                 )
                                 
+                                search_elapsed = (time.time() - search_start) * 1000  # Convert to ms
+                                
                                 if search_response.status_code == 200:
-                                    search_latency = (time.time() - search_start) * 1000  # Convert to ms
-                                    self.qdrant_metrics.search_latency = round(search_latency, 2)
-                                    logger.debug(f"Qdrant search latency measured: {search_latency:.2f}ms")
+                                    search_result = search_response.json()
+                                    if search_result.get('status') == 'ok' or 'result' in search_result:
+                                        self.qdrant_metrics.search_latency = round(search_elapsed, 2)
+                                        logger.info(f"✅ Qdrant search latency measured: {search_elapsed:.2f}ms (collection: {collection_name}, points: {total_points})")
+                                    else:
+                                        logger.warning(f"Qdrant search returned unexpected result: {search_result.get('status', 'unknown')}")
+                                        self.qdrant_metrics.search_latency = 0.0
                                 else:
-                                    logger.debug(f"Qdrant search test returned status {search_response.status_code}")
+                                    error_text = search_response.text[:200] if search_response.text else "No error message"
+                                    logger.warning(f"Qdrant search test failed with status {search_response.status_code}: {error_text}")
                                     self.qdrant_metrics.search_latency = 0.0
+                        except requests.exceptions.Timeout:
+                            logger.warning(f"Qdrant search latency test timed out for collection '{collection_name}'")
+                            self.qdrant_metrics.search_latency = 0.0
+                        except requests.exceptions.RequestException as e:
+                            logger.warning(f"Qdrant search latency test request failed: {e}")
+                            self.qdrant_metrics.search_latency = 0.0
                         except Exception as e:
-                            logger.warning(f"Failed to get collection config for search latency test: {e}")
+                            logger.warning(f"Failed to get collection config for search latency test: {e}", exc_info=True)
                             self.qdrant_metrics.search_latency = 0.0
                     else:
-                        logger.debug("Skipping search latency test: no points or collections available")
+                        logger.debug(f"Skipping search latency test: total_points={total_points}, collections={len(collections)}")
                         self.qdrant_metrics.search_latency = 0.0
                 except Exception as e:
-                    logger.warning(f"Failed to measure Qdrant search latency: {e}")
+                    logger.warning(f"Failed to measure Qdrant search latency: {e}", exc_info=True)
                     self.qdrant_metrics.search_latency = 0.0
                 
                 # Set connection status to connected
@@ -603,28 +622,82 @@ class EnhancedMetricsCollector:
                 
                 # Calculate real metrics from actual data
                 if queries:
-                    # Calculate queries per minute based on recent queries
                     now = datetime.now()
-                    recent_queries = [
-                        q for q in queries 
-                        if (now - datetime.fromtimestamp(q.get('timestamp', 0))).total_seconds() < 3600  # Last hour
-                    ]
-                    self.pipeline_metrics.query_processing_rate = len(recent_queries) / 60.0  # Per minute
+                    
+                    # Calculate queries per minute based on queries from last minute (not hour)
+                    # Also check last 5 minutes as fallback if no queries in last minute
+                    recent_queries_1min = []
+                    recent_queries_5min = []
+                    
+                    for q in queries:
+                        timestamp = q.get('timestamp', 0)
+                        if timestamp:
+                            try:
+                                # Handle both float timestamps and ISO string timestamps
+                                if isinstance(timestamp, (int, float)):
+                                    query_time = datetime.fromtimestamp(timestamp)
+                                elif isinstance(timestamp, str):
+                                    # Try parsing ISO format
+                                    try:
+                                        from dateutil.parser import parse as parse_date
+                                        query_time = parse_date(timestamp)
+                                    except ImportError:
+                                        # Fallback to datetime.fromisoformat if dateutil not available
+                                        try:
+                                            query_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                        except:
+                                            logger.debug(f"Could not parse timestamp string: {timestamp}")
+                                            continue
+                                else:
+                                    continue
+                                
+                                time_diff = (now - query_time).total_seconds()
+                                
+                                if time_diff < 60:  # Last minute
+                                    recent_queries_1min.append(q)
+                                if time_diff < 300:  # Last 5 minutes
+                                    recent_queries_5min.append(q)
+                            except Exception as e:
+                                logger.debug(f"Error parsing query timestamp: {e}")
+                                continue
+                    
+                    # Use queries from last minute if available, otherwise use last 5 minutes and divide by 5
+                    if recent_queries_1min:
+                        self.pipeline_metrics.query_processing_rate = len(recent_queries_1min)
+                        logger.debug(f"Query processing rate: {len(recent_queries_1min)} queries/min (from last minute)")
+                    elif recent_queries_5min:
+                        # Estimate per minute from 5-minute window
+                        self.pipeline_metrics.query_processing_rate = len(recent_queries_5min) / 5.0
+                        logger.debug(f"Query processing rate: {self.pipeline_metrics.query_processing_rate:.2f} queries/min (estimated from {len(recent_queries_5min)} queries in last 5 minutes)")
+                    else:
+                        # No recent queries - set to 0
+                        self.pipeline_metrics.query_processing_rate = 0.0
+                        logger.debug("No queries in last 5 minutes - query processing rate set to 0")
                     
                     # Calculate average response time from actual data
-                    response_times = [
-                        q.get('processing_time', 0) for q in queries 
-                        if q.get('processing_time') is not None
-                    ]
+                    # processing_time is in seconds, convert to milliseconds
+                    response_times = []
+                    for q in queries:
+                        proc_time = q.get('processing_time')
+                        if proc_time is not None and proc_time > 0:
+                            # Convert seconds to milliseconds
+                            response_times.append(proc_time * 1000)
+                    
                     if response_times:
                         self.pipeline_metrics.avg_query_processing_time = sum(response_times) / len(response_times)
+                        logger.debug(f"Average query processing time: {self.pipeline_metrics.avg_query_processing_time:.2f}ms (from {len(response_times)} queries)")
+                    else:
+                        logger.debug("No valid processing times found in queries")
                     
                     # Calculate success rate
                     successful_queries = len([q for q in queries if q.get('response')])
                     self.pipeline_metrics.success_rate = (successful_queries / len(queries)) * 100 if queries else 0
                     
-                    # Active queries (recent ones)
-                    self.pipeline_metrics.active_queries = len(recent_queries)
+                    # Active queries (recent ones from last minute)
+                    self.pipeline_metrics.active_queries = len(recent_queries_1min)
+                else:
+                    logger.debug("No queries found in query history")
+                    self.pipeline_metrics.query_processing_rate = 0.0
             
             # Get document metrics from the actual documents endpoint
             docs_response = await asyncio.get_event_loop().run_in_executor(

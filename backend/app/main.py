@@ -209,9 +209,15 @@ def extract_text_from_file(file_path: str, file_ext: str) -> str:
         logger.error(f"Text extraction failed for {file_path}: {e}")
         return f"Content from {os.path.basename(file_path)} (extraction failed)"
 
-def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
-    """Split text into overlapping chunks for better vector search"""
+def chunk_text(text: str, chunk_size: Optional[int] = None, overlap: Optional[int] = None) -> List[str]:
+    """Split text into overlapping chunks for better vector search using configuration defaults"""
     try:
+        # Use configuration values if not provided
+        if chunk_size is None:
+            chunk_size = getattr(settings, 'CHUNK_SIZE', 1000) if config_ok else 1000
+        if overlap is None:
+            overlap = getattr(settings, 'CHUNK_OVERLAP', 200) if config_ok else 200
+        
         if len(text) <= chunk_size:
             return [text]
         
@@ -592,20 +598,30 @@ async def ask_query(
                 # Generate query embedding
                 query_embedding = embedding_model.encode(request.query).tolist()
                 
+                # Use configuration values for search parameters
+                search_limit = getattr(settings, 'VECTOR_SEARCH_LIMIT', 5) if config_ok else 5
+                search_threshold = getattr(settings, 'VECTOR_SEARCH_SCORE_THRESHOLD', 0.5) if config_ok else 0.5
+                collection_name = getattr(settings, 'QDRANT_COLLECTION_NAME', 'rag') if config_ok else 'rag'
+                
                 search_results = qdrant_client.search(
-                    collection_name="rag",
+                    collection_name=collection_name,
                     query_vector=query_embedding,
-                    limit=5,
-                    score_threshold=0.3  # Restore reasonable threshold
+                    limit=search_limit,
+                    score_threshold=search_threshold
                 )
                 
-                # Process search results
+                # Process search results with backward compatibility
                 for result in search_results:
+                    # FIXED: Handle both "content" (new) and "text" (old) for backward compatibility
+                    content = result.payload.get("content") or result.payload.get("text", "")
+                    
                     sources.append({
-                        "content": result.payload.get("content", ""),
-                        "filename": result.payload.get("filename", ""),
+                        "content": content,  # FIXED: Standardized with backward compatibility
+                        "filename": result.payload.get("filename", ""),  # Now available from payload
                         "score": result.score,
-                        "chunk_index": result.payload.get("chunk_index", 0)
+                        "chunk_index": result.payload.get("chunk_index", 0),
+                        "department": result.payload.get("department", "General"),  # ADDED: Now available
+                        "file_type": result.payload.get("file_type", "")  # ADDED: Now available
                     })
                 
                 used_vector_search = True

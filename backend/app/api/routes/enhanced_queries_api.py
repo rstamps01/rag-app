@@ -76,12 +76,16 @@ async def ask_query(
             try:
                 logger.info("🔍 Performing vector search...")
                 
+                # Use configuration values for search parameters
+                search_limit = request.max_context_chunks if request.max_context_chunks else getattr(settings, 'VECTOR_SEARCH_LIMIT', 5)
+                search_threshold = getattr(settings, 'VECTOR_SEARCH_SCORE_THRESHOLD', 0.5)
+                
                 # Search for relevant documents
                 search_results = enhanced_vector_db_service.search(
                     query=request.query,
-                    limit=request.max_context_chunks,
+                    limit=search_limit,
                     department=request.department if request.department != "General" else None,
-                    score_threshold=0.6
+                    score_threshold=search_threshold
                 )
                 
                 if search_results:

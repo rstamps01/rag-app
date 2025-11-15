@@ -171,10 +171,16 @@ class IntegratedDocumentProcessor:
             logger.error(f"❌ TXT extraction failed: {e}")
         return ""
     
-    def create_chunks(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
-        """Create overlapping text chunks with enhanced logic"""
+    def create_chunks(self, text: str, chunk_size: Optional[int] = None, overlap: Optional[int] = None) -> List[str]:
+        """Create overlapping text chunks with enhanced logic using configuration defaults"""
         if not text or not text.strip():
             return []
+        
+        # Use configuration values if not provided
+        if chunk_size is None:
+            chunk_size = getattr(settings, 'CHUNK_SIZE', 1000)
+        if overlap is None:
+            overlap = getattr(settings, 'CHUNK_OVERLAP', 200)
         
         chunks = []
         start = 0
@@ -226,19 +232,27 @@ class IntegratedDocumentProcessor:
         logger.info(f"✅ Created {len(chunks)} chunks from text ({len(text)} chars)")
         return chunks
     
-    async def store_in_qdrant(self, document_id: str, chunks: List[str]) -> bool:
-        """Store document chunks in Qdrant with enhanced error handling"""
+    async def store_in_qdrant(
+        self, 
+        document_id: str, 
+        chunks: List[str],
+        filename: Optional[str] = None,
+        department: Optional[str] = None,
+        file_type: Optional[str] = None
+    ) -> bool:
+        """Store document chunks in Qdrant with enhanced error handling and complete metadata"""
         if not self.qdrant_client or not self.embedding_model or not chunks:
             logger.warning("⚠️ Qdrant storage skipped: missing client, model, or chunks")
             return False
         
         try:
             from qdrant_client.models import PointStruct
+            import time
             
             # Generate embeddings for all chunks
             embeddings = self.embedding_model.encode(chunks)
             
-            # Create points for Qdrant
+            # Create points for Qdrant with standardized payload structure
             points = []
             for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
                 point_id = str(uuid.uuid4())  # Use UUID for point ID
@@ -248,8 +262,12 @@ class IntegratedDocumentProcessor:
                     payload={
                         "document_id": document_id,  # Original field name
                         "chunk_index": i,
-                        "text": chunk,
-                        "chunk_id": f"{document_id}_chunk_{i}"
+                        "content": chunk,  # FIXED: Changed from "text" to "content" for consistency
+                        "chunk_id": f"{document_id}_chunk_{i}",
+                        "filename": filename or "unknown",  # ADDED: Missing metadata
+                        "department": department or "General",  # ADDED: Missing metadata
+                        "file_type": file_type or "unknown",  # ADDED: Missing metadata
+                        "processed_at": time.time()  # ADDED: Processing timestamp
                     }
                 ))
             
@@ -310,7 +328,18 @@ class IntegratedDocumentProcessor:
             
             # Create chunks and store in vector database (async)
             chunks = self.create_chunks(text_content)
-            vector_success = await self.store_in_qdrant(document_id, chunks)
+            
+            # Extract file type from filename
+            file_ext = Path(file.filename).suffix.lower() if file.filename else ""
+            
+            # Store with complete metadata
+            vector_success = await self.store_in_qdrant(
+                document_id=document_id,
+                chunks=chunks,
+                filename=file.filename,
+                department=department,
+                file_type=file_ext
+            )
             
             # Update document status
             if vector_success:
@@ -394,11 +423,15 @@ class IntegratedDocumentProcessor:
             if self.qdrant_client and self.embedding_model:
                 try:
                     from qdrant_client.models import PointStruct
+                    import time
+                    
+                    # Extract file type from filename
+                    file_ext = Path(filename).suffix.lower() if filename else ""
                     
                     # Generate embeddings
                     embeddings = self.embedding_model.encode(chunks)
                     
-                    # Create points
+                    # Create points with standardized payload structure
                     points = []
                     for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
                         point_id = str(uuid.uuid4())
@@ -408,8 +441,12 @@ class IntegratedDocumentProcessor:
                             payload={
                                 "document_id": document_id,  # Original field name
                                 "chunk_index": i,
-                                "text": chunk,
-                                "chunk_id": f"{document_id}_chunk_{i}"
+                                "content": chunk,  # FIXED: Changed from "text" to "content" for consistency
+                                "chunk_id": f"{document_id}_chunk_{i}",
+                                "filename": filename or "unknown",  # ADDED: Missing metadata
+                                "department": department or "General",  # ADDED: Missing metadata
+                                "file_type": file_ext or "unknown",  # ADDED: Missing metadata
+                                "processed_at": time.time()  # ADDED: Processing timestamp
                             }
                         ))
                     

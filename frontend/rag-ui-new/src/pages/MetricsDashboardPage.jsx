@@ -630,6 +630,28 @@ const MetricsDashboardPage = () => {
           collectionMethod: 'API Polling'
         },
         { 
+          id: 'qdrant_indexed_vectors_count', 
+          label: 'Qdrant Indexed Vectors Count', 
+          value: typeof qm.total_points === 'number' ? qm.total_points : null, 
+          unit: '', 
+          category: 'real', 
+          dataSource: 'qdrant', 
+          isReal: typeof qm.total_points === 'number',
+          description: 'Number of indexed vectors in Qdrant collections. Same as total_points as all points are indexed via /metrics/comprehensive API',
+          collectionMethod: 'API Polling'
+        },
+        { 
+          id: 'qdrant_embeddings_generated', 
+          label: 'Embeddings Generated', 
+          value: typeof qm.total_points === 'number' ? qm.total_points : null, 
+          unit: '', 
+          category: 'real', 
+          dataSource: 'qdrant', 
+          isReal: typeof qm.total_points === 'number',
+          description: 'Total number of embeddings generated, represented by Qdrant total_points count via /metrics/comprehensive API',
+          collectionMethod: 'API Polling'
+        },
+        { 
           id: 'qdrant_search_latency', 
           label: 'Qdrant Search Latency', 
           value: typeof qm.search_latency === 'number' ? qm.search_latency : null, 
@@ -776,6 +798,17 @@ const MetricsDashboardPage = () => {
           isReal: !!plm.error_rate,
           description: 'Pipeline error rate percentage calculated from error counts via /metrics/comprehensive API',
           collectionMethod: 'Calculated'
+        },
+        { 
+          id: 'pipeline_active_documents', 
+          label: 'Documents Processed', 
+          value: typeof plm.active_documents === 'number' ? plm.active_documents : null, 
+          unit: '', 
+          category: 'real', 
+          dataSource: 'postgres', 
+          isReal: typeof plm.active_documents === 'number',
+          description: 'Total number of processed documents from documents table via /metrics/comprehensive API',
+          collectionMethod: 'API Polling'
         }
       );
     }
@@ -875,32 +908,11 @@ const MetricsDashboardPage = () => {
     }
     
     // Placeholder/Mock Metrics (from hardcoded values)
+    // Phase 1: Removed placeholders that have real equivalents:
+    // - placeholder_points_count → Use qdrant_total_points
+    // - placeholder_indexed_vectors → Use qdrant_indexed_vectors_count
     if (showPlaceholders) {
       metrics.push(
-        { 
-          id: 'placeholder_points_count', 
-          label: 'Points Count (Placeholder)', 
-          value: 13122, 
-          unit: '', 
-          category: 'placeholder', 
-          dataSource: 'placeholder', 
-          isReal: false,
-          description: 'Hardcoded placeholder value (13122) used when Qdrant service unavailable. Replace with GET /collections/{name} API call.',
-          collectionMethod: 'Placeholder',
-          recommendation: 'Use GET /collections/{name} endpoint to fetch real points_count from Qdrant API'
-        },
-        { 
-          id: 'placeholder_indexed_vectors', 
-          label: 'Indexed Vectors Count (Placeholder)', 
-          value: 13122, 
-          unit: '', 
-          category: 'placeholder', 
-          dataSource: 'placeholder', 
-          isReal: false,
-          description: 'Hardcoded placeholder value (13122) used when Qdrant service unavailable. Replace with GET /collections/{name}/stats API call.',
-          collectionMethod: 'Placeholder',
-          recommendation: 'Use GET /collections/{name}/stats endpoint to fetch real indexed_vectors_count from Qdrant API'
-        },
         { 
           id: 'placeholder_search_latency', 
           label: 'Search Latency (Placeholder)', 
@@ -913,18 +925,7 @@ const MetricsDashboardPage = () => {
           collectionMethod: 'Placeholder',
           recommendation: 'Perform test search and measure response time: POST /collections/{name}/points/search with timing'
         },
-        { 
-          id: 'placeholder_cache_hit_ratio', 
-          label: 'Cache Hit Ratio (Placeholder)', 
-          value: 92, 
-          unit: '%', 
-          category: 'placeholder', 
-          dataSource: 'placeholder', 
-          isReal: false,
-          description: 'Hardcoded placeholder value (92%) used when Qdrant service unavailable. Replace with actual cache statistics.',
-          collectionMethod: 'Placeholder',
-          recommendation: 'Query Qdrant metrics endpoint or Prometheus for cache hit ratio statistics'
-        },
+        // Phase 1: Removed placeholder_cache_hit_ratio → Use postgres_cache_hit_ratio (real metric)
         { 
           id: 'placeholder_compression_ratio', 
           label: 'Compression Ratio (Placeholder)', 
@@ -949,54 +950,11 @@ const MetricsDashboardPage = () => {
           collectionMethod: 'Placeholder',
           recommendation: 'Calculate from query_history table: COUNT(queries) WHERE timestamp > NOW() - INTERVAL 1 minute'
         },
-        { 
-          id: 'placeholder_avg_response_time', 
-          label: 'Average Response Time (Placeholder)', 
-          value: 23, 
-          unit: 'ms', 
-          category: 'placeholder', 
-          dataSource: 'placeholder', 
-          isReal: false,
-          description: 'Hardcoded placeholder value (23ms) used when backend unavailable. Replace with calculated value from query history.',
-          collectionMethod: 'Placeholder',
-          recommendation: 'Calculate from query_history table: AVG(processing_time_ms) from recent queries'
-        },
-        { 
-          id: 'placeholder_success_rate', 
-          label: 'Success Rate (Placeholder)', 
-          value: 98.5, 
-          unit: '%', 
-          category: 'placeholder', 
-          dataSource: 'placeholder', 
-          isReal: false,
-          description: 'Hardcoded placeholder value (98.5%) used when backend unavailable. Replace with calculated value from query results.',
-          collectionMethod: 'Placeholder',
-          recommendation: 'Calculate from query_history table: (COUNT(successful) / COUNT(total)) * 100'
-        },
-        { 
-          id: 'placeholder_documents_processed', 
-          label: 'Documents Processed (Placeholder)', 
-          value: 150, 
-          unit: '', 
-          category: 'placeholder', 
-          dataSource: 'placeholder', 
-          isReal: false,
-          description: 'Hardcoded placeholder value (150) used when backend unavailable. Replace with COUNT from documents table.',
-          collectionMethod: 'Placeholder',
-          recommendation: 'Query documents table: SELECT COUNT(*) FROM documents WHERE status = processed'
-        },
-        { 
-          id: 'placeholder_embeddings_generated', 
-          label: 'Embeddings Generated (Placeholder)', 
-          value: 13122, 
-          unit: '', 
-          category: 'placeholder', 
-          dataSource: 'placeholder', 
-          isReal: false,
-          description: 'Hardcoded placeholder value (13122) used when backend unavailable. Replace with Qdrant total_points count.',
-          collectionMethod: 'Placeholder',
-          recommendation: 'Use Qdrant API: GET /collections/{name} to get points_count which represents embeddings'
-        },
+        // Phase 1: Removed placeholders that have real equivalents:
+        // - placeholder_avg_response_time → Use pipeline_avg_query_processing_time
+        // - placeholder_success_rate → Use pipeline_success_rate
+        // - placeholder_documents_processed → Use pipeline_active_documents
+        // - placeholder_embeddings_generated → Use qdrant_embeddings_generated
         { 
           id: 'placeholder_chunks_generated', 
           label: 'Chunks Generated (Placeholder)', 

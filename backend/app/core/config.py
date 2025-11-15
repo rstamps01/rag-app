@@ -64,6 +64,34 @@ class Settings(BaseSettings):
         description="Embedding model name"
     )
     
+    # Chunking Configuration
+    CHUNK_SIZE: int = Field(
+        default=1000,
+        description="Text chunk size in characters"
+    )
+    CHUNK_OVERLAP: int = Field(
+        default=200,
+        description="Overlap between chunks in characters"
+    )
+    CHUNK_STRATEGY: str = Field(
+        default="sentence",
+        description="Chunking strategy: sentence, word, token, semantic"
+    )
+    
+    # Vector Search Configuration
+    VECTOR_SEARCH_LIMIT: int = Field(
+        default=5,
+        description="Default number of search results to return"
+    )
+    VECTOR_SEARCH_SCORE_THRESHOLD: float = Field(
+        default=0.5,
+        description="Minimum similarity score threshold for search results"
+    )
+    VECTOR_SEARCH_EF: int = Field(
+        default=128,
+        description="HNSW search parameter (quality vs speed tradeoff)"
+    )
+    
     # Cache and Model Storage
     MODELS_CACHE_DIR: str = Field(
         default="/app/models_cache",

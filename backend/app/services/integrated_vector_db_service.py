@@ -15,6 +15,7 @@ import logging
 import uuid
 import hashlib
 import os
+from typing import Optional
 
 logger = logging.getLogger(__name__ )
 
@@ -109,10 +110,16 @@ class IntegratedVectorDBService:
         """Check if embedding model is ready"""
         return self.is_embedding_available and self.embedding_model is not None
     
-    def chunk_document(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
-        """Split document into overlapping chunks with enhanced logic"""
+    def chunk_document(self, text: str, chunk_size: Optional[int] = None, overlap: Optional[int] = None) -> List[str]:
+        """Split document into overlapping chunks with enhanced logic using configuration defaults"""
         if not text or not text.strip():
             return []
+        
+        # Use configuration values if not provided
+        if chunk_size is None:
+            chunk_size = getattr(settings, 'CHUNK_SIZE', 1000)
+        if overlap is None:
+            overlap = getattr(settings, 'CHUNK_OVERLAP', 200)
         
         chunks = []
         start = 0
@@ -210,17 +217,26 @@ class IntegratedVectorDBService:
             for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
                 point_id = str(uuid.uuid4())  # Use UUID for point ID to avoid conflicts
                 
+                # Standardized payload structure with complete metadata
                 payload = {
                     "document_id": document_id,  # Original field name
                     "chunk_index": i,
-                    "text": chunk,
+                    "content": chunk,  # FIXED: Changed from "text" to "content" for consistency
                     "chunk_id": f"{document_id}_chunk_{i}",
                     "text_hash": hashlib.md5(chunk.encode()).hexdigest()
                 }
                 
-                # Add additional metadata if provided
+                # Add additional metadata if provided (filename, department, file_type, etc.)
                 if metadata:
                     payload.update(metadata)
+                
+                # Ensure minimum required metadata fields are present
+                if "filename" not in payload:
+                    payload["filename"] = "unknown"
+                if "department" not in payload:
+                    payload["department"] = "General"
+                if "file_type" not in payload:
+                    payload["file_type"] = "unknown"
                 
                 points.append(PointStruct(
                     id=point_id,
@@ -247,8 +263,8 @@ class IntegratedVectorDBService:
     def search_similar_documents(
         self, 
         query: str, 
-        limit: int = 5, 
-        score_threshold: float = 0.7,
+        limit: Optional[int] = None, 
+        score_threshold: Optional[float] = None,
         filter_conditions: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Search for similar documents with enhanced filtering and error handling"""
@@ -257,6 +273,12 @@ class IntegratedVectorDBService:
             return []
         
         try:
+            # Use configuration values if not provided
+            if limit is None:
+                limit = getattr(settings, 'VECTOR_SEARCH_LIMIT', 5)
+            if score_threshold is None:
+                score_threshold = getattr(settings, 'VECTOR_SEARCH_SCORE_THRESHOLD', 0.5)
+            
             # Generate query embedding
             query_embedding = self.embedding_model.encode([query])[0]
             
@@ -282,17 +304,23 @@ class IntegratedVectorDBService:
                 with_payload=True
             )
             
-            # Format results
+            # Format results with backward compatibility for "text" field
             results = []
             for result in search_results:
+                # FIXED: Handle both "content" (new) and "text" (old) for backward compatibility
+                content = result.payload.get("content") or result.payload.get("text", "")
+                
                 results.append({
-                    "content": result.payload.get("text", ""),
+                    "content": content,  # FIXED: Standardized to "content" with backward compatibility
                     "document_id": result.payload.get("document_id", ""),  # Original field name
                     "chunk_index": result.payload.get("chunk_index", 0),
                     "score": float(result.score),
                     "chunk_id": result.payload.get("chunk_id", ""),
+                    "filename": result.payload.get("filename", ""),  # ADDED: Now available from payload
+                    "department": result.payload.get("department", "General"),  # ADDED: Now available from payload
+                    "file_type": result.payload.get("file_type", ""),  # ADDED: Now available from payload
                     "metadata": {k: v for k, v in result.payload.items() 
-                               if k not in ["text", "document_id", "chunk_index", "chunk_id"]}
+                               if k not in ["content", "text", "document_id", "chunk_index", "chunk_id", "filename", "department", "file_type"]}
                 })
             
             logger.info(f"✅ Found {len(results)} similar documents for query")
@@ -301,6 +329,36 @@ class IntegratedVectorDBService:
         except Exception as e:
             logger.error(f"❌ Vector search failed: {e}")
             return []
+    
+    def search(
+        self,
+        query: str,
+        limit: Optional[int] = None,
+        department: Optional[str] = None,
+        score_threshold: Optional[float] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Alias for search_similar_documents with department filtering support.
+        This method provides a simpler interface matching enhanced_vector_db_service API.
+        """
+        # Use configuration values if not provided
+        if limit is None:
+            limit = getattr(settings, 'VECTOR_SEARCH_LIMIT', 5)
+        if score_threshold is None:
+            score_threshold = getattr(settings, 'VECTOR_SEARCH_SCORE_THRESHOLD', 0.5)
+        
+        # Build filter conditions if department is provided
+        filter_conditions = None
+        if department and department != "General":
+            filter_conditions = {"department": department}
+        
+        # Call the main search method
+        return self.search_similar_documents(
+            query=query,
+            limit=limit,
+            score_threshold=score_threshold,
+            filter_conditions=filter_conditions
+        )
     
     def delete_document_vectors(self, document_id: str) -> bool:
         """Delete all vectors for a specific document"""
@@ -366,3 +424,6 @@ class IntegratedVectorDBService:
 
 # Global integrated vector database service instance
 integrated_vector_db_service = IntegratedVectorDBService()
+
+# Alias for backward compatibility with enhanced_vector_db_service
+enhanced_vector_db_service = integrated_vector_db_service

@@ -63,8 +63,8 @@ async def cleanup_test_queries(
         query_filter = and_(
             QueryHistory.query_timestamp < cutoff_date,
             or_(
-                QueryHistory.query.ilike(f"%{pattern}%"),
-                QueryHistory.response.ilike(f"%{pattern}%")
+                QueryHistory.query_text.ilike(f"%{pattern}%"),
+                QueryHistory.response_text.ilike(f"%{pattern}%")
             )
         )
         
@@ -79,7 +79,7 @@ async def cleanup_test_queries(
                 "sample_queries": [
                     {
                         "id": q.id,
-                        "query": q.query[:100] + "..." if len(q.query) > 100 else q.query,
+                        "query": q.query_text[:100] + "..." if len(q.query_text) > 100 else q.query_text,
                         "timestamp": q.query_timestamp.isoformat()
                     } for q in matching_queries[:10]
                 ]
@@ -266,22 +266,44 @@ async def detect_orphans(db: Session = Depends(get_db)):
                 # Get all document IDs from database
                 db_doc_ids = set(doc.id for doc in documents)
                 
-                # Get all vectors from Qdrant (this is a simplified check)
-                search_results = qdrant_client.scroll(
-                    collection_name="rag",
-                    limit=1000,  # Adjust based on your collection size
-                    with_payload=True
-                )
+                # Use pagination to get ALL points, not just first 1000
+                next_page_offset = None
+                batch_size = 1000
+                total_scanned = 0
                 
-                for point in search_results[0]:  # scroll returns (points, next_page_offset)
-                    doc_id = point.payload.get("document_id")
-                    if doc_id and doc_id not in db_doc_ids:
-                        orphan_report["qdrant_orphans"].append({
-                            "type": "orphaned_vector",
-                            "document_id": doc_id,
-                            "point_id": point.id,
-                            "chunk_index": point.payload.get("chunk_index", 0)
-                        })
+                while True:
+                    # Scroll with pagination
+                    scroll_params = {
+                        "collection_name": "rag",
+                        "limit": batch_size,
+                        "with_payload": True
+                    }
+                    
+                    if next_page_offset is not None:
+                        scroll_params["offset"] = next_page_offset
+                    
+                    search_results = qdrant_client.scroll(**scroll_params)
+                    points, next_page_offset = search_results
+                    
+                    # Check each point for orphaned status
+                    for point in points:
+                        total_scanned += 1
+                        doc_id = point.payload.get("document_id")
+                        if doc_id and doc_id not in db_doc_ids:
+                            orphan_report["qdrant_orphans"].append({
+                                "type": "orphaned_vector",
+                                "document_id": doc_id,
+                                "point_id": point.id,
+                                "chunk_index": point.payload.get("chunk_index", 0)
+                            })
+                    
+                    # If no more pages, break
+                    if next_page_offset is None or len(points) == 0:
+                        break
+                    
+                    logger.debug(f"Admin: Scanned {total_scanned} points, found {len(orphan_report['qdrant_orphans'])} orphans so far")
+                
+                logger.info(f"Admin: Orphan detection complete - scanned {total_scanned} points, found {len(orphan_report['qdrant_orphans'])} orphaned vectors")
                         
             except Exception as e:
                 logger.warning(f"Error checking Qdrant orphans: {e}")
@@ -334,31 +356,72 @@ async def cleanup_orphans(
             try:
                 db_doc_ids = set(doc.id for doc in db.query(Document).all())
                 
-                search_results = qdrant_client.scroll(
-                    collection_name="rag",
-                    limit=1000,
-                    with_payload=True
-                )
-                
+                # Use pagination to get ALL orphaned points, not just first 1000
                 orphaned_point_ids = []
-                for point in search_results[0]:
-                    doc_id = point.payload.get("document_id")
-                    if doc_id and doc_id not in db_doc_ids:
-                        orphaned_point_ids.append(point.id)
+                next_page_offset = None
+                batch_size = 1000
+                total_scanned = 0
+                
+                while True:
+                    # Scroll with pagination
+                    scroll_params = {
+                        "collection_name": "rag",
+                        "limit": batch_size,
+                        "with_payload": True
+                    }
+                    
+                    if next_page_offset is not None:
+                        scroll_params["offset"] = next_page_offset
+                    
+                    search_results = qdrant_client.scroll(**scroll_params)
+                    points, next_page_offset = search_results
+                    
+                    # Check each point for orphaned status
+                    for point in points:
+                        total_scanned += 1
+                        doc_id = point.payload.get("document_id")
+                        if doc_id and doc_id not in db_doc_ids:
+                            orphaned_point_ids.append(point.id)
+                    
+                    # If no more pages, break
+                    if next_page_offset is None or len(points) == 0:
+                        break
+                    
+                    logger.info(f"Admin: Scanned {total_scanned} points, found {len(orphaned_point_ids)} orphans so far")
+                
+                logger.info(f"Admin: Total orphaned vectors found: {len(orphaned_point_ids)} (scanned {total_scanned} total points)")
                 
                 if orphaned_point_ids and not dry_run:
-                    # Delete orphaned points
-                    qdrant_client.delete(
-                        collection_name="rag",
-                        points_selector=orphaned_point_ids
-                    )
-                    cleanup_report["vectors_cleaned"] = len(orphaned_point_ids)
-                    logger.info(f"Admin: Cleaned up {len(orphaned_point_ids)} orphaned vectors")
+                    # Delete orphaned points in batches (Qdrant has limits on batch size)
+                    batch_delete_size = 1000
+                    total_deleted = 0
+                    
+                    for i in range(0, len(orphaned_point_ids), batch_delete_size):
+                        batch = orphaned_point_ids[i:i + batch_delete_size]
+                        try:
+                            # Delete points by ID - Qdrant accepts list of point IDs directly
+                            # points_selector can be: List[point_ids] or FilterSelector
+                            qdrant_client.delete(
+                                collection_name="rag",
+                                points_selector=batch  # Pass list of point IDs directly
+                            )
+                            total_deleted += len(batch)
+                            logger.info(f"Admin: Deleted batch of {len(batch)} orphaned vectors ({total_deleted}/{len(orphaned_point_ids)})")
+                        except Exception as batch_error:
+                            error_msg = f"Failed to delete batch {i//batch_delete_size + 1}: {batch_error}"
+                            logger.error(f"Admin: {error_msg}")
+                            cleanup_report["errors"].append(error_msg)
+                    
+                    cleanup_report["vectors_cleaned"] = total_deleted
+                    logger.info(f"Admin: Successfully cleaned up {total_deleted} orphaned vectors")
                 elif orphaned_point_ids:
                     cleanup_report["vectors_cleaned"] = len(orphaned_point_ids)
+                    logger.info(f"Admin: Dry run - would clean up {len(orphaned_point_ids)} orphaned vectors")
                     
             except Exception as e:
-                cleanup_report["errors"].append(f"Failed to cleanup vectors: {e}")
+                error_msg = f"Failed to cleanup vectors: {e}"
+                logger.error(f"Admin: {error_msg}")
+                cleanup_report["errors"].append(error_msg)
         
         return cleanup_report
         
@@ -375,7 +438,12 @@ async def admin_stats_overview(db: Session = Depends(get_db)):
             "documents": {
                 "total": db.query(Document).count(),
                 "with_files": db.query(Document).filter(Document.path.isnot(None)).count(),
-                "processed": db.query(Document).filter(Document.status == "completed").count()
+                "processed": db.query(Document).filter(
+                    Document.status.in_(["completed", "processed"])
+                ).count(),
+                "vector_stored": db.query(Document).filter(
+                    Document.status.in_(["completed", "processed"])
+                ).count()  # Alias for frontend compatibility
             },
             "queries": {
                 "total": db.query(QueryHistory).count(),
@@ -396,10 +464,15 @@ async def admin_stats_overview(db: Session = Depends(get_db)):
         if qdrant_client is not None:
             try:
                 collection_info = qdrant_client.get_collection("rag")
-                stats["vector_db"]["points_count"] = collection_info.points_count
-                stats["vector_db"]["status"] = collection_info.status
+                stats["vector_db"]["points_count"] = collection_info.points_count if hasattr(collection_info, 'points_count') else None
+                stats["vector_db"]["status"] = str(collection_info.status) if hasattr(collection_info, 'status') else "unknown"
+                stats["vector_db"]["connected"] = True
             except Exception as e:
+                logger.warning(f"Error getting Qdrant collection info: {e}")
                 stats["vector_db"]["error"] = str(e)
+                stats["vector_db"]["connected"] = True  # Client is initialized, just collection query failed
+                stats["vector_db"]["points_count"] = None
+                stats["vector_db"]["status"] = "error"
         
         return stats
         
