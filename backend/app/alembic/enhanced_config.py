@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     
     # API Configuration
     API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "RAG Application"
+    PROJECT_NAME: str = "RAG-APP-07"
     
     # Enhanced Database Configuration
     DATABASE_URL: str = os.getenv(

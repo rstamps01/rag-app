@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     """Application settings with all environment variables properly defined"""
     
     # Core Application Settings
-    PROJECT_NAME: str = Field(default="RAG Application", description="Project name")
+    PROJECT_NAME: str = Field(default="RAG-APP-07", description="Project name")
     API_V1_STR: str = Field(default="/api/v1", description="API version prefix")
     DEBUG: bool = Field(default=False, description="Debug mode")
     
@@ -285,7 +285,7 @@ def create_settings():
         
         # Create fallback settings
         class FallbackSettings:
-            PROJECT_NAME = "RAG Application"
+            PROJECT_NAME = "RAG-APP-07"
             API_V1_STR = "/api/v1"
             DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rag:rag@postgres-07:5432/rag")
             QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant-07:6333")

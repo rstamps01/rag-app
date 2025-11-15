@@ -68,7 +68,7 @@ except Exception as e:
     logger.error(f"⚠️  Config import failed: {e}")
     # Create fallback settings
     class FallbackSettings:
-        PROJECT_NAME = "RAG Application"
+        PROJECT_NAME = "RAG-APP-07"
         API_V1_STR = "/api/v1"
         DATABASE_URL = "postgresql://rag:rag@postgres-07:5432/rag"
         QDRANT_URL = "http://qdrant-07:6333"
