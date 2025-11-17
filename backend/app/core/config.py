@@ -92,6 +92,16 @@ class Settings(BaseSettings):
         description="HNSW search parameter (quality vs speed tradeoff)"
     )
     
+    # Qdrant HNSW Index Configuration
+    QDRANT_HNSW_M: int = Field(
+        default=16,
+        description="HNSW parameter m: number of bi-directional links (higher = faster search, more memory)"
+    )
+    QDRANT_HNSW_EF_CONSTRUCT: int = Field(
+        default=200,
+        description="HNSW parameter ef_construct: size of candidate list during index construction (higher = better quality, slower build)"
+    )
+    
     # Cache and Model Storage
     MODELS_CACHE_DIR: str = Field(
         default="/app/models_cache",

@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
-from qdrant_client.http.models import Distance, VectorParams, PointStruct
+from qdrant_client.http.models import Distance, VectorParams, PointStruct, HnswConfigDiff, OptimizersConfigDiff, PayloadSchemaType
 from sentence_transformers import SentenceTransformer
 from app.core.config import settings
 import logging
@@ -83,24 +83,116 @@ class IntegratedVectorDBService:
             collection_names = [c.name for c in collections]
             
             if self.collection_name not in collection_names:
-                # Create collection with proper vector configuration
+                # Get HNSW parameters from config
+                hnsw_m = getattr(settings, 'QDRANT_HNSW_M', 16)
+                hnsw_ef_construct = getattr(settings, 'QDRANT_HNSW_EF_CONSTRUCT', 200)
+                
+                # Configure HNSW for optimized search performance
+                hnsw_config = HnswConfigDiff(
+                    m=hnsw_m,
+                    ef_construct=hnsw_ef_construct,
+                    full_scan_threshold=10000  # Use HNSW for collections > 10K points
+                )
+                
+                # Optimizer config for large collections
+                optimizer_config = OptimizersConfigDiff(
+                    indexing_threshold=20000,  # Index after 20K vectors
+                    memmap_threshold=50000,    # Use memory-mapped files after 50K
+                    vacuum_threshold=0.2       # Vacuum when 20% deleted
+                )
+                
+                # Create collection with optimized configuration
                 self.client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=VectorParams(
                         size=384,  # all-MiniLM-L6-v2 embedding size
                         distance=Distance.COSINE
-                    )
+                    ),
+                    hnsw_config=hnsw_config,
+                    optimizers_config=optimizer_config
                 )
-                logger.info(f"✅ Created collection: {self.collection_name}")
+                logger.info(f"✅ Created collection: {self.collection_name} with HNSW config (m={hnsw_m}, ef_construct={hnsw_ef_construct})")
+                
+                # Create payload indexes for faster filtering
+                self._create_payload_indexes()
             else:
                 logger.info(f"✅ Collection exists: {self.collection_name}")
+                # Ensure payload indexes exist even if collection already exists
+                self._create_payload_indexes()
                 
         except Exception as e:
             # Handle the specific case where collection already exists
             if "already exists" in str(e).lower():
                 logger.info(f"✅ Collection already exists: {self.collection_name}")
+                # Ensure payload indexes exist even if collection already existed
+                self._create_payload_indexes()
             else:
                 logger.error(f"❌ Collection setup failed: {e}")
+    
+    def _create_payload_indexes(self):
+        """Create payload indexes for faster filtering by department, filename, file_type"""
+        if not self.client:
+            return
+        
+        try:
+            # Index for department filtering (most common filter)
+            try:
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="department",
+                    field_schema=PayloadSchemaType.KEYWORD
+                )
+                logger.info("✅ Created payload index for: department")
+            except Exception as e:
+                if "already exists" in str(e).lower() or "already exist" in str(e).lower():
+                    logger.debug("Payload index for 'department' already exists")
+                else:
+                    logger.warning(f"Could not create department index: {e}")
+            
+            # Index for filename filtering
+            try:
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="filename",
+                    field_schema=PayloadSchemaType.KEYWORD
+                )
+                logger.info("✅ Created payload index for: filename")
+            except Exception as e:
+                if "already exists" in str(e).lower() or "already exist" in str(e).lower():
+                    logger.debug("Payload index for 'filename' already exists")
+                else:
+                    logger.warning(f"Could not create filename index: {e}")
+            
+            # Index for file_type filtering
+            try:
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="file_type",
+                    field_schema=PayloadSchemaType.KEYWORD
+                )
+                logger.info("✅ Created payload index for: file_type")
+            except Exception as e:
+                if "already exists" in str(e).lower() or "already exist" in str(e).lower():
+                    logger.debug("Payload index for 'file_type' already exists")
+                else:
+                    logger.warning(f"Could not create file_type index: {e}")
+            
+            # Index for processed_at (datetime) for date range queries
+            try:
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="processed_at",
+                    field_schema=PayloadSchemaType.FLOAT  # Store as timestamp
+                )
+                logger.info("✅ Created payload index for: processed_at")
+            except Exception as e:
+                if "already exists" in str(e).lower() or "already exist" in str(e).lower():
+                    logger.debug("Payload index for 'processed_at' already exists")
+                else:
+                    logger.warning(f"Could not create processed_at index: {e}")
+                    
+        except Exception as e:
+            logger.warning(f"Error creating payload indexes: {e}")
     
     def is_available(self) -> bool:
         """Check if vector database is available"""
@@ -294,14 +386,20 @@ class IntegratedVectorDBService:
                     ]
                 )
             
-            # Perform search
+            # Get HNSW ef parameter from config for search quality
+            search_ef = getattr(settings, 'VECTOR_SEARCH_EF', 128)
+            
+            # Perform search with HNSW ef parameter for optimized quality
             search_results = self.client.search(
                 collection_name=self.collection_name,
                 query_vector=query_embedding.tolist(),
                 limit=limit,
                 score_threshold=score_threshold,
                 query_filter=search_filter,
-                with_payload=True
+                with_payload=True,
+                search_params=models.SearchParams(
+                    hnsw_ef=search_ef  # Use configured ef value for search quality
+                )
             )
             
             # Format results with backward compatibility for "text" field
