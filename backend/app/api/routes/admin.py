@@ -461,15 +461,29 @@ async def admin_stats_overview(db: Session = Depends(get_db)):
         }
         
         # Get Qdrant collection info if available
+        # Use direct HTTP request to avoid Pydantic validation errors with Qdrant client
         if qdrant_client is not None:
             try:
-                collection_info = qdrant_client.get_collection("rag")
-                stats["vector_db"]["points_count"] = collection_info.points_count if hasattr(collection_info, 'points_count') else None
-                stats["vector_db"]["status"] = str(collection_info.status) if hasattr(collection_info, 'status') else "unknown"
-                stats["vector_db"]["connected"] = True
+                import requests
+                qdrant_url = getattr(settings, 'QDRANT_URL', 'http://qdrant-07:6333')
+                collection_name = getattr(settings, 'QDRANT_COLLECTION_NAME', 'rag')
+                
+                # Use direct HTTP request instead of client.get_collection() to avoid Pydantic validation issues
+                response = requests.get(f"{qdrant_url}/collections/{collection_name}", timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    result = data.get('result', {})
+                    stats["vector_db"]["points_count"] = result.get('points_count', 0)
+                    stats["vector_db"]["status"] = result.get('status', 'unknown')
+                    stats["vector_db"]["connected"] = True
+                else:
+                    stats["vector_db"]["error"] = f"HTTP {response.status_code}: {response.text[:100]}"
+                    stats["vector_db"]["connected"] = True
+                    stats["vector_db"]["points_count"] = None
+                    stats["vector_db"]["status"] = "error"
             except Exception as e:
                 logger.warning(f"Error getting Qdrant collection info: {e}")
-                stats["vector_db"]["error"] = str(e)
+                stats["vector_db"]["error"] = str(e)[:200]  # Truncate long error messages
                 stats["vector_db"]["connected"] = True  # Client is initialized, just collection query failed
                 stats["vector_db"]["points_count"] = None
                 stats["vector_db"]["status"] = "error"
