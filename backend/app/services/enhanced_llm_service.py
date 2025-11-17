@@ -74,6 +74,13 @@ class LLMService:
             
             # Add GPU-specific optimizations
             if self.device == "cuda":
+                # Add max_memory limit for GPU (75% of 32GB = 24GB total, ~12GB per worker with 2 workers)
+                if torch.cuda.is_available():
+                    total_memory = torch.cuda.get_device_properties(0).total_memory / 1e9  # GB
+                    max_memory_per_worker = int(total_memory * 0.375 * 1e9)  # 37.5% per worker in bytes
+                    model_kwargs["max_memory"] = {0: max_memory_per_worker}
+                    logger.info(f"🔒 Setting max_memory per worker: {max_memory_per_worker / 1e9:.2f}GB (37.5% of {total_memory:.1f}GB)")
+                
                 model_kwargs.update({
                     "attn_implementation": "eager",                # "flash_attention_2",  # For RTX 5090 optimization
                     "use_cache": True

@@ -73,8 +73,8 @@ class GPUAccelerator:
         try:
             if self.is_blackwell():
                 # RTX 5090 Blackwell optimizations
-                #torch.cuda.set_per_process_memory_fraction(0.95)  # Use 95% of 32GB VRAM
-                torch.cuda.set_per_process_memory_fraction(0.70)  # Use 70% of 32GB VRAM
+                # With 2 workers: 75% total / 2 = 37.5% per worker
+                torch.cuda.set_per_process_memory_fraction(0.375)  # Use 37.5% per worker (75% total with 2 workers)
                 torch.set_float32_matmul_precision('high')  # Enable TensorFloat-32
                 logger.info("Configured RTX 5090 Blackwell optimizations")
                 

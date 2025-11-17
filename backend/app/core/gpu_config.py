@@ -9,7 +9,8 @@ class GPUMemoryOptimizer:
     """GPU Memory optimization for RTX 5090"""
     
     # RTX 5090 specific settings
-    MEMORY_FRACTION = 0.7  # Use 70% of 32GB
+    # With 2 uvicorn workers: 75% total / 2 = 37.5% per worker
+    MEMORY_FRACTION = 0.375  # Use 37.5% per worker (75% total with 2 workers)
     MAX_SPLIT_SIZE_MB = 512
     TRITON_CACHE_SIZE = 1024
     
