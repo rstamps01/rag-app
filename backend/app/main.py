@@ -576,6 +576,39 @@ async def get_query_history(
         "message": "Query history retrieved from mock data (database unavailable)"
     }
 
+# Thread pool executor for CPU/GPU-intensive query processing
+# This prevents blocking the FastAPI event loop during LLM generation
+_query_processing_executor = ThreadPoolExecutor(
+    max_workers=2,
+    thread_name_prefix="query_processor"
+)
+
+def _generate_embedding_sync(query: str):
+    """Synchronous embedding generation for thread pool execution"""
+    global embedding_model
+    if embedding_model is None:
+        return None
+    try:
+        return embedding_model.encode(query).tolist()
+    except Exception as e:
+        logger.error(f"Embedding generation error: {e}")
+        return None
+
+def _generate_llm_response_sync(query: str, context: str):
+    """Synchronous LLM response generation for thread pool execution"""
+    global llm_service
+    if llm_service is None:
+        return None
+    try:
+        result = llm_service.generate_response(
+            query=query,
+            context=context
+        )
+        return result
+    except Exception as e:
+        logger.error(f"LLM generation error: {e}")
+        return None
+
 @app.post("/api/v1/queries/ask")
 async def ask_query(
     request: QueryRequest,
