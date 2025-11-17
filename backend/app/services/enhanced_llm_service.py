@@ -74,17 +74,19 @@ class LLMService:
             
             # Add GPU-specific optimizations
             if self.device == "cuda":
-                # Add max_memory limit for GPU (75% of 32GB = 24GB total, ~12GB per worker with 2 workers)
-                if torch.cuda.is_available():
-                    total_memory = torch.cuda.get_device_properties(0).total_memory / 1e9  # GB
-                    max_memory_per_worker = int(total_memory * 0.375 * 1e9)  # 37.5% per worker in bytes
-                    model_kwargs["max_memory"] = {0: max_memory_per_worker}
-                    logger.info(f"🔒 Setting max_memory per worker: {max_memory_per_worker / 1e9:.2f}GB (37.5% of {total_memory:.1f}GB)")
+                # Use device_map="cuda" instead of "auto" to avoid meta device offloading issues
+                # With 2 workers, each gets ~12GB which should be enough for Mistral-7B (~14GB)
+                # If memory is insufficient, the model will fail to load rather than partially offload
+                model_kwargs["device_map"] = "cuda"  # Force all parameters to GPU, no offloading
                 
                 model_kwargs.update({
                     "attn_implementation": "eager",                # "flash_attention_2",  # For RTX 5090 optimization
                     "use_cache": True
                 })
+                
+                if torch.cuda.is_available():
+                    total_memory = torch.cuda.get_device_properties(0).total_memory / 1e9  # GB
+                    logger.info(f"🔒 Loading model on GPU (device_map='cuda'): {total_memory:.1f}GB available")
             
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
@@ -94,11 +96,13 @@ class LLMService:
             logger.info("✅ Model loaded successfully")
             
             # Create pipeline
+            # Explicitly set device for pipeline to ensure all tensors are on the correct device
+            pipeline_device = 0 if self.device == "cuda" else -1
             self.pipeline = pipeline(
                 "text-generation",
                 model=self.model,
                 tokenizer=self.tokenizer,
-                #device=0 if self.device == "cuda" else -1,
+                device=pipeline_device,  # Explicitly set device to avoid meta device issues
                 torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
                 return_full_text=False
             )
