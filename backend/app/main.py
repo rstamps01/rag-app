@@ -660,10 +660,14 @@ async def ask_query(
                     context
                 )
                 
+                # Handle both dict and string responses from LLM service
                 if llm_response:
-                    response_text = llm_response
+                    if isinstance(llm_response, dict):
+                        response_text = llm_response.get("response", str(llm_response))
+                    else:
+                        response_text = llm_response
                     used_llm = True
-                    logger.info("✅ LLM response generated")
+                    logger.info("✅ LLM response generated in thread pool")
                 else:
                     raise Exception("LLM returned empty response")
                     
