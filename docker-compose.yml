@@ -23,8 +23,10 @@ services:
       resources:
         limits:
           memory: 24G
+          cpus: '16.0'      # Allocate all 16 vCPUs for maximum performance
         reservations:
           memory: 8G
+          cpus: '4.0'       # Reserve 4 vCPUs to ensure minimum performance
           devices:
           - driver: nvidia
             count: 1
