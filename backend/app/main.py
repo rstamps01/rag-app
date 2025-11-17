@@ -23,6 +23,7 @@ import os
 import asyncio
 from typing import Optional, List
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -595,8 +596,16 @@ async def ask_query(
             try:
                 logger.info("Performing vector search...")
                 
-                # Generate query embedding
-                query_embedding = embedding_model.encode(request.query).tolist()
+                # Generate query embedding in thread pool to avoid blocking
+                loop = asyncio.get_event_loop()
+                query_embedding = await loop.run_in_executor(
+                    _query_processing_executor,
+                    _generate_embedding_sync,
+                    request.query
+                )
+                
+                if query_embedding is None:
+                    raise Exception("Embedding generation failed")
                 
                 # Use configuration values for search parameters
                 search_limit = getattr(settings, 'VECTOR_SEARCH_LIMIT', 5) if config_ok else 5
@@ -631,9 +640,10 @@ async def ask_query(
                 logger.error(f"Vector search failed: {e}")
         
         # Step 2: Generate response with LLM (if enabled and available)
+        # Run in thread pool to avoid blocking event loop during ~30s generation
         if request.use_llm and llm_service is not None:
             try:
-                logger.info("Generating LLM response...")
+                logger.info("Generating LLM response in thread pool (non-blocking)...")
                 
                 # Prepare context from vector search results
                 context = ""
@@ -641,11 +651,13 @@ async def ask_query(
                     context_chunks = [source.get("content", "") for source in sources[:3]]
                     context = "\n\n".join(context_chunks)
                 
-                # Generate response with LLM
-                llm_response = llm_service.generate_response(
-                #    prompt=request.query,
-                    query=request.query,
-                    context=context
+                # Generate response with LLM in thread pool to avoid blocking event loop
+                loop = asyncio.get_event_loop()
+                llm_response = await loop.run_in_executor(
+                    _query_processing_executor,
+                    _generate_llm_response_sync,
+                    request.query,
+                    context
                 )
                 
                 if llm_response:
