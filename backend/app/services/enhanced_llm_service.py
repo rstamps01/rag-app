@@ -138,10 +138,11 @@ class LLMService:
         self,
         query: str,
         context: str = "",
-        max_length: int = 512,
+        max_length: int = 1536,  # PHASE 1: Increased from 512 to 1536 tokens for longer, more detailed responses
         temperature: float = 0.7,
         top_p: float = 0.9,
-        do_sample: bool = True
+        do_sample: bool = True,
+        repetition_penalty: float = 1.15  # PHASE 1: Added to avoid repetitive responses
     ) -> Dict[str, Any]:
         """Generate response using Mistral model"""
         if not self.is_available():
@@ -150,29 +151,36 @@ class LLMService:
         start_time = time.time()
         
         try:
-            # Prepare prompt with context
+            # PHASE 1: Enhanced prompt template for better quality and detail
             if context:
-                prompt = f"""<s>[INST] Based on the following context, please answer the question.
+                prompt = f"""<s>[INST] You are an expert assistant. Based on the following context, provide a comprehensive, detailed answer to the question.
 
 Context:
 {context}
 
 Question: {query}
 
-Please provide a comprehensive and accurate answer based on the context provided. [/INST]"""
+Instructions:
+- Provide a thorough, well-structured answer
+- Include relevant details from the context
+- Use clear explanations and examples where appropriate
+- If the context doesn't fully answer the question, indicate what information is available
+[/INST]"""
             else:
                 prompt = f"<s>[INST] {query} [/INST]"
             
             logger.info(f"🤖 Generating response for query: '{query[:50]}...'")
             
-            # Generate response
+            # Generate response with repetition penalty
             with torch.amp.autocast(device_type='cuda') if self.device == "cuda" else torch.no_grad():
                 result = self.pipeline(
                     prompt,
                     max_new_tokens=max_length,
                     temperature=temperature,
                     top_p=top_p,
+                    top_k=50,  # PHASE 1: Added for better diversity
                     do_sample=do_sample,
+                    repetition_penalty=repetition_penalty,  # PHASE 1: Added to avoid loops
                     pad_token_id=self.tokenizer.eos_token_id,
                     eos_token_id=self.tokenizer.eos_token_id
                 )

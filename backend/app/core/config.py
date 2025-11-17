@@ -91,6 +91,10 @@ class Settings(BaseSettings):
         default=128,
         description="HNSW search parameter (quality vs speed tradeoff)"
     )
+    MAX_CONTEXT_CHUNKS: int = Field(
+        default=8,  # PHASE 1: Increased from 3 to 8 for more context
+        description="Maximum number of context chunks to use for LLM generation"
+    )
     
     # Qdrant HNSW Index Configuration
     QDRANT_HNSW_M: int = Field(

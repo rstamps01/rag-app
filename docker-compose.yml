@@ -37,6 +37,8 @@ services:
     - ./backend/models_cache:/app/models_cache:rw
     - backend_logs-07:/app/data/logs:rw
     - uploaded_documents-07:/app/data/uploads:rw
+    # PHASE 1: Shared memory for model caching and PyTorch DataLoader
+    shm_size: '8gb'
     environment:
     - HF_HOME=/app/models_cache
     - HF_HUB_CACHE=/app/models_cache/hub
@@ -45,8 +47,15 @@ services:
     - TORCH_CUDA_ARCH_LIST=12.0
     - CUDA_VISIBLE_DEVICES=0
     - NVIDIA_VISIBLE_DEVICES=0
-    - CUDA_LAUNCH_BLOCKING=1
+    - CUDA_LAUNCH_BLOCKING=0
     - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    # PHASE 1: Performance optimizations
+    - OMP_NUM_THREADS=8
+    - MKL_NUM_THREADS=8
+    - TORCH_NUM_THREADS=8
+    - PYTHONOPTIMIZE=2
+    - PYTHONDONTWRITEBYTECODE=1
+    - CUDA_MODULE_LOADING=LAZY
     - DATABASE_URL=postgresql://rag:rag@postgres-07:5432/rag
     - QDRANT_URL=http://qdrant-07:6333
     - QDRANT_COLLECTION_NAME=rag

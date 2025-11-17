@@ -585,12 +585,29 @@ _query_processing_executor = ThreadPoolExecutor(
 )
 
 def _generate_embedding_sync(query: str):
-    """Synchronous embedding generation for thread pool execution"""
+    """Synchronous embedding generation for thread pool execution with caching"""
     global embedding_model
     if embedding_model is None:
         return None
     try:
-        return embedding_model.encode(query).tolist()
+        # PHASE 1: Check embedding cache
+        from app.services.cache_service import embedding_cache
+        import hashlib
+        
+        cache_key = hashlib.md5(query.encode()).hexdigest()
+        cached_embedding = embedding_cache.get(cache_key)
+        if cached_embedding:
+            logger.debug(f"✅ Embedding cache hit for query: {query[:50]}...")
+            return cached_embedding
+        
+        # Generate embedding if not cached
+        embedding = embedding_model.encode(query).tolist()
+        
+        # PHASE 1: Cache the embedding
+        embedding_cache.set(embedding, cache_key)
+        logger.debug(f"💾 Cached embedding for query: {query[:50]}...")
+        
+        return embedding
     except Exception as e:
         logger.error(f"Embedding generation error: {e}")
         return None
@@ -618,6 +635,29 @@ async def ask_query(
     """Ask a query with real LLM integration and vector search"""
     start_time = time.time()
     logger.info(f"Query received: {request.query}")
+    
+    # PHASE 1: Check query result cache
+    from app.services.cache_service import query_cache
+    import hashlib
+    import json
+    
+    cache_key_data = {
+        "query": request.query,
+        "department": request.department,
+        "use_llm": request.use_llm,
+        "use_vector_search": request.use_vector_search
+    }
+    cache_key = hashlib.md5(
+        json.dumps(cache_key_data, sort_keys=True).encode()
+    ).hexdigest()
+    
+    cached_result = query_cache.get(cache_key)
+    if cached_result:
+        logger.info(f"✅ Query cache hit for: {request.query[:50]}...")
+        # Add cache hit indicator
+        if isinstance(cached_result, dict):
+            cached_result["cached"] = True
+        return cached_result
     
     response_text = ""
     sources = []
@@ -679,11 +719,14 @@ async def ask_query(
             try:
                 logger.info("Generating LLM response in thread pool (non-blocking)...")
                 
-                # Prepare context from vector search results
+                # PHASE 1: Prepare context from vector search results with increased chunk count
                 context = ""
                 if sources:
-                    context_chunks = [source.get("content", "") for source in sources[:3]]
+                    # Use configuration value for max context chunks (default: 8, increased from 3)
+                    max_context_chunks = getattr(settings, 'MAX_CONTEXT_CHUNKS', 8) if config_ok else 8
+                    context_chunks = [source.get("content", "") for source in sources[:max_context_chunks]]
                     context = "\n\n".join(context_chunks)
+                    logger.info(f"📚 Using {len(context_chunks)} context chunks (max: {max_context_chunks})")
                 
                 # Generate response with LLM in thread pool to avoid blocking event loop
                 loop = asyncio.get_event_loop()
@@ -724,6 +767,24 @@ async def ask_query(
         
         # Calculate processing time
         processing_time = time.time() - start_time
+        
+        # PHASE 1: Prepare response with cache indicator
+        response_data = {
+            "query": request.query,
+            "response": response_text,
+            "sources": sources,
+            "used_llm": used_llm,
+            "used_vector_search": used_vector_search,
+            "processing_time": processing_time,
+            "cached": False  # Not from cache
+        }
+        
+        # PHASE 1: Cache the query result
+        try:
+            query_cache.set(response_data, cache_key)
+            logger.debug(f"💾 Cached query result for: {request.query[:50]}...")
+        except Exception as e:
+            logger.warning(f"Failed to cache query result: {e}")
         
         # Store query in database if available (FIXED: Use correct field names)
         query_id = f"query-{int(time.time())}"
