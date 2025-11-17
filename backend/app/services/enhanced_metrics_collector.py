@@ -78,6 +78,7 @@ class EnhancedMetricsCollector:
         # Health check intervals
         self.health_check_interval = 5  # seconds
         self.metrics_update_interval = 0.1  # seconds (reduced for non-blocking updates)
+        self.qdrant_metrics_interval = 5.0  # seconds - Qdrant search latency test interval (reduced from 0.1s to avoid excessive logging)
         
         # Cached metrics for non-blocking access
         self.system_metrics = {}
@@ -157,7 +158,8 @@ class EnhancedMetricsCollector:
             except Exception as e:
                 logger.error(f"Qdrant metrics collection error: {e}")
             
-            await asyncio.sleep(self.metrics_update_interval)
+            # Use longer interval for Qdrant metrics to reduce excessive logging
+            await asyncio.sleep(self.qdrant_metrics_interval)
     
     async def _postgres_metrics_loop(self):
         """Continuously collect PostgreSQL metrics"""
@@ -449,7 +451,8 @@ class EnhancedMetricsCollector:
                                     vector_size = 384  # Default fallback
                                 
                                 # Perform test search with correct vector size
-                                logger.info(f"Performing Qdrant search latency test on collection '{collection_name}' with {vector_size}D vector")
+                                # Changed to debug level to reduce log noise (was INFO)
+                                logger.debug(f"Performing Qdrant search latency test on collection '{collection_name}' with {vector_size}D vector")
                                 search_start = time.time()
                                 
                                 # Create test vector
@@ -473,7 +476,8 @@ class EnhancedMetricsCollector:
                                     search_result = search_response.json()
                                     if search_result.get('status') == 'ok' or 'result' in search_result:
                                         self.qdrant_metrics.search_latency = round(search_elapsed, 2)
-                                        logger.info(f"✅ Qdrant search latency measured: {search_elapsed:.2f}ms (collection: {collection_name}, points: {total_points})")
+                                        # Changed to debug level to reduce log noise (was INFO)
+                                        logger.debug(f"✅ Qdrant search latency measured: {search_elapsed:.2f}ms (collection: {collection_name}, points: {total_points})")
                                     else:
                                         logger.warning(f"Qdrant search returned unexpected result: {search_result.get('status', 'unknown')}")
                                         self.qdrant_metrics.search_latency = 0.0

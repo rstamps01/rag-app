@@ -635,6 +635,8 @@ async def ask_query(
     """Ask a query with real LLM integration and vector search"""
     start_time = time.time()
     logger.info(f"Query received: {request.query}")
+    logger.info(f"Query flags: use_llm={request.use_llm}, use_vector_search={request.use_vector_search}, department={request.department}")
+    logger.info(f"Service status: llm_service={'available' if llm_service is not None else 'None'}, qdrant_client={'available' if qdrant_client is not None else 'None'}, embedding_model={'available' if embedding_model is not None else 'None'}")
     
     # PHASE 1: Check query result cache
     from app.services.cache_service import query_cache
@@ -715,9 +717,12 @@ async def ask_query(
         
         # Step 2: Generate response with LLM (if enabled and available)
         # Run in thread pool to avoid blocking event loop during ~30s generation
-        if request.use_llm and llm_service is not None:
-            try:
-                logger.info("Generating LLM response in thread pool (non-blocking)...")
+        if request.use_llm:
+            if llm_service is None:
+                logger.warning(f"⚠️ LLM service is None but use_llm=True. LLM generation will be skipped.")
+            else:
+                logger.info(f"✅ LLM service available, generating response in thread pool (non-blocking)...")
+                try:
                 
                 # PHASE 1: Prepare context from vector search results with increased chunk count
                 context = ""
@@ -748,13 +753,15 @@ async def ask_query(
                 else:
                     raise Exception("LLM returned empty response")
                     
-            except Exception as e:
-                logger.error(f"LLM generation failed: {e}")
-                # Fallback to contextual response
-                if sources:
-                    response_text = f"Based on the relevant documents found, here's what I can tell you about '{request.query}': {sources[0].get('content', '')[:500]}..."
-                else:
-                    response_text = f"I understand you're asking about: '{request.query}'. While I'm currently unable to access the full LLM capabilities, I can tell you that this appears to be a question about {request.department.lower() if request.department != 'General' else 'general'} topics. The system is configured to use Mistral-7B-Instruct-v0.2 for generating comprehensive responses."
+                except Exception as e:
+                    logger.error(f"LLM generation failed: {e}", exc_info=True)
+                    # Fallback to contextual response
+                    if sources:
+                        response_text = f"Based on the relevant documents found, here's what I can tell you about '{request.query}': {sources[0].get('content', '')[:500]}..."
+                    else:
+                        response_text = f"I understand you're asking about: '{request.query}'. While I'm currently unable to access the full LLM capabilities, I can tell you that this appears to be a question about {request.department.lower() if request.department != 'General' else 'general'} topics. The system is configured to use Mistral-7B-Instruct-v0.2 for generating comprehensive responses."
+        else:
+            logger.info(f"⚠️ LLM generation skipped: use_llm={request.use_llm}")
         
         # Fallback response if LLM is not available
         if not response_text:
