@@ -578,8 +578,9 @@ async def get_query_history(
 
 # Thread pool executor for CPU/GPU-intensive query processing
 # This prevents blocking the FastAPI event loop during LLM generation
+# Increased workers to utilize more CPUs (16 CPUs available)
 _query_processing_executor = ThreadPoolExecutor(
-    max_workers=2,
+    max_workers=8,  # Increased from 2 to 8 for better multi-core utilization
     thread_name_prefix="query_processor"
 )
 

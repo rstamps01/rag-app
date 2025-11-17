@@ -73,7 +73,7 @@ services:
       \ ready, waiting...'\n    sleep 2\n  done &&\n  echo 'Cache initialization detected,\
       \ starting backend...' &&\n  sleep 7 &&\n  cd /app &&\n  echo 'Skipping migrations\
       \ - starting FastAPI application...' &&\n  PYTHONPATH=/app python -m uvicorn\
-      \ app.main:app --host 0.0.0.0 --port 8000\n\"\n"
+      \ app.main:app --host 0.0.0.0 --port 8000 --workers 4\n\"\n"
     networks:
     - network-07
 

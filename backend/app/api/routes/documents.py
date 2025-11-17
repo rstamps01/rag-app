@@ -48,8 +48,9 @@ documents_db = {}
 
 # Thread pool executor for CPU-intensive document processing
 # This prevents blocking the FastAPI event loop during document processing
+# Increased workers to utilize more CPUs (16 CPUs available)
 _document_processing_executor = ThreadPoolExecutor(
-    max_workers=2,
+    max_workers=8,  # Increased from 2 to 8 for better multi-core utilization
     thread_name_prefix="doc_processor"
 )
 
