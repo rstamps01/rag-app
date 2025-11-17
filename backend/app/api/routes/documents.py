@@ -8,6 +8,8 @@ import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form, BackgroundTasks
 from sqlalchemy.orm import Session
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
 
 # FIXED: Import from existing schema structure
 from app.schemas.documents import DocumentCreate, DocumentUpdate, Document
@@ -43,6 +45,28 @@ if vector_db_available:
 
 # In-memory storage for immediate status tracking (placeholder DB)
 documents_db = {}
+
+# Thread pool executor for CPU-intensive document processing
+# This prevents blocking the FastAPI event loop during document processing
+_document_processing_executor = ThreadPoolExecutor(
+    max_workers=2,
+    thread_name_prefix="doc_processor"
+)
+
+def _process_document_sync(file_path: str, filename: str, content_type: str, db):
+    """Synchronous document processing function for thread pool execution"""
+    from app.services.integrated_document_processor import integrated_document_processor
+    
+    # Call the synchronous processing function
+    result = integrated_document_processor.process_document_sync(
+        file_path=file_path,
+        filename=filename,
+        content_type=content_type,
+        department="General",  # Default, can be passed as parameter
+        document_id=None  # Will be generated
+    )
+    
+    return result
 
 def convert_db_document_to_response(db_document) -> Document:
     """
@@ -96,18 +120,20 @@ async def process_document_pipeline(doc_id: str, file_path: str, filename: str, 
         db = next(get_db())
         
         try:
-            # 3. FIXED: Call document processor with correct signature and handle result
-            logger.info(f"[{doc_id}] Attempting to call document_processor.process_and_store_document")
+            # 3. FIXED: Run CPU-intensive processing in thread pool to avoid blocking event loop
+            logger.info(f"[{doc_id}] Running document processing in thread pool (non-blocking)")
             
-            # FIXED: Call with GitHub-compatible signature (4 parameters)
-            result = process_and_store_document(
-                file_path=file_path,
-                filename=filename,
-                content_type=content_type,
-                db=db
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                _document_processing_executor,
+                _process_document_sync,
+                file_path,
+                filename,
+                content_type,
+                db
             )
             
-            logger.info(f"[{doc_id}] Successfully called process_and_store_document")
+            logger.info(f"[{doc_id}] Document processing completed in thread pool")
             logger.info(f"[{doc_id}] Processing result: {result}")
             
             # 4. FIXED: Update status based on actual processing result

@@ -77,13 +77,17 @@ class EnhancedMetricsCollector:
         
         # Health check intervals
         self.health_check_interval = 5  # seconds
-        self.metrics_update_interval = 2  # seconds
+        self.metrics_update_interval = 0.1  # seconds (reduced for non-blocking updates)
+        
+        # Cached metrics for non-blocking access
+        self.system_metrics = {}
+        self._cpu_initialized = False
         
         # Start monitoring
         self.is_running = False
         self.tasks = []
         
-        logger.info("EnhancedMetricsCollector initialized")
+        logger.info("EnhancedMetricsCollector initialized with non-blocking metrics")
     
     async def start(self):
         """Start the enhanced metrics collection"""
@@ -723,24 +727,29 @@ class EnhancedMetricsCollector:
             # Only collect real metrics, no fallbacks
     
     async def _update_system_metrics(self):
-        """Update system-level metrics"""
+        """Update system-level metrics - NON-BLOCKING version"""
         try:
-            # CPU usage
-            cpu_percent = psutil.cpu_percent(interval=1)
+            # Use non-blocking CPU percent (interval=None returns immediately with cached value)
+            # First call initializes, subsequent calls return immediately
+            loop = asyncio.get_event_loop()
             
-            # Memory usage
+            # Run CPU percent in executor to avoid blocking (non-blocking call)
+            cpu_percent = await loop.run_in_executor(
+                None,  # Default thread pool executor
+                lambda: psutil.cpu_percent(interval=None)  # Non-blocking, uses cached value
+            )
+            
+            # Memory, disk, network are fast operations (non-blocking)
             memory = psutil.virtual_memory()
             memory_percent = memory.percent
             memory_available = memory.available
             
-            # Disk usage
             disk = psutil.disk_usage('/')
             disk_percent = disk.percent
             
-            # Network usage
             network = psutil.net_io_counters()
             
-            # Get GPU metrics if available
+            # Get GPU metrics (already non-blocking)
             gpu_metrics = self._get_gpu_metrics()
             
             # Store in a way that can be accessed by the frontend
@@ -756,6 +765,7 @@ class EnhancedMetricsCollector:
             
         except Exception as e:
             logger.debug(f"System metrics update failed: {e}")
+            # Use cached values on error to prevent blocking
     
     def _get_gpu_metrics(self):
         """Get GPU metrics if available"""

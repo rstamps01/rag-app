@@ -133,7 +133,8 @@ class EnhancedPipelineMonitor(PipelineMonitor):
                     'data': all_metrics
                 })
                 
-                await asyncio.sleep(2)  # Broadcast every 2 seconds
+                # Reduced interval for more frequent updates (non-blocking)
+                await asyncio.sleep(0.5)  # Broadcast every 0.5 seconds
                 
             except Exception as e:
                 logger.error(f"Metrics broadcast error: {e}")

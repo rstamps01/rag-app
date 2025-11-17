@@ -428,8 +428,23 @@ class IntegratedDocumentProcessor:
                     # Extract file type from filename
                     file_ext = Path(filename).suffix.lower() if filename else ""
                     
-                    # Generate embeddings
-                    embeddings = self.embedding_model.encode(chunks)
+                    # Generate embeddings in batches for GPU optimization
+                    # Batch size optimized for RTX 5090 (32GB VRAM)
+                    batch_size = 32  # Optimal batch size for GPU utilization
+                    embeddings = []
+                    
+                    for i in range(0, len(chunks), batch_size):
+                        batch_chunks = chunks[i:i + batch_size]
+                        batch_embeddings = self.embedding_model.encode(
+                            batch_chunks,
+                            batch_size=len(batch_chunks),
+                            show_progress_bar=False,
+                            convert_to_numpy=True
+                        )
+                        embeddings.extend(batch_embeddings)
+                    
+                    embeddings = embeddings if isinstance(embeddings, list) else embeddings.tolist()
+                    logger.info(f"✅ Generated {len(embeddings)} embeddings in batches of {batch_size}")
                     
                     # Create points with standardized payload structure
                     points = []
