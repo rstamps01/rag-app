@@ -523,7 +523,7 @@ class EnhancedMetricsCollector:
                     result = db.execute(text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"))
                     self.postgres_metrics.active_connections = result.scalar()
                 except Exception as e:
-                    safe_log("debug", f"Error getting active connections: {e}")
+                    logger.debug(f"Error getting active connections: {e}")
                     self.postgres_metrics.active_connections = 0
                 
                 # Get total connections
@@ -531,7 +531,7 @@ class EnhancedMetricsCollector:
                     result = db.execute(text("SELECT count(*) FROM pg_stat_activity"))
                     self.postgres_metrics.total_connections = result.scalar()
                 except Exception as e:
-                    safe_log("debug", f"Error getting total connections: {e}")
+                    logger.debug(f"Error getting total connections: {e}")
                     self.postgres_metrics.total_connections = 0
                 
                 # Get database size
@@ -539,7 +539,7 @@ class EnhancedMetricsCollector:
                     result = db.execute(text("SELECT pg_database_size(current_database())"))
                     self.postgres_metrics.database_size = result.scalar()
                 except Exception as e:
-                    safe_log("debug", f"Error getting database size: {e}")
+                    logger.debug(f"Error getting database size: {e}")
                     self.postgres_metrics.database_size = 0
             
                 # Get cache hit ratio
@@ -554,7 +554,7 @@ class EnhancedMetricsCollector:
                     if cache_hit_ratio:
                         self.postgres_metrics.cache_hit_ratio = float(cache_hit_ratio)
                 except Exception as e:
-                    safe_log("debug", f"Error getting cache hit ratio: {e}")
+                    logger.debug(f"Error getting cache hit ratio: {e}")
                     self.postgres_metrics.cache_hit_ratio = 0.0
             
                 # Get query performance metrics using alternative approach
@@ -566,7 +566,7 @@ class EnhancedMetricsCollector:
                     query_time_ms = (end_time - start_time) * 1000
                     self.postgres_metrics.query_performance = round(query_time_ms, 2)
                 except Exception as e:
-                    safe_log("debug", f"Error getting query performance: {e}")
+                    logger.debug(f"Error getting query performance: {e}")
                     self.postgres_metrics.query_performance = 0.0
             
                 # Get table statistics
@@ -594,7 +594,7 @@ class EnhancedMetricsCollector:
                         for row in table_stats
                     ]
                 except Exception as e:
-                    safe_log("debug", f"Error getting table statistics: {e}")
+                    logger.debug(f"Error getting table statistics: {e}")
                     self.postgres_metrics.table_stats = []
             
                 # Set connection status to connected

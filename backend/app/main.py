@@ -723,36 +723,35 @@ async def ask_query(
             else:
                 logger.info(f"✅ LLM service available, generating response in thread pool (non-blocking)...")
                 try:
-                
-                # PHASE 1: Prepare context from vector search results with increased chunk count
-                context = ""
-                if sources:
-                    # Use configuration value for max context chunks (default: 8, increased from 3)
-                    max_context_chunks = getattr(settings, 'MAX_CONTEXT_CHUNKS', 8) if config_ok else 8
-                    context_chunks = [source.get("content", "") for source in sources[:max_context_chunks]]
-                    context = "\n\n".join(context_chunks)
-                    logger.info(f"📚 Using {len(context_chunks)} context chunks (max: {max_context_chunks})")
-                
-                # Generate response with LLM in thread pool to avoid blocking event loop
-                loop = asyncio.get_event_loop()
-                llm_response = await loop.run_in_executor(
-                    _query_processing_executor,
-                    _generate_llm_response_sync,
-                    request.query,
-                    context
-                )
-                
-                # Handle both dict and string responses from LLM service
-                if llm_response:
-                    if isinstance(llm_response, dict):
-                        response_text = llm_response.get("response", str(llm_response))
-                    else:
-                        response_text = llm_response
-                    used_llm = True
-                    logger.info("✅ LLM response generated in thread pool")
-                else:
-                    raise Exception("LLM returned empty response")
+                    # PHASE 1: Prepare context from vector search results with increased chunk count
+                    context = ""
+                    if sources:
+                        # Use configuration value for max context chunks (default: 8, increased from 3)
+                        max_context_chunks = getattr(settings, 'MAX_CONTEXT_CHUNKS', 8) if config_ok else 8
+                        context_chunks = [source.get("content", "") for source in sources[:max_context_chunks]]
+                        context = "\n\n".join(context_chunks)
+                        logger.info(f"📚 Using {len(context_chunks)} context chunks (max: {max_context_chunks})")
                     
+                    # Generate response with LLM in thread pool to avoid blocking event loop
+                    loop = asyncio.get_event_loop()
+                    llm_response = await loop.run_in_executor(
+                        _query_processing_executor,
+                        _generate_llm_response_sync,
+                        request.query,
+                        context
+                    )
+                    
+                    # Handle both dict and string responses from LLM service
+                    if llm_response:
+                        if isinstance(llm_response, dict):
+                            response_text = llm_response.get("response", str(llm_response))
+                        else:
+                            response_text = llm_response
+                        used_llm = True
+                        logger.info("✅ LLM response generated in thread pool")
+                    else:
+                        raise Exception("LLM returned empty response")
+                        
                 except Exception as e:
                     logger.error(f"LLM generation failed: {e}", exc_info=True)
                     # Fallback to contextual response
