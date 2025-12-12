@@ -3,11 +3,52 @@ Enhanced LLM Service
 Provides Mistral-7B-Instruct-v0.2 integration with GPU acceleration
 """
 
+# Suppress Pydantic validation errors from transformers library
+import warnings
+import os
+warnings.filterwarnings('ignore', category=UserWarning, message='.*Args.*Parameters.*')
+warnings.filterwarnings('ignore', message='.*No `Args` or `Parameters` section.*')
+os.environ["PYDANTIC_DISABLE_VALIDATION"] = "1"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+
+# CRITICAL: Patch transformers validation functions BEFORE importing transformers
+# This prevents ValueError from being raised during import
+try:
+    from app.utils.pydantic_suppress import _patch_transformers_validation
+    _patch_transformers_validation()
+except Exception:
+    # If patching fails, continue anyway - other suppression methods will handle it
+    pass
+
 import logging
 import time
 import torch
 from typing import Dict, Any, Optional, List
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+
+# Wrap transformers import to catch Pydantic validation errors
+try:
+    from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+except (ValueError, TypeError) as e:
+    # Pydantic validation errors are non-fatal - models can still be used
+    import sys
+    if "Args" in str(e) or "Parameters" in str(e) or "docstring" in str(e).lower():
+        # Suppress stderr temporarily to avoid error spam
+        import io
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            # Apply patches again before retry
+            try:
+                from app.utils.pydantic_suppress import _patch_transformers_validation
+                _patch_transformers_validation()
+            except Exception:
+                pass
+            from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+        finally:
+            sys.stderr = old_stderr
+    else:
+        raise
+
 import os
 
 logger = logging.getLogger(__name__)
@@ -256,6 +297,37 @@ Summary: [/INST]"""
             torch.cuda.empty_cache()
             logger.info("🧹 GPU memory cache cleared")
 
-# Global enhanced LLM service instance
-enhanced_llm_service = LLMService()
+# Global enhanced LLM service instance - lazy initialization to avoid import-time errors
+_llm_service_instance = None
+_llm_service_error = None
+
+def get_enhanced_llm_service():
+    """Get or create the enhanced LLM service instance (lazy initialization)"""
+    global _llm_service_instance, _llm_service_error
+    if _llm_service_instance is None and _llm_service_error is None:
+        try:
+            _llm_service_instance = LLMService()
+        except Exception as e:
+            _llm_service_error = e
+            logger.error(f"⚠️ Failed to initialize LLM service: {e}")
+    if _llm_service_instance is None:
+        raise Exception(f"LLM service not available: {_llm_service_error}")
+    return _llm_service_instance
+
+# For backward compatibility, create instance but catch errors
+try:
+    enhanced_llm_service = LLMService()
+except Exception as e:
+    logger.warning(f"⚠️ LLM service initialization deferred due to: {e}")
+    # Create a placeholder that will initialize on first use
+    class LazyLLMService:
+        def __init__(self):
+            self._instance = None
+        
+        def __getattr__(self, name):
+            if self._instance is None:
+                self._instance = get_enhanced_llm_service()
+            return getattr(self._instance, name)
+    
+    enhanced_llm_service = LazyLLMService()
 
