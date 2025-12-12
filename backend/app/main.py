@@ -507,14 +507,66 @@ async def process_document_for_vectors(
                             # Check if this is a validation error
                             if ("Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower()):
                                 logger.warning(f"⚠️ Validation error during direct load (non-fatal): {error_str[:100]}")
-                                # Try one more time with fresh stderr buffer
-                                sys.stderr = io.StringIO()
+                                # CRITICAL: ValueError occurs during SentenceTransformer.__init__()
+                                # The patches aren't preventing the error, so we need a different approach
+                                # Try using the model cache directory directly - models might already be downloaded
+                                
+                                # Apply patches one more time
                                 try:
-                                    embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-                                    logger.info("✅ Embedding model initialized after validation error retry")
-                                except Exception as retry_e:
-                                    logger.error(f"❌ Direct loading retry failed: {retry_e}")
-                                    embedding_model = None
+                                    _patch_transformers_validation()
+                                except Exception:
+                                    pass
+                                
+                                # Try loading from cache directory if model is already downloaded
+                                model_cache_path = os.environ.get('HF_HUB_CACHE', '/app/models_cache/hub')
+                                potential_model_path = None
+                                
+                                # Check if model exists in cache
+                                try:
+                                    import glob
+                                    # Look for the model in HuggingFace cache
+                                    cache_patterns = [
+                                        f"{model_cache_path}/models--sentence-transformers--all-MiniLM-L6-v2/**",
+                                        "/app/models_cache/hub/models--sentence-transformers--all-MiniLM-L6-v2/**"
+                                    ]
+                                    for pattern in cache_patterns:
+                                        matches = glob.glob(pattern + "/config.json", recursive=True)
+                                        if matches:
+                                            potential_model_path = os.path.dirname(matches[0])
+                                            break
+                                except Exception:
+                                    pass
+                                
+                                # Try loading again with fresh stderr and more aggressive suppression
+                                sys.stderr = io.StringIO()
+                                warnings.filterwarnings('ignore')
+                                os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+                                os.environ["PYDANTIC_DISABLE_VALIDATION"] = "1"
+                                
+                                # Final attempt: Try loading with device='cpu' first, then move to GPU
+                                # Sometimes CPU loading avoids the validation error
+                                try:
+                                    logger.debug("Attempting CPU-only loading to bypass validation error...")
+                                    import torch
+                                    embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cpu')
+                                    # Move to GPU if available
+                                    if torch.cuda.is_available():
+                                        embedding_model = embedding_model.to('cuda')
+                                    logger.info("✅ Embedding model initialized via CPU-first loading")
+                                except Exception as cpu_e:
+                                    error_str_cpu = str(cpu_e)
+                                    if ("Args" in error_str_cpu or "Parameters" in error_str_cpu or "docstring" in error_str_cpu.lower()):
+                                        logger.error(f"❌ CPU loading also failed with validation error: {error_str_cpu[:100]}")
+                                        embedding_model = None
+                                    else:
+                                        # Not a validation error - try one more time with standard approach
+                                        try:
+                                            sys.stderr = io.StringIO()
+                                            embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                                            logger.info("✅ Embedding model initialized on final retry")
+                                        except Exception:
+                                            logger.error(f"❌ All direct loading strategies exhausted")
+                                            embedding_model = None
                             else:
                                 logger.error(f"❌ Direct loading failed (non-validation error): {ve}")
                                 embedding_model = None
