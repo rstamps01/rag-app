@@ -473,86 +473,33 @@ async def process_document_for_vectors(
         if embedding_model is None:
             logger.info("🔄 Embedding model not initialized, attempting lazy initialization...")
             
-            # Apply comprehensive transformers validation patches BEFORE loading model
+            # Use the safe_sentence_transformer utility which has comprehensive error handling
             try:
-                from app.utils.pydantic_suppress import _patch_transformers_validation
-                _patch_transformers_validation()
-                logger.debug("✅ Applied transformers validation patches")
-            except Exception as patch_e:
-                logger.debug(f"Could not apply transformers patches: {patch_e}")
-            
-            # Try direct initialization with comprehensive error suppression
-            import sys
-            import io
-            import warnings
-            
-            old_stderr = sys.stderr
-            stderr_buffer = io.StringIO()
-            sys.stderr = stderr_buffer
-            warnings.filterwarnings('ignore')
-            os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-            
-            try:
-                # Try to load model - catch ValueError but continue if it's validation error
-                try:
-                    embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-                    logger.info("✅ Embedding model initialized lazily")
-                except (ValueError, TypeError) as e:
-                    error_str = str(e)
-                    stderr_content = stderr_buffer.getvalue()
-                    
-                    # Check if this is a Pydantic validation error (non-fatal)
-                    if ("Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower() or 
-                        "Args" in stderr_content or "Parameters" in stderr_content):
-                        # This is a validation error - the patching might not have worked
-                        # Try to load model anyway by catching and ignoring the exception
-                        logger.warning(f"⚠️ Validation error caught (non-fatal): {error_str[:150]}")
-                        
-                        # Use a context manager approach to catch and suppress the error
-                        class SuppressValidationError:
-                            def __enter__(self):
-                                return self
-                            def __exit__(self, exc_type, exc_val, exc_tb):
-                                if exc_type == ValueError:
-                                    error_str = str(exc_val)
-                                    if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
-                                        return True  # Suppress this exception
-                                return False
-                        
-                        # Try again with suppression context
-                        stderr_buffer = io.StringIO()
-                        sys.stderr = stderr_buffer
-                        try:
-                            with SuppressValidationError():
-                                embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-                            if embedding_model is not None:
-                                logger.info("✅ Embedding model initialized lazily (validation error suppressed)")
-                        except Exception:
-                            logger.error("❌ Embedding model initialization failed even with error suppression")
-                            embedding_model = None
-                    else:
-                        # Not a validation error - this is a real error
-                        logger.error(f"❌ Embedding model initialization failed (non-validation error): {e}")
-                        embedding_model = None
-                except Exception as e:
-                    error_str = str(e)
-                    logger.error(f"❌ Embedding model initialization failed: {error_str}")
-                    embedding_model = None
-            finally:
-                sys.stderr = old_stderr
+                from app.utils.pydantic_suppress import safe_sentence_transformer, _patch_transformers_validation
                 
-            # Verify model works if it was created
-            if embedding_model is not None:
-                try:
-                    test_embedding = embedding_model.encode("test")
-                    if test_embedding is not None and len(test_embedding) > 0:
-                        logger.info("✅ Embedding model verified and working")
-                    else:
-                        logger.warning("⚠️ Embedding model created but encode() returned invalid result")
+                # Apply patches before loading
+                _patch_transformers_validation()
+                
+                # Use safe loader with all fallback strategies
+                embedding_model = safe_sentence_transformer('sentence-transformers/all-MiniLM-L6-v2')
+                
+                if embedding_model is not None:
+                    # Verify model works
+                    try:
+                        test_embedding = embedding_model.encode("test")
+                        if test_embedding is not None and len(test_embedding) > 0:
+                            logger.info("✅ Embedding model initialized lazily and verified")
+                        else:
+                            logger.warning("⚠️ Embedding model created but encode() returned invalid result")
+                            embedding_model = None
+                    except Exception as test_e:
+                        logger.error(f"❌ Embedding model created but encode() failed: {test_e}")
                         embedding_model = None
-                except Exception as test_e:
-                    logger.error(f"❌ Embedding model created but encode() failed: {test_e}")
-                    embedding_model = None
+                else:
+                    logger.error("❌ Embedding model lazy initialization failed: safe_sentence_transformer returned None")
+            except Exception as e:
+                logger.error(f"❌ Embedding model lazy initialization failed: {e}", exc_info=True)
+                embedding_model = None
         
         # Ensure Qdrant client is initialized
         if qdrant_client is None:
