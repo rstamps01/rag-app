@@ -32,8 +32,8 @@ class TransformersImportHook:
         if self._patching:
             return None
         
-        # Only intercept transformers.utils.doc and transformers.utils.args_doc
-        if name in ('transformers.utils.doc', 'transformers.utils.args_doc'):
+        # Intercept transformers.utils modules that need patching
+        if name in ('transformers.utils.doc', 'transformers.utils.args_doc', 'transformers.utils.auto_docstring'):
             self._patching = True
             try:
                 # Use _find_spec directly to avoid recursion

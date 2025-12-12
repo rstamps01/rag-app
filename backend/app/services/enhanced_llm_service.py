@@ -6,48 +6,90 @@ Provides Mistral-7B-Instruct-v0.2 integration with GPU acceleration
 # Suppress Pydantic validation errors from transformers library
 import warnings
 import os
+import sys
 warnings.filterwarnings('ignore', category=UserWarning, message='.*Args.*Parameters.*')
 warnings.filterwarnings('ignore', message='.*No `Args` or `Parameters` section.*')
 os.environ["PYDANTIC_DISABLE_VALIDATION"] = "1"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 
-# CRITICAL: Patch transformers validation functions BEFORE importing transformers
-# This prevents ValueError from being raised during import
+# CRITICAL: Install import hook BEFORE importing transformers
+# This patches transformers modules as they're imported
 try:
-    from app.utils.pydantic_suppress import _patch_transformers_validation
-    _patch_transformers_validation()
+    from app.utils.pydantic_suppress import TransformersImportHook
+    # Install the import hook if not already installed
+    hook_installed = any(isinstance(hook, TransformersImportHook) for hook in sys.meta_path)
+    if not hook_installed:
+        hook_instance = TransformersImportHook()
+        sys.meta_path.insert(0, hook_instance)
 except Exception:
-    # If patching fails, continue anyway - other suppression methods will handle it
-    pass
+    # If import hook fails, try direct patching
+    try:
+        from app.utils.pydantic_suppress import _patch_transformers_validation
+        _patch_transformers_validation()
+    except Exception:
+        pass
 
 import logging
 import time
 import torch
 from typing import Dict, Any, Optional, List
 
-# Wrap transformers import to catch Pydantic validation errors
+# Import transformers with comprehensive error handling
+# CRITICAL: Import AutoTokenizer and AutoModelForCausalLM first (these work)
+# Defer pipeline import until needed to avoid triggering deep imports
 try:
-    from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    # Pipeline will be imported lazily when needed
+    pipeline = None
 except (ValueError, TypeError) as e:
     # Pydantic validation errors are non-fatal - models can still be used
-    import sys
-    if "Args" in str(e) or "Parameters" in str(e) or "docstring" in str(e).lower():
-        # Suppress stderr temporarily to avoid error spam
-        import io
-        old_stderr = sys.stderr
-        sys.stderr = io.StringIO()
+    import io
+    old_stderr = sys.stderr
+    sys.stderr = io.StringIO()
+    try:
+        # Apply patches and retry
         try:
-            # Apply patches again before retry
+            from app.utils.pydantic_suppress import _patch_transformers_validation
+            _patch_transformers_validation()
+        except Exception:
+            pass
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        pipeline = None
+    finally:
+        sys.stderr = old_stderr
+    if AutoTokenizer is None or AutoModelForCausalLM is None:
+        raise ImportError(f"Failed to import transformers: {e}")
+
+# Function to lazily import pipeline when needed
+def _get_pipeline():
+    """Lazy import of pipeline with error handling"""
+    global pipeline
+    if pipeline is None:
+        try:
+            # Apply patches before importing pipeline
             try:
                 from app.utils.pydantic_suppress import _patch_transformers_validation
                 _patch_transformers_validation()
             except Exception:
                 pass
-            from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-        finally:
-            sys.stderr = old_stderr
-    else:
-        raise
+            
+            # Try importing pipeline
+            import io
+            import sys
+            old_stderr = sys.stderr
+            sys.stderr = io.StringIO()
+            try:
+                from transformers import pipeline
+            except (ValueError, TypeError) as e:
+                # If pipeline import fails, return None - we'll create it manually
+                error_str = str(e)
+                if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
+                    pipeline = None
+                else:
+                    raise
+            finally:
+                sys.stderr = old_stderr
+    return pipeline
 
 import os
 
@@ -136,17 +178,29 @@ class LLMService:
             
             logger.info("✅ Model loaded successfully")
             
-            # Create pipeline
-            # Explicitly set device for pipeline to ensure all tensors are on the correct device
+            # Create pipeline lazily (import pipeline when needed to avoid import-time errors)
             pipeline_device = 0 if self.device == "cuda" else -1
-            self.pipeline = pipeline(
-                "text-generation",
-                model=self.model,
-                tokenizer=self.tokenizer,
-                device=pipeline_device,  # Explicitly set device to avoid meta device issues
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                return_full_text=False
-            )
+            pipeline_func = _get_pipeline()
+            if pipeline_func is not None:
+                self.pipeline = pipeline_func(
+                    "text-generation",
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    device=pipeline_device,  # Explicitly set device to avoid meta device issues
+                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                    return_full_text=False
+                )
+            else:
+                # Fallback: Create pipeline manually using TextGenerationPipeline
+                logger.warning("⚠️ Pipeline import failed, creating TextGenerationPipeline manually")
+                from transformers.pipelines.text_generation import TextGenerationPipeline
+                self.pipeline = TextGenerationPipeline(
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    device=pipeline_device,
+                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                    return_full_text=False
+                )
             
             logger.info("✅ Pipeline created successfully")
             
