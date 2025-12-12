@@ -205,7 +205,7 @@ async def get_query_history(
 ):
     """Get query history with filtering and pagination"""
     try:
-        logger.info(f"Query history requested: limit={limit}, skip={skip}, department={department}")
+        logger.debug(f"Query history requested: limit={limit}, skip={skip}, department={department}")
         
         # Build query
         query = db.query(QueryHistory)

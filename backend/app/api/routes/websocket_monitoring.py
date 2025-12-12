@@ -82,7 +82,7 @@ class WebSocketManager:
         """Accept a new WebSocket connection."""
         await websocket.accept()
         self.clients.append(ClientConnection(websocket))
-        safe_log("info", f"Client connected. Total clients: {len(self.clients)}")
+        safe_log("debug", f"Client connected. Total clients: {len(self.clients)}")
 
         # Start broadcasting if this is the first client
         if len(self.clients) == 1 and not self.broadcast_task:
@@ -91,7 +91,7 @@ class WebSocketManager:
     def disconnect(self, websocket: WebSocket) -> None:
         """Remove a WebSocket connection."""
         self.clients = [c for c in self.clients if c.websocket != websocket]
-        safe_log("info", f"Client disconnected. Total clients: {len(self.clients)}")
+        safe_log("debug", f"Client disconnected. Total clients: {len(self.clients)}")
 
         # Stop broadcasting if no clients remain
         if not self.clients and self.broadcast_task:

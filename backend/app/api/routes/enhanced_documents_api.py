@@ -72,7 +72,7 @@ async def get_documents(
 ):
     """Get documents with filtering and pagination"""
     try:
-        logger.info(f"Documents requested: skip={skip}, limit={limit}, department={department}, status={status}")
+        logger.debug(f"Documents requested: skip={skip}, limit={limit}, department={department}, status={status}")
         
         # Build query
         query = db.query(Document)

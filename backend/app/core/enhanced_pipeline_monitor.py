@@ -59,7 +59,7 @@ class EnhancedPipelineMonitor(PipelineMonitor):
             }
         }
         
-        logger.info("EnhancedPipelineMonitor initialized with comprehensive metrics collection")
+        logger.debug("EnhancedPipelineMonitor initialized with comprehensive metrics collection")
     
     async def start_monitoring(self):
         """Start the enhanced monitoring system"""
@@ -75,7 +75,7 @@ class EnhancedPipelineMonitor(PipelineMonitor):
             asyncio.create_task(self._metrics_broadcast_loop())
             asyncio.create_task(self._health_monitoring_loop())
             
-            logger.info("Enhanced pipeline monitoring started with comprehensive metrics collection")
+            logger.debug("Enhanced pipeline monitoring started with comprehensive metrics collection")
             
         except Exception as e:
             logger.error(f"Failed to start enhanced monitoring: {e}")
@@ -90,7 +90,7 @@ class EnhancedPipelineMonitor(PipelineMonitor):
             # Stop WebSocket manager
             await self.websocket_manager.stop()
             
-            logger.info("Enhanced pipeline monitoring stopped")
+            logger.debug("Enhanced pipeline monitoring stopped")
             
         except Exception as e:
             logger.error(f"Failed to stop enhanced monitoring: {e}")

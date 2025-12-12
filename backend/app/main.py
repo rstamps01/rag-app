@@ -137,6 +137,42 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Suppress non-critical monitoring logs and frequently-polled API endpoints
+class MonitoringLogFilter(logging.Filter):
+    """Filter to suppress non-critical monitoring-related logs and frequently-polled endpoints"""
+    def filter(self, record):
+        # Suppress HTTP access logs for monitoring endpoints and frequently-polled endpoints (uvicorn.access logger)
+        if record.name == "uvicorn.access":
+            # Check message content for endpoints to suppress
+            msg = record.getMessage() if hasattr(record, 'getMessage') else str(record.msg)
+            # Suppress monitoring endpoints
+            if '/api/v1/metrics/' in msg or '/api/v1/monitoring/' in msg:
+                return False
+            # Suppress frequently-polled endpoints (frontend polling)
+            if '/api/v1/queries/history' in msg or '/api/v1/documents' in msg:
+                return False
+            # Suppress health check endpoints (frequent polling)
+            if 'GET /health' in msg or 'GET /api/v1/health' in msg:
+                return False
+        # Suppress monitoring service INFO logs (keep WARNING and ERROR)
+        if record.name.startswith(('app.services.enhanced_metrics_collector', 
+                                   'app.api.routes.websocket_monitoring',
+                                   'app.core.enhanced_pipeline_monitor',
+                                   'app.api.routes.monitoring')):
+            if record.levelno == logging.INFO:
+                return False
+        # Suppress application-level INFO logs for frequently-polled endpoints
+        if record.name == "app.main":
+            msg = record.getMessage() if hasattr(record, 'getMessage') else str(record.msg)
+            if ('Query history requested' in msg or 
+                'Documents requested' in msg):
+                return False
+        return True
+
+# Apply filter to root logger and uvicorn.access logger
+logging.getLogger().addFilter(MonitoringLogFilter())
+logging.getLogger("uvicorn.access").addFilter(MonitoringLogFilter())
+
 # Initialize components with error handling
 config_ok = False
 db_ok = False
@@ -684,6 +720,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add middleware to suppress access logs for monitoring endpoints
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+import logging
+
+class SuppressMonitoringAccessLogsMiddleware(BaseHTTPMiddleware):
+    """Middleware to suppress access logs for monitoring endpoints and frequently-polled endpoints"""
+    async def dispatch(self, request: Request, call_next):
+        # Check if this is a monitoring endpoint or frequently-polled endpoint
+        is_suppressed_endpoint = (
+            request.url.path.startswith('/api/v1/metrics/') or
+            request.url.path.startswith('/api/v1/monitoring/') or
+            request.url.path.startswith('/api/v1/ws/pipeline-monitoring') or
+            request.url.path.startswith('/api/v1/queries/history') or
+            request.url.path.startswith('/api/v1/documents') or
+            request.url.path == '/health' or
+            request.url.path == '/api/v1/health'
+        )
+        
+        # Temporarily disable uvicorn access logger for suppressed endpoints
+        if is_suppressed_endpoint:
+            uvicorn_access_logger = logging.getLogger("uvicorn.access")
+            original_level = uvicorn_access_logger.level
+            uvicorn_access_logger.setLevel(logging.WARNING)
+            try:
+                response = await call_next(request)
+            finally:
+                uvicorn_access_logger.setLevel(original_level)
+            return response
+        else:
+            return await call_next(request)
+
+app.add_middleware(SuppressMonitoringAccessLogsMiddleware)
+
 # WebSocket imports with proper error handling
 try:
     from app.api.routes.websocket_monitoring import router as websocket_router
@@ -799,7 +869,7 @@ async def get_query_history(
     db: Session = Depends(get_db)
 ):
     """Get query history from database or fallback to mock data"""
-    logger.info(f"Query history requested: limit={limit}, skip={skip}")
+    logger.debug(f"Query history requested: limit={limit}, skip={skip}")
     
     if db_ok and db is not None:
         try:
@@ -1199,7 +1269,7 @@ async def get_documents(
     db: Session = Depends(get_db)
 ):
     """Get documents from database or fallback to mock data"""
-    logger.info(f"Documents requested: skip={skip}, limit={limit}")
+    logger.debug(f"Documents requested: skip={skip}, limit={limit}")
     
     if db_ok and db is not None:
         try:

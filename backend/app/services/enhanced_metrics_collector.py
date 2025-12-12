@@ -88,7 +88,7 @@ class EnhancedMetricsCollector:
         self.is_running = False
         self.tasks = []
         
-        logger.info("EnhancedMetricsCollector initialized with non-blocking metrics")
+        logger.debug("EnhancedMetricsCollector initialized with non-blocking metrics")
     
     async def start(self):
         """Start the enhanced metrics collection"""
@@ -106,7 +106,7 @@ class EnhancedMetricsCollector:
             asyncio.create_task(self._pipeline_metrics_loop())
         ]
         
-        logger.info("Enhanced metrics collection started")
+        logger.debug("Enhanced metrics collection started")
     
     async def stop(self):
         """Stop the enhanced metrics collection"""
@@ -119,7 +119,7 @@ class EnhancedMetricsCollector:
         # Wait for tasks to complete
         await asyncio.gather(*self.tasks, return_exceptions=True)
         
-        logger.info("Enhanced metrics collection stopped")
+        logger.debug("Enhanced metrics collection stopped")
     
     async def _health_check_loop(self):
         """Continuously check service health"""
