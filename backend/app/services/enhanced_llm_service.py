@@ -146,6 +146,14 @@ class LLMService:
             
             # Load model with optimizations
             logger.info("🤖 Loading model...")
+            
+            # Apply patches before model loading to prevent validation errors
+            try:
+                from app.utils.pydantic_suppress import _patch_transformers_validation
+                _patch_transformers_validation()
+            except Exception:
+                pass
+            
             model_kwargs = {
                 "cache_dir": self.cache_dir,
                 "trust_remote_code": True,
@@ -170,10 +178,36 @@ class LLMService:
                     total_memory = torch.cuda.get_device_properties(0).total_memory / 1e9  # GB
                     logger.info(f"🔒 Loading model on GPU (device_map='cuda'): {total_memory:.1f}GB available")
             
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                **model_kwargs
-            )
+            # Load model with comprehensive error suppression
+            import sys
+            import io
+            old_stderr = sys.stderr
+            sys.stderr = io.StringIO()
+            try:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    **model_kwargs
+                )
+            except (ValueError, TypeError) as model_e:
+                error_str = str(model_e)
+                # If it's a validation error, try again with patches applied
+                if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower() or "expected string" in error_str.lower():
+                    logger.warning(f"⚠️ Model loading encountered validation error, retrying with patches: {error_str[:100]}")
+                    # Apply patches again and retry
+                    try:
+                        from app.utils.pydantic_suppress import _patch_transformers_validation
+                        _patch_transformers_validation()
+                    except Exception:
+                        pass
+                    # Retry model loading
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        self.model_name,
+                        **model_kwargs
+                    )
+                else:
+                    raise
+            finally:
+                sys.stderr = old_stderr
             
             logger.info("✅ Model loaded successfully")
             
