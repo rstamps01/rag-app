@@ -304,6 +304,13 @@ class EnhancedCacheInitializer:
         try:
             logger.info("=== Cache Initialization Started ===")
             
+            # Check if marker file already exists
+            marker_file = self.cache_dir / '.initialization_complete'
+            if marker_file.exists():
+                logger.info(f"✅ Completion marker already exists: {marker_file}")
+                logger.info("Cache appears to be already initialized. Running validation only...")
+                # Still run validation to ensure everything is OK
+            
             # Step 1: Validate environment
             if not self.validate_environment():
                 logger.error("❌ Environment validation failed")
@@ -350,6 +357,16 @@ class EnhancedCacheInitializer:
                 print(f"📄 Status report: {status_file}")
             
             print("="*50)
+            
+            # Create completion marker file for backend container
+            marker_file = self.cache_dir / '.initialization_complete'
+            try:
+                marker_file.touch()
+                logger.info(f"✅ Created completion marker: {marker_file}")
+                print(f"✅ Created completion marker: {marker_file}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to create completion marker: {e}")
+                # Don't fail initialization if marker creation fails
             
             logger.info("✅ Cache initialization completed successfully")
             return 0

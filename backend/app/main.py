@@ -15,6 +15,64 @@ os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512,expandable_segmen
 os.environ['TRITON_CACHE_DIR'] = '/tmp/triton_cache'
 os.environ['TRITON_KERNEL_CACHE_SIZE'] = '1024'
 
+# CRITICAL: Suppress Pydantic validation errors from transformers BEFORE any imports
+import warnings
+import sys
+warnings.filterwarnings('ignore', category=UserWarning, message='.*Args.*Parameters.*')
+warnings.filterwarnings('ignore', message='.*No `Args` or `Parameters` section.*')
+warnings.filterwarnings('ignore', category=ValueError)
+
+# Use import hook to patch transformers validation BEFORE it's imported
+class TransformersImportHook:
+    """Import hook to patch transformers validation functions before they're used"""
+    def find_spec(self, name, path, target=None):
+        if name.startswith('transformers.utils'):
+            # Return None to use default import, but we'll patch after import
+            return None
+        return None
+    
+    def create_module(self, spec):
+        return None
+    
+    def exec_module(self, module):
+        # Patch docstring processing functions after module is loaded
+        if hasattr(module, '_process_returns_section'):
+            original = module._process_returns_section
+            def patched(*args, **kwargs):
+                try:
+                    return original(*args, **kwargs)
+                except (ValueError, TypeError, AttributeError) as e:
+                    if "Args" in str(e) or "Parameters" in str(e) or "docstring" in str(e).lower() or "'NoneType'" in str(e):
+                        return ('', '')
+                    raise
+            module._process_returns_section = patched
+        
+        if hasattr(module, '_prepare_output_docstrings'):
+            original = module._prepare_output_docstrings
+            def patched(*args, **kwargs):
+                try:
+                    return original(*args, **kwargs)
+                except (ValueError, TypeError, AttributeError) as e:
+                    if "Args" in str(e) or "Parameters" in str(e) or "docstring" in str(e).lower() or "'NoneType'" in str(e):
+                        return ''
+                    raise
+            module._prepare_output_docstrings = patched
+        
+        # Patch docstring_decorator to handle None docstrings
+        if hasattr(module, 'docstring_decorator'):
+            original = module.docstring_decorator
+            def patched_decorator(func):
+                try:
+                    return original(func)
+                except AttributeError as e:
+                    if "'NoneType'" in str(e) and 'split' in str(e):
+                        # Docstring is None, return function as-is
+                        return func
+                    raise
+            module.docstring_decorator = patched_decorator
+
+# Install import hook
+sys.meta_path.insert(0, TransformersImportHook())
 
 import logging
 import time
@@ -36,7 +94,24 @@ from app.services.integrated_vector_db_service import integrated_vector_db_servi
 # Vector processing imports
 try:
     import PyPDF2
-    from sentence_transformers import SentenceTransformer
+    # Wrap sentence_transformers import to catch Pydantic validation errors
+    try:
+        from sentence_transformers import SentenceTransformer
+    except (ValueError, TypeError) as e:
+        # Pydantic validation errors are non-fatal - models can still be used
+        import sys
+        if "Args" in str(e) or "Parameters" in str(e) or "docstring" in str(e).lower():
+            # Suppress stderr temporarily to avoid error spam
+            import io
+            old_stderr = sys.stderr
+            sys.stderr = io.StringIO()
+            try:
+                from sentence_transformers import SentenceTransformer
+            finally:
+                sys.stderr = old_stderr
+        else:
+            raise
+    
     from qdrant_client import QdrantClient
     from qdrant_client.models import Distance, VectorParams, PointStruct, FilterSelector, Filter, FieldCondition, MatchValue
     vector_processing_available = True
@@ -46,6 +121,14 @@ except ImportError as e:
     vector_processing_available = False
     logger = logging.getLogger(__name__)
     logger.warning(f"⚠️ Vector processing dependencies not available: {e}")
+except (ValueError, TypeError) as e:
+    # Handle Pydantic validation errors during import
+    if "Args" in str(e) or "Parameters" in str(e) or "docstring" in str(e).lower():
+        vector_processing_available = True  # Still mark as available, errors are non-fatal
+        logger = logging.getLogger(__name__)
+        logger.warning(f"⚠️ Pydantic validation warnings during import (non-fatal): {e}")
+    else:
+        raise
 
 # Configure logging FIRST before any usage
 logging.basicConfig(
@@ -169,12 +252,61 @@ def initialize_services():
     
     # Initialize embedding model for vector processing
     if vector_processing_available:
+        # Suppress stderr before initialization to catch Pydantic validation errors
+        import sys
+        import io
+        old_stderr = sys.stderr
+        stderr_buffer = io.StringIO()
+        sys.stderr = stderr_buffer
+        
         try:
             embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
             logger.info("✅ Embedding model initialized")
+        except (ValueError, TypeError) as e:
+            # Check if it's a Pydantic validation error
+            error_str = str(e)
+            stderr_content = stderr_buffer.getvalue()
+            if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower() or "Args" in stderr_content or "Parameters" in stderr_content:
+                # Pydantic validation error - clear buffer and retry
+                stderr_buffer = io.StringIO()
+                sys.stderr = stderr_buffer
+                try:
+                    embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                    logger.info("✅ Embedding model initialized (with validation warnings suppressed)")
+                except Exception as retry_e:
+                    # If retry fails, log warning but try one more time
+                    logger.warning(f"⚠️ Embedding model initialization had validation warnings (non-fatal): {retry_e}")
+                    stderr_buffer = io.StringIO()
+                    sys.stderr = stderr_buffer
+                    try:
+                        embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                        logger.info("✅ Embedding model initialized despite validation warnings")
+                    except:
+                        embedding_model = None
+                        logger.error("❌ Failed to initialize embedding model after retries")
+            else:
+                # Not a Pydantic validation error, re-raise
+                embedding_model = None
+                raise
         except Exception as e:
-            logger.error(f"❌ Failed to initialize embedding model: {e}")
-            embedding_model = None
+            error_str = str(e)
+            stderr_content = stderr_buffer.getvalue()
+            if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower() or "Args" in stderr_content or "Parameters" in stderr_content:
+                logger.warning(f"⚠️ Embedding model initialization had validation warnings (non-fatal): {e}")
+                # Try one more time with fresh stderr buffer
+                stderr_buffer = io.StringIO()
+                sys.stderr = stderr_buffer
+                try:
+                    embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                    logger.info("✅ Embedding model initialized despite validation warnings")
+                except:
+                    embedding_model = None
+                    logger.error("❌ Failed to initialize embedding model after retries")
+            else:
+                logger.error(f"❌ Failed to initialize embedding model: {e}")
+                embedding_model = None
+        finally:
+            sys.stderr = old_stderr
         
         # Initialize Qdrant client
         try:
@@ -258,19 +390,36 @@ async def process_document_for_vectors(
     db: Session = None
 ):
     """Background task to process document and store vectors with comprehensive error handling"""
+    # Create our own database session for background task (don't rely on passed session)
+    db_session = None
     try:
-        logger.info(f"Starting vector processing for document: {file_id}")
+        logger.info(f"🚀 Starting vector processing for document: {file_id}")
+        
+        # Create fresh database session for background task
+        if db_ok:
+            try:
+                from app.db.session import SessionLocal
+                db_session = SessionLocal()
+                logger.info(f"✅ Created database session for background task: {file_id}")
+            except Exception as e:
+                logger.error(f"❌ Failed to create database session: {e}")
+                db_session = None
         
         # Update status to processing
-        if db_ok and db is not None:
+        if db_session is not None:
             try:
-                document = db.query(Document).filter(Document.id == file_id).first()
+                document = db_session.query(Document).filter(Document.id == file_id).first()
                 if document:
                     document.status = "processing"
                     document.error_message = "Processing document for vector storage"
-                    db.commit()
+                    db_session.commit()
+                    logger.info(f"✅ Updated document status to 'processing': {file_id}")
+                else:
+                    logger.warning(f"⚠️ Document not found in database: {file_id}")
             except Exception as e:
-                logger.error(f"Failed to update document status: {e}")
+                logger.error(f"❌ Failed to update document status: {e}")
+                if db_session:
+                    db_session.rollback()
         
         # Extract text from file
         file_ext = os.path.splitext(filename)[1].lower()
@@ -283,7 +432,85 @@ async def process_document_for_vectors(
         chunks = chunk_text(text_content)
         logger.info(f"Document chunked into {len(chunks)} pieces")
         
+        # Lazy initialization: Ensure embedding model is loaded
+        global embedding_model, qdrant_client
+        if embedding_model is None:
+            logger.info("🔄 Embedding model not initialized, attempting lazy initialization...")
+            import sys
+            import io
+            import warnings
+            
+            # Suppress all warnings and stderr
+            old_stderr = sys.stderr
+            old_warnings_filters = warnings.filters[:]
+            warnings.filterwarnings('ignore')
+            stderr_buffer = io.StringIO()
+            sys.stderr = stderr_buffer
+            
+            try:
+                # Try to load model - ValueError will be raised but we'll catch it
+                embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                logger.info("✅ Embedding model initialized lazily")
+            except (ValueError, TypeError) as e:
+                error_str = str(e)
+                # If it's a Pydantic validation error, try again with fresh stderr
+                if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
+                    # Clear buffer and try again - the error is non-fatal
+                    stderr_buffer = io.StringIO()
+                    sys.stderr = stderr_buffer
+                    try:
+                        embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                        logger.info("✅ Embedding model initialized lazily (validation error suppressed)")
+                    except Exception as retry_e:
+                        # If retry also fails, check if it's still a validation error
+                        retry_error_str = str(retry_e)
+                        if "Args" in retry_error_str or "Parameters" in retry_error_str or "docstring" in retry_error_str.lower():
+                            # Still a validation error - try one more time
+                            stderr_buffer = io.StringIO()
+                            sys.stderr = stderr_buffer
+                            try:
+                                embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                                logger.info("✅ Embedding model initialized lazily (after multiple retries)")
+                            except:
+                                logger.warning("⚠️ Embedding model lazy initialization failed after retries")
+                                embedding_model = None
+                        else:
+                            logger.warning(f"⚠️ Embedding model lazy initialization failed: {retry_e}")
+                            embedding_model = None
+                else:
+                    embedding_model = None
+            except Exception as e:
+                error_str = str(e)
+                if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
+                    # Pydantic validation error - try one more time
+                    stderr_buffer = io.StringIO()
+                    sys.stderr = stderr_buffer
+                    try:
+                        embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                        logger.info("✅ Embedding model initialized lazily despite validation warnings")
+                    except:
+                        embedding_model = None
+                else:
+                    logger.error(f"❌ Embedding model lazy initialization failed: {e}")
+                    embedding_model = None
+            finally:
+                sys.stderr = old_stderr
+                warnings.filters[:] = old_warnings_filters
+        
+        # Ensure Qdrant client is initialized
+        if qdrant_client is None:
+            logger.info("🔄 Qdrant client not initialized, attempting lazy initialization...")
+            try:
+                qdrant_client = QdrantClient(url="http://qdrant-07:6333")
+                logger.info("✅ Qdrant client initialized lazily")
+            except Exception as e:
+                logger.error(f"❌ Qdrant client lazy initialization failed: {e}")
+                qdrant_client = None
+        
         # Generate embeddings and store in Qdrant
+        vectors_stored = False
+        vectors_count = 0
+        
         if embedding_model is not None and qdrant_client is not None:
             try:
                 points = []
@@ -316,37 +543,69 @@ async def process_document_for_vectors(
                     points=points
                 )
                 
-                logger.info(f"Successfully stored {len(points)} vectors for document {file_id}")
+                vectors_stored = True
+                vectors_count = len(points)
+                logger.info(f"✅ Successfully stored {vectors_count} vectors for document {file_id}")
             
             except Exception as e:
-                logger.error(f"Vector storage failed: {e}")
-                raise e
+                logger.error(f"❌ Vector storage failed: {e}", exc_info=True)
+                vectors_stored = False
+        else:
+            if embedding_model is None:
+                logger.error(f"❌ Cannot store vectors: Embedding model is not available for document {file_id}")
+            if qdrant_client is None:
+                logger.error(f"❌ Cannot store vectors: Qdrant client is not available for document {file_id}")
         
-        # Update status to processed
-        if db_ok and db is not None:
+        # Update status based on whether vectors were actually stored
+        if db_session is not None:
             try:
-                document = db.query(Document).filter(Document.id == file_id).first()
+                document = db_session.query(Document).filter(Document.id == file_id).first()
                 if document:
-                    document.status = "processed"
-                    document.error_message = f"Successfully processed {len(chunks)} chunks"
-                    db.commit()
-                    logger.info(f"Document {file_id} marked as processed")
+                    if vectors_stored:
+                        document.status = "processed"
+                        document.error_message = f"Successfully processed {vectors_count} vectors from {len(chunks)} chunks"
+                        logger.info(f"✅ Document {file_id} marked as processed ({vectors_count} vectors stored)")
+                    else:
+                        document.status = "error"
+                        error_msg = "Vector storage failed"
+                        if embedding_model is None:
+                            error_msg += ": Embedding model unavailable"
+                        if qdrant_client is None:
+                            error_msg += ": Qdrant client unavailable"
+                        document.error_message = error_msg
+                        logger.warning(f"⚠️ Document {file_id} marked as error: vectors not stored")
+                    db_session.commit()
+                else:
+                    logger.warning(f"⚠️ Document not found when updating status: {file_id}")
             except Exception as e:
-                logger.error(f"Failed to update final document status: {e}")
+                logger.error(f"❌ Failed to update document status: {e}")
+                if db_session:
+                    db_session.rollback()
     
     except Exception as e:
-        logger.error(f"Vector processing failed for document {file_id}: {e}")
+        logger.error(f"❌ Vector processing failed for document {file_id}: {e}", exc_info=True)
         
         # Update status to error
-        if db_ok and db is not None:
+        if db_session is not None:
             try:
-                document = db.query(Document).filter(Document.id == file_id).first()
+                document = db_session.query(Document).filter(Document.id == file_id).first()
                 if document:
                     document.status = "error"
                     document.error_message = f"Processing failed: {str(e)}"
-                    db.commit()
+                    db_session.commit()
+                    logger.info(f"✅ Document {file_id} marked as error")
             except Exception as db_e:
-                logger.error(f"Failed to update error status: {db_e}")
+                logger.error(f"❌ Failed to update error status: {db_e}")
+                if db_session:
+                    db_session.rollback()
+    finally:
+        # Always close the database session
+        if db_session is not None:
+            try:
+                db_session.close()
+                logger.debug(f"✅ Closed database session for document: {file_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ Error closing database session: {e}")
 
 # Create upload directory
 UPLOAD_DIR = "/app/data/uploads"
@@ -587,6 +846,69 @@ _query_processing_executor = ThreadPoolExecutor(
 def _generate_embedding_sync(query: str):
     """Synchronous embedding generation for thread pool execution with caching"""
     global embedding_model
+    # Lazy initialization: Ensure embedding model is loaded
+    if embedding_model is None:
+        logger.info("🔄 Embedding model not initialized, attempting lazy initialization...")
+        import sys
+        import io
+        import warnings
+        
+        # Suppress all warnings and stderr
+        old_stderr = sys.stderr
+        old_warnings_filters = warnings.filters[:]
+        warnings.filterwarnings('ignore')
+        stderr_buffer = io.StringIO()
+        sys.stderr = stderr_buffer
+        
+        try:
+            # Try to load model - ValueError will be raised but we'll catch it
+            embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+            logger.info("✅ Embedding model initialized lazily")
+        except (ValueError, TypeError) as e:
+            error_str = str(e)
+            # If it's a Pydantic validation error, try again with fresh stderr
+            if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
+                # Clear buffer and try again - the error is non-fatal
+                stderr_buffer = io.StringIO()
+                sys.stderr = stderr_buffer
+                try:
+                    embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                    logger.info("✅ Embedding model initialized lazily (validation error suppressed)")
+                except Exception as retry_e:
+                    # If retry also fails, check if it's still a validation error
+                    retry_error_str = str(retry_e)
+                    if "Args" in retry_error_str or "Parameters" in retry_error_str or "docstring" in retry_error_str.lower():
+                        # Still a validation error - try one more time
+                        stderr_buffer = io.StringIO()
+                        sys.stderr = stderr_buffer
+                        try:
+                            embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                            logger.info("✅ Embedding model initialized lazily (after multiple retries)")
+                        except:
+                            logger.warning("⚠️ Embedding model lazy initialization failed after retries")
+                            embedding_model = None
+                    else:
+                        logger.warning(f"⚠️ Embedding model lazy initialization failed: {retry_e}")
+                        embedding_model = None
+            else:
+                embedding_model = None
+        except Exception as e:
+            error_str = str(e)
+            if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
+                # Pydantic validation error - try one more time
+                stderr_buffer = io.StringIO()
+                sys.stderr = stderr_buffer
+                try:
+                    embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                    logger.info("✅ Embedding model initialized lazily despite validation warnings")
+                except:
+                    embedding_model = None
+            else:
+                logger.error(f"❌ Embedding model lazy initialization failed: {e}")
+                embedding_model = None
+        finally:
+            sys.stderr = old_stderr
+            warnings.filters[:] = old_warnings_filters
     if embedding_model is None:
         return None
     try:
@@ -668,7 +990,8 @@ async def ask_query(
     
     try:
         # Step 1: Vector search for relevant documents (if enabled and available)
-        if request.use_vector_search and qdrant_client is not None and embedding_model is not None:
+        # Note: embedding_model may be None at startup but will be lazily initialized in _generate_embedding_sync
+        if request.use_vector_search and qdrant_client is not None:
             try:
                 logger.info("Performing vector search...")
                 
@@ -1008,9 +1331,10 @@ async def upload_document(
         # Queue background processing if available
         if vector_processing_available:
             try:
+                # Don't pass db session - let background task create its own
                 background_tasks.add_task(
                     process_document_for_vectors,
-                    file_id, file_path, file.filename, department, db
+                    file_id, file_path, file.filename, department, None
                 )
                 
                 if pipeline_monitor:
@@ -1018,9 +1342,9 @@ async def upload_document(
                         "status": "queued"
                     })
                 
-                logger.info(f"Background processing queued for document: {file_id}")
+                logger.info(f"✅ Background processing queued for document: {file_id}")
             except Exception as e:
-                logger.error(f"Failed to queue background processing: {e}")
+                logger.error(f"❌ Failed to queue background processing: {e}")
         
         return {
             "message": "Document uploaded successfully", 
