@@ -186,7 +186,9 @@ def _patch_transformers_validation():
                     except (ValueError, TypeError) as e:
                         error_str = str(e)
                         if ("No `Args` or `Parameters` section" in error_str or 
-                            "docstring" in error_str.lower()):
+                            "docstring" in error_str.lower() or
+                            "expected string or buffer" in error_str.lower() or
+                            "NoneType" in error_str):
                             return ("", "")
                         raise
                 
@@ -202,7 +204,9 @@ def _patch_transformers_validation():
                     except (ValueError, TypeError) as e:
                         error_str = str(e)
                         if ("No `Args` or `Parameters` section" in error_str or 
-                            "docstring" in error_str.lower()):
+                            "docstring" in error_str.lower() or
+                            "expected string or buffer" in error_str.lower() or
+                            "NoneType" in error_str):
                             return ""
                         raise
                 
@@ -215,10 +219,12 @@ def _patch_transformers_validation():
                 def patched_auto_method(*args, **kwargs):
                     try:
                         return original_auto_method(*args, **kwargs)
-                    except ValueError as ve:
-                        error_str = str(ve)
+                    except (ValueError, TypeError) as e:
+                        error_str = str(e)
                         if ("No `Args` or `Parameters` section" in error_str or 
-                            "docstring" in error_str.lower()):
+                            "docstring" in error_str.lower() or
+                            "expected string or buffer" in error_str.lower() or
+                            "NoneType" in error_str):
                             return ""  # Return empty docstring
                         raise
                 
