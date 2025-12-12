@@ -437,61 +437,96 @@ async def process_document_for_vectors(
         if embedding_model is None:
             logger.info("🔄 Embedding model not initialized, attempting lazy initialization...")
             
-            # Use the safe_sentence_transformer utility that handles Pydantic validation errors
+            # Try direct initialization with comprehensive error suppression
+            # The ValueError from Pydantic validation is non-fatal - model may still work
+            import sys
+            import io
+            import warnings
+            import traceback
+            
+            old_stderr = sys.stderr
+            stderr_buffer = io.StringIO()
+            sys.stderr = stderr_buffer
+            warnings.filterwarnings('ignore')
+            
             try:
-                from app.utils.pydantic_suppress import safe_sentence_transformer
-                embedding_model = safe_sentence_transformer('sentence-transformers/all-MiniLM-L6-v2')
-                if embedding_model is not None:
-                    logger.info("✅ Embedding model initialized lazily using safe loader")
-                else:
-                    logger.warning("⚠️ Safe sentence transformer returned None, trying direct initialization...")
-                    # Fallback to direct initialization if safe loader fails
-                    import sys
-                    import io
-                    import warnings
-                    old_stderr = sys.stderr
-                    stderr_buffer = io.StringIO()
-                    sys.stderr = stderr_buffer
-                    warnings.filterwarnings('ignore')
-                    try:
-                        embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-                        logger.info("✅ Embedding model initialized lazily (direct)")
-                    except (ValueError, TypeError) as e:
-                        error_str = str(e)
-                        if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
-                            logger.warning(f"⚠️ Validation error during direct init (non-fatal): {error_str[:100]}")
-                            embedding_model = None
-                        else:
-                            logger.error(f"❌ Embedding model initialization failed: {e}")
-                            embedding_model = None
-                    finally:
-                        sys.stderr = old_stderr
-            except ImportError:
-                logger.warning("⚠️ safe_sentence_transformer not available, using direct initialization...")
-                # Fallback if utility not available
-                import sys
-                import io
-                import warnings
-                old_stderr = sys.stderr
-                stderr_buffer = io.StringIO()
-                sys.stderr = stderr_buffer
-                warnings.filterwarnings('ignore')
+                # Set environment variables to suppress validation
+                os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+                
+                # Try to load model - catch ValueError but continue if it's validation error
                 try:
                     embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-                    logger.info("✅ Embedding model initialized lazily (direct fallback)")
+                    logger.info("✅ Embedding model initialized lazily")
                 except (ValueError, TypeError) as e:
                     error_str = str(e)
-                    if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
-                        logger.warning(f"⚠️ Validation error (non-fatal): {error_str[:100]}")
-                        embedding_model = None
+                    stderr_content = stderr_buffer.getvalue()
+                    
+                    # Check if this is a Pydantic validation error (non-fatal)
+                    if ("Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower() or 
+                        "Args" in stderr_content or "Parameters" in stderr_content):
+                        # This is a validation error - try to continue anyway
+                        # The model might have been partially created despite the error
+                        logger.warning(f"⚠️ Validation error during model init (non-fatal): {error_str[:150]}")
+                        
+                        # Try to create model again with fresh stderr buffer
+                        stderr_buffer = io.StringIO()
+                        sys.stderr = stderr_buffer
+                        try:
+                            embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                            logger.info("✅ Embedding model initialized lazily (after validation error)")
+                        except Exception as retry_e:
+                            # Even if retry fails, check if model was created in first attempt
+                            # Sometimes the ValueError is raised but model object exists
+                            logger.warning(f"⚠️ Retry also failed: {retry_e}")
+                            # Try one more time with completely fresh environment
+                            stderr_buffer = io.StringIO()
+                            sys.stderr = stderr_buffer
+                            try:
+                                embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                                logger.info("✅ Embedding model initialized lazily (final retry)")
+                            except Exception:
+                                logger.error("❌ Embedding model initialization failed after all retries")
+                                embedding_model = None
                     else:
-                        logger.error(f"❌ Embedding model initialization failed: {e}")
+                        # Not a validation error - this is a real error
+                        logger.error(f"❌ Embedding model initialization failed (non-validation error): {e}")
+                        logger.error(f"Error type: {type(e).__name__}")
                         embedding_model = None
-                finally:
-                    sys.stderr = old_stderr
-            except Exception as e:
-                logger.error(f"❌ Failed to initialize embedding model: {e}", exc_info=True)
-                embedding_model = None
+                except Exception as e:
+                    error_str = str(e)
+                    stderr_content = stderr_buffer.getvalue()
+                    logger.error(f"❌ Embedding model initialization failed: {error_str}")
+                    logger.error(f"Error type: {type(e).__name__}")
+                    logger.debug(f"Stderr: {stderr_content[:500]}")
+                    
+                    # Check if it's a validation error
+                    if ("Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower() or
+                        "Args" in stderr_content or "Parameters" in stderr_content):
+                        # Try one more time
+                        stderr_buffer = io.StringIO()
+                        sys.stderr = stderr_buffer
+                        try:
+                            embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                            logger.info("✅ Embedding model initialized lazily (exception retry)")
+                        except Exception:
+                            embedding_model = None
+                    else:
+                        embedding_model = None
+            finally:
+                sys.stderr = old_stderr
+                
+            # Verify model works if it was created
+            if embedding_model is not None:
+                try:
+                    test_embedding = embedding_model.encode("test")
+                    if test_embedding is not None and len(test_embedding) > 0:
+                        logger.info("✅ Embedding model verified and working")
+                    else:
+                        logger.warning("⚠️ Embedding model created but encode() returned invalid result")
+                        embedding_model = None
+                except Exception as test_e:
+                    logger.error(f"❌ Embedding model created but encode() failed: {test_e}")
+                    embedding_model = None
         
         # Ensure Qdrant client is initialized
         if qdrant_client is None:
