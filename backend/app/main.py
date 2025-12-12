@@ -483,8 +483,49 @@ async def process_document_for_vectors(
                 # Use safe loader with all fallback strategies
                 embedding_model = safe_sentence_transformer('sentence-transformers/all-MiniLM-L6-v2')
                 
+                # If safe_sentence_transformer failed, try aggressive direct loading as final fallback
+                if embedding_model is None:
+                    logger.warning("⚠️ safe_sentence_transformer returned None, trying aggressive direct loading...")
+                    import sys
+                    import io
+                    import warnings
+                    from sentence_transformers import SentenceTransformer
+                    
+                    # Aggressive error suppression
+                    old_stderr = sys.stderr
+                    sys.stderr = io.StringIO()
+                    warnings.filterwarnings('ignore')
+                    os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+                    
+                    try:
+                        # Try to load model - catch ValueError but check if model was created
+                        try:
+                            embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                            logger.info("✅ Embedding model initialized via aggressive direct loading")
+                        except (ValueError, TypeError) as ve:
+                            error_str = str(ve)
+                            # Check if this is a validation error
+                            if ("Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower()):
+                                logger.warning(f"⚠️ Validation error during direct load (non-fatal): {error_str[:100]}")
+                                # Try one more time with fresh stderr buffer
+                                sys.stderr = io.StringIO()
+                                try:
+                                    embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                                    logger.info("✅ Embedding model initialized after validation error retry")
+                                except Exception as retry_e:
+                                    logger.error(f"❌ Direct loading retry failed: {retry_e}")
+                                    embedding_model = None
+                            else:
+                                logger.error(f"❌ Direct loading failed (non-validation error): {ve}")
+                                embedding_model = None
+                    except Exception as e:
+                        logger.error(f"❌ Aggressive direct loading failed: {e}")
+                        embedding_model = None
+                    finally:
+                        sys.stderr = old_stderr
+                
+                # Verify model works if it was created
                 if embedding_model is not None:
-                    # Verify model works
                     try:
                         test_embedding = embedding_model.encode("test")
                         if test_embedding is not None and len(test_embedding) > 0:
@@ -496,7 +537,7 @@ async def process_document_for_vectors(
                         logger.error(f"❌ Embedding model created but encode() failed: {test_e}")
                         embedding_model = None
                 else:
-                    logger.error("❌ Embedding model lazy initialization failed: safe_sentence_transformer returned None")
+                    logger.error("❌ Embedding model lazy initialization failed: all strategies exhausted")
             except Exception as e:
                 logger.error(f"❌ Embedding model lazy initialization failed: {e}", exc_info=True)
                 embedding_model = None
