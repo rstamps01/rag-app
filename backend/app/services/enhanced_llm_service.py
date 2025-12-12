@@ -65,30 +65,29 @@ def _get_pipeline():
     """Lazy import of pipeline with error handling"""
     global pipeline
     if pipeline is None:
+        # Apply patches before importing pipeline
         try:
-            # Apply patches before importing pipeline
-            try:
-                from app.utils.pydantic_suppress import _patch_transformers_validation
-                _patch_transformers_validation()
-            except Exception:
-                pass
-            
-            # Try importing pipeline
-            import io
-            import sys
-            old_stderr = sys.stderr
-            sys.stderr = io.StringIO()
-            try:
-                from transformers import pipeline
-            except (ValueError, TypeError) as e:
-                # If pipeline import fails, return None - we'll create it manually
-                error_str = str(e)
-                if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
-                    pipeline = None
-                else:
-                    raise
-            finally:
-                sys.stderr = old_stderr
+            from app.utils.pydantic_suppress import _patch_transformers_validation
+            _patch_transformers_validation()
+        except Exception:
+            pass
+        
+        # Try importing pipeline
+        import io
+        import sys
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            from transformers import pipeline
+        except (ValueError, TypeError) as e:
+            # If pipeline import fails, return None - we'll create it manually
+            error_str = str(e)
+            if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
+                pipeline = None
+            else:
+                raise
+        finally:
+            sys.stderr = old_stderr
     return pipeline
 
 import os
