@@ -233,6 +233,39 @@ def _patch_transformers_validation():
         except (ImportError, AttributeError):
             # auto_docstring module might not exist or be importable yet
             pass
+        
+        # CRITICAL: Patch modeling_layers module BEFORE model loading
+        # This is where GenericForSequenceClassification is defined and causes errors
+        try:
+            import transformers.modeling_layers as modeling_layers_module
+            # Patch the auto_docstring decorator if it's used in this module
+            # We need to patch it before classes are defined
+            if hasattr(modeling_layers_module, '__file__'):
+                # Module exists, try to patch auto_docstring if imported
+                try:
+                    from transformers.utils.auto_docstring import auto_docstring as original_auto_docstring
+                    # Replace auto_docstring decorator with a safe version
+                    def safe_auto_docstring(obj):
+                        try:
+                            return original_auto_docstring(obj)
+                        except (ValueError, TypeError) as e:
+                            error_str = str(e)
+                            if ("No `Args` or `Parameters` section" in error_str or 
+                                "docstring" in error_str.lower() or
+                                "expected string or buffer" in error_str.lower() or
+                                "NoneType" in error_str):
+                                # Return function as-is if validation fails
+                                return obj
+                            raise
+                    
+                    # Replace in modeling_layers if it uses auto_docstring
+                    if hasattr(modeling_layers_module, 'auto_docstring'):
+                        modeling_layers_module.auto_docstring = safe_auto_docstring
+                except (ImportError, AttributeError):
+                    pass
+        except (ImportError, AttributeError):
+            # modeling_layers might not be imported yet
+            pass
             
     except (ImportError, AttributeError):
         # Transformers not imported yet or modules don't exist - that's OK

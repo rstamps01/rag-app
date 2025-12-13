@@ -147,6 +147,18 @@ class LLMService:
             # Load model with optimizations
             logger.info("🤖 Loading model...")
             
+            # CRITICAL: Import and patch modeling_layers BEFORE model loading
+            # This prevents errors during class definition in modeling_layers.py
+            try:
+                # Force import modeling_layers to trigger patches
+                import transformers.modeling_layers
+                from app.utils.pydantic_suppress import _patch_transformers_validation
+                _patch_transformers_validation()
+                # Apply patches again after importing modeling_layers
+                _patch_transformers_validation()
+            except Exception:
+                pass
+            
             # Apply patches before model loading to prevent validation errors
             try:
                 from app.utils.pydantic_suppress import _patch_transformers_validation
