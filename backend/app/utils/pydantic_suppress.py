@@ -19,8 +19,11 @@ os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 # Suppress warnings
 warnings.filterwarnings("ignore", message=".*No `Args` or `Parameters` section.*")
 warnings.filterwarnings("ignore", message=".*is part of.*forward's signature.*")
+warnings.filterwarnings("ignore", message=".*but not documented.*")
+warnings.filterwarnings("ignore", message=".*Make sure to add it to the docstring.*")
 warnings.filterwarnings("ignore", category=UserWarning, module="transformers")
 warnings.filterwarnings("ignore", category=FutureWarning, module="transformers")
+warnings.filterwarnings("ignore", category=UserWarning)  # Catch all UserWarnings
 
 # Install import hook to patch transformers modules as they're imported
 class TransformersImportHook:
@@ -174,6 +177,46 @@ def _patch_transformers_validation():
             doc_module._prepare_output_docstrings = patched_prepare_output
             doc_module._pydantic_patched = True
         
+        # CRITICAL: Patch _process_example_section and get_checkpoint_from_config_class
+        # These functions cause "expected string or buffer" errors
+        try:
+            # Patch _process_example_section
+            original_process_example = getattr(args_doc_module, '_process_example_section', None)
+            if original_process_example and not hasattr(args_doc_module, '_pydantic_example_patched'):
+                def patched_process_example(*args, **kwargs):
+                    try:
+                        return original_process_example(*args, **kwargs)
+                    except (ValueError, TypeError) as e:
+                        error_str = str(e)
+                        if ("expected string or buffer" in error_str.lower() or
+                            "No `Args` or `Parameters` section" in error_str or
+                            "docstring" in error_str.lower() or
+                            "NoneType" in error_str):
+                            return ""  # Return empty example docstring
+                        raise
+                
+                args_doc_module._process_example_section = patched_process_example
+                args_doc_module._pydantic_example_patched = True
+            
+            # Patch get_checkpoint_from_config_class - CRITICAL for model loading
+            original_get_checkpoint = getattr(args_doc_module, 'get_checkpoint_from_config_class', None)
+            if original_get_checkpoint and not hasattr(args_doc_module, '_pydantic_checkpoint_patched'):
+                def patched_get_checkpoint(*args, **kwargs):
+                    try:
+                        return original_get_checkpoint(*args, **kwargs)
+                    except (ValueError, TypeError) as e:
+                        error_str = str(e)
+                        if ("expected string or buffer" in error_str.lower() or
+                            "NoneType" in error_str or
+                            "findall" in error_str.lower()):
+                            return ""  # Return empty checkpoint example
+                        raise
+                
+                args_doc_module.get_checkpoint_from_config_class = patched_get_checkpoint
+                args_doc_module._pydantic_checkpoint_patched = True
+        except (ImportError, AttributeError):
+            pass
+        
         # CRITICAL: Patch auto_docstring module where the actual error occurs
         try:
             import transformers.utils.auto_docstring as auto_docstring_module
@@ -298,11 +341,17 @@ def suppress_pydantic_validation_errors():
             self.buffer = StringIO()
         
         def write(self, message):
-            # Filter out Pydantic validation errors
+            # Filter out Pydantic validation errors and docstring warnings
             if "No `Args` or `Parameters` section" in message:
                 return  # Suppress this error
             if "docstring" in message.lower() and "Args" in message:
                 return  # Suppress docstring validation errors
+            if "but not documented" in message:
+                return  # Suppress "but not documented" warnings
+            if "Make sure to add it to the docstring" in message:
+                return  # Suppress docstring reminder warnings
+            if "🚨" in message and ("signature" in message.lower() or "docstring" in message.lower()):
+                return  # Suppress transformers validation warnings with 🚨 emoji
             self.original.write(message)
         
         def flush(self):
@@ -331,10 +380,34 @@ def suppress_pydantic_validation_errors():
         sys.stderr = original_stderr
 
 
+def _create_stderr_filter(original_stderr):
+    """Create a stderr filter to suppress transformers docstring validation warnings"""
+    class StderrFilter:
+        """Filter stderr to suppress transformers docstring validation warnings"""
+        def __init__(self, original):
+            self.original = original
+        
+        def write(self, message):
+            # Filter out "but not documented" warnings
+            if "but not documented" in message:
+                return
+            if "Make sure to add it to the docstring" in message:
+                return
+            if "🚨" in message and ("signature" in message.lower() or "docstring" in message.lower()):
+                return
+            self.original.write(message)
+        
+        def flush(self):
+            self.original.flush()
+    
+    return StderrFilter(original_stderr)
+
+
 def safe_sentence_transformer(model_name: str, **kwargs):
     """
     Safely initialize SentenceTransformer, suppressing Pydantic validation errors.
-    Uses subprocess validation to isolate errors.
+    Uses direct loading with comprehensive error suppression (subprocess loader disabled
+    as it consistently fails and direct loading works reliably).
     
     Args:
         model_name: Name of the model to load
@@ -346,18 +419,9 @@ def safe_sentence_transformer(model_name: str, **kwargs):
     import logging
     logger = logging.getLogger(__name__)
     
-    # Try subprocess-based loading first (most reliable)
-    try:
-        from app.utils.subprocess_model_loader import load_model_with_subprocess_validation
-        model = load_model_with_subprocess_validation(model_name, **kwargs)
-        if model is not None:
-            logger.info(f"✅ SentenceTransformer loaded via subprocess validation: {model_name}")
-            return model
-        else:
-            logger.warning(f"⚠️ Subprocess validation failed, falling back to direct loading")
-    except Exception as e:
-        logger.debug(f"Subprocess loading failed (fallback to direct): {e}")
-        # Fall through to direct loading
+    # OPTIMIZED: Skip subprocess loader - it consistently fails and direct loading works reliably
+    # The subprocess approach was causing unnecessary log noise and delays
+    # Direct loading with comprehensive patches works perfectly
     
     # Fallback to direct loading with comprehensive error suppression
     from sentence_transformers import SentenceTransformer
@@ -372,11 +436,10 @@ def safe_sentence_transformer(model_name: str, **kwargs):
     # Strategy 1: Direct initialization with comprehensive error suppression
     model = None
     try:
-        # Suppress stderr completely during initialization
+        # Suppress stderr with filtering during initialization
         import sys
-        from io import StringIO
         old_stderr = sys.stderr
-        sys.stderr = StringIO()
+        sys.stderr = _create_stderr_filter(old_stderr)
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -463,15 +526,15 @@ def safe_sentence_transformer(model_name: str, **kwargs):
             "not enough values to unpack" in error_str.lower()):
             try:
                 import sys
-                from io import StringIO
                 old_stderr = sys.stderr
-                sys.stderr = StringIO()
+                sys.stderr = _create_stderr_filter(old_stderr)
                 try:
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore")
                         model = SentenceTransformer(model_name, **kwargs)
-                        logger.info(f"✅ SentenceTransformer initialized successfully (strategy 2): {model_name}")
-                        return model
+                        if model is not None:
+                            logger.info(f"✅ SentenceTransformer initialized successfully (strategy 2): {model_name}")
+                            return model
                 finally:
                     sys.stderr = old_stderr
             except Exception as e2:
@@ -549,9 +612,8 @@ def safe_sentence_transformer(model_name: str, **kwargs):
             os.environ["TRANSFORMERS_VERBOSITY"] = "error"
             os.environ["PYDANTIC_DISABLE_VALIDATION"] = "1"
             import sys
-            from io import StringIO
             old_stderr = sys.stderr
-            sys.stderr = StringIO()
+            sys.stderr = _create_stderr_filter(old_stderr)
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
@@ -590,9 +652,8 @@ def safe_import_transformers():
            "docstring" in error_str.lower():
             # Try to import anyway
             import sys
-            from io import StringIO
             old_stderr = sys.stderr
-            sys.stderr = StringIO()
+            sys.stderr = _create_stderr_filter(old_stderr)
             try:
                 import transformers
                 return transformers

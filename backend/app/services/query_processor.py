@@ -1,11 +1,34 @@
 # File Path: /backend/app/services/query_processor.py
 # Fixed version - corrected schema mappings and method signatures
 
+# Suppress Pydantic validation errors from transformers/sentence-transformers
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, message='.*Args.*Parameters.*')
+warnings.filterwarnings('ignore', message='.*No `Args` or `Parameters` section.*')
+
 import logging
 from typing import List, Dict, Any, Optional
 import time
 import torch
-from sentence_transformers import SentenceTransformer
+
+# Wrap sentence_transformers import to catch Pydantic validation errors
+try:
+    from sentence_transformers import SentenceTransformer
+except (ValueError, TypeError) as e:
+    # Pydantic validation errors are non-fatal - models can still be used
+    import sys
+    if "Args" in str(e) or "Parameters" in str(e) or "docstring" in str(e).lower():
+        # Suppress stderr temporarily to avoid error spam
+        import io
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            from sentence_transformers import SentenceTransformer
+        finally:
+            sys.stderr = old_stderr
+    else:
+        raise
+
 from qdrant_client import QdrantClient, models
 from app.core.config import settings
 from app.core.pipeline_monitor import pipeline_monitor
@@ -39,15 +62,47 @@ class QueryProcessor:
             # Initialize embedding model with fallback
             device = "cuda" if torch.cuda.is_available() and settings.ENABLE_GPU else "cpu"
             try:
-                self.embedding_model = SentenceTransformer(
-                    settings.EMBEDDING_MODEL_NAME,  # Use from config
-                    device=device
-                )
-                logger.info(f"Embedding model loaded on {device}")
+                # Wrap initialization to catch Pydantic validation errors
+                try:
+                    self.embedding_model = SentenceTransformer(
+                        settings.EMBEDDING_MODEL_NAME,  # Use from config
+                        device=device
+                    )
+                    logger.info(f"Embedding model loaded on {device}")
+                except (ValueError, TypeError) as e:
+                    # Pydantic validation errors are non-fatal - try with stderr suppression
+                    if "Args" in str(e) or "Parameters" in str(e) or "docstring" in str(e).lower():
+                        import sys
+                        import io
+                        old_stderr = sys.stderr
+                        sys.stderr = io.StringIO()
+                        try:
+                            self.embedding_model = SentenceTransformer(
+                                settings.EMBEDDING_MODEL_NAME,
+                                device=device
+                            )
+                            logger.info(f"Embedding model loaded on {device} (with validation warnings)")
+                        finally:
+                            sys.stderr = old_stderr
+                    else:
+                        raise
             except Exception as e:
                 logger.warning(f"Failed to load embedding model: {e}")
                 # Use fallback model
-                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
+                try:
+                    self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
+                except (ValueError, TypeError) as e2:
+                    if "Args" in str(e2) or "Parameters" in str(e2) or "docstring" in str(e2).lower():
+                        import sys
+                        import io
+                        old_stderr = sys.stderr
+                        sys.stderr = io.StringIO()
+                        try:
+                            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
+                        finally:
+                            sys.stderr = old_stderr
+                    else:
+                        raise
             
             # Initialize vector database client
             self.vector_client = QdrantClient(

@@ -4,6 +4,11 @@ Integrated Document Processing Service
 Combines async processing capabilities with enhanced service layer architecture
 """
 
+# Suppress Pydantic validation errors from transformers/sentence-transformers
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, message='.*Args.*Parameters.*')
+warnings.filterwarnings('ignore', message='.*No `Args` or `Parameters` section.*')
+
 import os
 import uuid
 import logging
@@ -39,8 +44,24 @@ class IntegratedDocumentProcessor:
             try:
                 from sentence_transformers import SentenceTransformer
                 model_name = getattr(settings, 'EMBEDDING_MODEL_NAME', 'sentence-transformers/all-MiniLM-L6-v2')
-                self.embedding_model = SentenceTransformer(model_name)
-                logger.info(f"✅ Embedding model initialized: {model_name}")
+                # Wrap initialization to catch Pydantic validation errors
+                try:
+                    self.embedding_model = SentenceTransformer(model_name)
+                    logger.info(f"✅ Embedding model initialized: {model_name}")
+                except (ValueError, TypeError) as e:
+                    # Pydantic validation errors are non-fatal - try with stderr suppression
+                    if "Args" in str(e) or "Parameters" in str(e) or "docstring" in str(e).lower():
+                        import sys
+                        import io
+                        old_stderr = sys.stderr
+                        sys.stderr = io.StringIO()
+                        try:
+                            self.embedding_model = SentenceTransformer(model_name)
+                            logger.info(f"✅ Embedding model initialized (with validation warnings): {model_name}")
+                        finally:
+                            sys.stderr = old_stderr
+                    else:
+                        raise
             except Exception as e:
                 logger.error(f"❌ Failed to initialize embedding model: {e}")
                 self.embedding_model = None

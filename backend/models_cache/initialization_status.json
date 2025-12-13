@@ -1,6 +1,6 @@
 {
-  "timestamp": 1753114672.0157294,
-  "initialization_time_seconds": 1.5814146995544434,
+  "timestamp": 1765586992.7572029,
+  "initialization_time_seconds": 5.5385518074035645,
   "status": {
     "initialization_started": true,
     "environment_validated": true,
@@ -13,19 +13,22 @@
     "warnings": []
   },
   "discovery_results": {
-    "total_directories": 6,
+    "total_directories": 9,
     "potential_models": [
+      ".locks",
       "hub",
+      "sentence_transformers",
+      "xet-model-cache-bu",
       "transformers",
       "models--sentence-transformers--all-MiniLM-L6-v2",
       "xet",
       "models--mistralai--Mistral-7B-Instruct-v0.2",
       "datasets"
     ],
-    "cache_size_mb": 28563.392068862915
+    "cache_size_mb": 147026.8662624359
   },
   "environment": {
-    "python_version": "3.10.12 (main, May 27 2025, 17:12:29) [GCC 11.4.0]",
+    "python_version": "3.10.12 (main, Nov  4 2025, 08:48:33) [GCC 11.4.0]",
     "python_executable": "/usr/bin/python",
     "cache_directory": "/app/models_cache",
     "environment_variables": {

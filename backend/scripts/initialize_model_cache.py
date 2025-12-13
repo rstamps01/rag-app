@@ -294,6 +294,177 @@ class EnhancedCacheInitializer:
             logger.error(f"Failed to create status report: {e}")
             return ""
     
+    def load_models_into_gpu(self) -> Dict[str, Any]:
+        """
+        Load models into GPU memory to warm up the cache
+        
+        Returns:
+            Dictionary with loading results
+        """
+        loading_results = {
+            'embedding_model_loaded': False,
+            'llm_model_loaded': False,
+            'errors': []
+        }
+        
+        try:
+            logger.info("=== GPU Model Loading ===")
+            
+            # Check if CUDA is available
+            try:
+                import torch
+                if not torch.cuda.is_available():
+                    logger.warning("⚠️ CUDA not available, skipping GPU model loading")
+                    return loading_results
+            except ImportError:
+                logger.warning("⚠️ PyTorch not available, skipping GPU model loading")
+                return loading_results
+            
+            # Apply Pydantic validation patches before loading models
+            try:
+                sys.path.insert(0, '/app')
+                from app.utils.pydantic_suppress import _patch_transformers_validation
+                _patch_transformers_validation()
+                logger.info("✅ Applied Pydantic validation patches")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to apply patches: {e}")
+            
+            # Load embedding model
+            try:
+                logger.info("📥 Loading embedding model into GPU cache...")
+                from sentence_transformers import SentenceTransformer
+                import warnings
+                import io
+                
+                # Suppress warnings and errors during loading
+                old_stderr = sys.stderr
+                sys.stderr = io.StringIO()
+                warnings.filterwarnings('ignore')
+                os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+                
+                try:
+                    embedding_model = SentenceTransformer(
+                        'sentence-transformers/all-MiniLM-L6-v2',
+                        cache_folder=str(self.cache_dir),
+                        device='cuda'
+                    )
+                    # Test the model
+                    test_embedding = embedding_model.encode("test", convert_to_numpy=True)
+                    if test_embedding is not None and len(test_embedding) > 0:
+                        loading_results['embedding_model_loaded'] = True
+                        logger.info("✅ Embedding model loaded into GPU successfully")
+                    else:
+                        logger.warning("⚠️ Embedding model loaded but encode() returned invalid result")
+                except Exception as e:
+                    error_str = str(e)
+                    if "expected string" in error_str.lower() or "Args" in error_str:
+                        logger.warning(f"⚠️ Embedding model loading encountered validation error (non-fatal): {error_str[:100]}")
+                        # Try again with patches
+                        _patch_transformers_validation()
+                        try:
+                            embedding_model = SentenceTransformer(
+                                'sentence-transformers/all-MiniLM-L6-v2',
+                                cache_folder=str(self.cache_dir),
+                                device='cuda'
+                            )
+                            test_embedding = embedding_model.encode("test", convert_to_numpy=True)
+                            if test_embedding is not None and len(test_embedding) > 0:
+                                loading_results['embedding_model_loaded'] = True
+                                logger.info("✅ Embedding model loaded into GPU successfully (after retry)")
+                        except Exception as retry_e:
+                            logger.warning(f"⚠️ Embedding model loading failed after retry: {retry_e}")
+                            loading_results['errors'].append(f"Embedding model: {str(retry_e)[:100]}")
+                    else:
+                        logger.warning(f"⚠️ Embedding model loading failed: {error_str[:100]}")
+                        loading_results['errors'].append(f"Embedding model: {error_str[:100]}")
+                finally:
+                    sys.stderr = old_stderr
+                    if 'embedding_model' in locals():
+                        del embedding_model
+                    torch.cuda.empty_cache()
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to load embedding model: {e}")
+                loading_results['errors'].append(f"Embedding model: {str(e)[:100]}")
+            
+            # Load LLM model (tokenizer and model)
+            try:
+                logger.info("📥 Loading LLM model into GPU cache...")
+                from transformers import AutoTokenizer, AutoModelForCausalLM
+                import warnings
+                import io
+                
+                # Suppress warnings and errors during loading
+                old_stderr = sys.stderr
+                sys.stderr = io.StringIO()
+                warnings.filterwarnings('ignore')
+                os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+                
+                try:
+                    # Load tokenizer
+                    tokenizer = AutoTokenizer.from_pretrained(
+                        'mistralai/Mistral-7B-Instruct-v0.2',
+                        cache_dir=str(self.cache_dir),
+                        trust_remote_code=True
+                    )
+                    logger.info("✅ LLM tokenizer loaded")
+                    
+                    # Apply patches again before model loading
+                    _patch_transformers_validation()
+                    
+                    # Try to import modeling_layers to trigger patches
+                    try:
+                        import transformers.modeling_layers
+                        _patch_transformers_validation()
+                    except Exception:
+                        pass
+                    
+                    # Load model
+                    model = AutoModelForCausalLM.from_pretrained(
+                        'mistralai/Mistral-7B-Instruct-v0.2',
+                        cache_dir=str(self.cache_dir),
+                        trust_remote_code=True,
+                        torch_dtype=torch.float16,
+                        device_map='cuda',
+                        low_cpu_mem_usage=True
+                    )
+                    
+                    # Verify model is on GPU
+                    if next(model.parameters()).is_cuda:
+                        loading_results['llm_model_loaded'] = True
+                        logger.info("✅ LLM model loaded into GPU successfully")
+                    else:
+                        logger.warning("⚠️ LLM model loaded but not on GPU")
+                        loading_results['errors'].append("LLM model not on GPU")
+                    
+                    # Clean up
+                    del model
+                    del tokenizer
+                    torch.cuda.empty_cache()
+                    
+                except Exception as e:
+                    error_str = str(e)
+                    if "expected string" in error_str.lower() or "Args" in error_str:
+                        logger.warning(f"⚠️ LLM model loading encountered validation error (non-fatal): {error_str[:100]}")
+                        loading_results['errors'].append(f"LLM model validation error (non-fatal): {error_str[:100]}")
+                    else:
+                        logger.warning(f"⚠️ LLM model loading failed: {error_str[:100]}")
+                        loading_results['errors'].append(f"LLM model: {error_str[:100]}")
+                finally:
+                    sys.stderr = old_stderr
+                    torch.cuda.empty_cache()
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to load LLM model: {e}")
+                loading_results['errors'].append(f"LLM model: {str(e)[:100]}")
+            
+            logger.info("=== GPU Model Loading Complete ===")
+            return loading_results
+            
+        except Exception as e:
+            logger.error(f"❌ GPU model loading failed: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            loading_results['errors'].append(str(e))
+            return loading_results
+    
     def run_initialization(self) -> int:
         """
         Run complete cache initialization process
@@ -324,10 +495,13 @@ class EnhancedCacheInitializer:
             # Step 3: Discover existing models
             discovery_results = self.discover_existing_models()
             
-            # Step 4: Create status report
+            # Step 4: Load models into GPU cache (NEW)
+            loading_results = self.load_models_into_gpu()
+            
+            # Step 5: Create status report
             status_file = self.create_status_report(discovery_results)
             
-            # Step 5: Final validation
+            # Step 6: Final validation
             total_time = time.time() - self.start_time
             
             self.status['initialization_completed'] = True
@@ -347,6 +521,22 @@ class EnhancedCacheInitializer:
                 print(f"✅ Cache size: {discovery_results.get('cache_size_mb', 0):.1f} MB")
             else:
                 print("ℹ️ No existing models found (normal for fresh deployment)")
+            
+            # GPU loading results
+            if loading_results.get('embedding_model_loaded'):
+                print("✅ Embedding model loaded into GPU cache")
+            else:
+                print("⚠️ Embedding model not loaded into GPU cache")
+            
+            if loading_results.get('llm_model_loaded'):
+                print("✅ LLM model loaded into GPU cache")
+            else:
+                print("⚠️ LLM model not loaded into GPU cache")
+            
+            if loading_results.get('errors'):
+                print(f"⚠️ GPU loading errors: {len(loading_results['errors'])}")
+                for error in loading_results['errors'][:3]:  # Show first 3 errors
+                    print(f"   - {error}")
             
             if self.status['warnings']:
                 print(f"⚠️ Warnings: {len(self.status['warnings'])}")

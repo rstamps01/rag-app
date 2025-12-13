@@ -28,7 +28,8 @@ RUN pip install --no-cache-dir \
 
 # Install other ML dependencies from PyPI
 RUN pip install --no-cache-dir \
-    transformers==4.53.2 \
+    transformers==4.45.0 \
+    tokenizers==0.20.0 \
     sentence-transformers==5.0.0 \
     qdrant-client==1.7.0 \
     numpy==1.24.3 \

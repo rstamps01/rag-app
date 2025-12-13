@@ -7,10 +7,37 @@ Provides Mistral-7B-Instruct-v0.2 integration with GPU acceleration
 import warnings
 import os
 import sys
+from io import StringIO
+
 warnings.filterwarnings('ignore', category=UserWarning, message='.*Args.*Parameters.*')
 warnings.filterwarnings('ignore', message='.*No `Args` or `Parameters` section.*')
+warnings.filterwarnings('ignore', message='.*but not documented.*')
+warnings.filterwarnings('ignore', message='.*Make sure to add it to the docstring.*')
 os.environ["PYDANTIC_DISABLE_VALIDATION"] = "1"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+
+# Install stderr filter early to catch transformers validation warnings
+class EarlyStderrFilter:
+    """Filter stderr to suppress transformers docstring validation warnings"""
+    def __init__(self, original):
+        self.original = original
+    
+    def write(self, message):
+        # Filter out "but not documented" warnings
+        if "but not documented" in message:
+            return
+        if "Make sure to add it to the docstring" in message:
+            return
+        if "🚨" in message and ("signature" in message.lower() or "docstring" in message.lower()):
+            return
+        self.original.write(message)
+    
+    def flush(self):
+        self.original.flush()
+
+# Apply stderr filter early (before transformers imports)
+if not isinstance(sys.stderr, EarlyStderrFilter):
+    sys.stderr = EarlyStderrFilter(sys.stderr)
 
 # CRITICAL: Install import hook BEFORE importing transformers
 # This patches transformers modules as they're imported
@@ -105,6 +132,7 @@ class LLMService:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.is_loaded = False
         self.cache_dir = "/app/models_cache"
+        self.uses_device_map = False  # Track if model was loaded with device_map
         
         # Initialize model
         self.initialize_model()
@@ -180,6 +208,7 @@ class LLMService:
                 # With 2 workers, each gets ~12GB which should be enough for Mistral-7B (~14GB)
                 # If memory is insufficient, the model will fail to load rather than partially offload
                 model_kwargs["device_map"] = "cuda"  # Force all parameters to GPU, no offloading
+                self.uses_device_map = True  # Track that we're using device_map
                 
                 model_kwargs.update({
                     "attn_implementation": "eager",                # "flash_attention_2",  # For RTX 5090 optimization
@@ -224,28 +253,65 @@ class LLMService:
             logger.info("✅ Model loaded successfully")
             
             # Create pipeline lazily (import pipeline when needed to avoid import-time errors)
-            pipeline_device = 0 if self.device == "cuda" else -1
-            pipeline_func = _get_pipeline()
-            if pipeline_func is not None:
-                self.pipeline = pipeline_func(
-                    "text-generation",
-                    model=self.model,
-                    tokenizer=self.tokenizer,
-                    device=pipeline_device,  # Explicitly set device to avoid meta device issues
-                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                    return_full_text=False
-                )
+            # CRITICAL: Since we use device_map="cuda" for model loading, we MUST NOT pass device to pipeline
+            # When device_map is used, accelerate handles device placement and pipeline will error if device is specified
+            pipeline_kwargs = {
+                "model": self.model,
+                "tokenizer": self.tokenizer,
+                "torch_dtype": torch.float16 if self.device == "cuda" else torch.float32,
+                "return_full_text": False
+            }
+            
+            # Only add device argument if we didn't use device_map for model loading
+            if self.uses_device_map:
+                # Model was loaded with device_map, don't pass device to pipeline
+                logger.info("🔧 Creating pipeline without device argument (model uses accelerate device_map)")
             else:
-                # Fallback: Create pipeline manually using TextGenerationPipeline
-                logger.warning("⚠️ Pipeline import failed, creating TextGenerationPipeline manually")
-                from transformers.pipelines.text_generation import TextGenerationPipeline
-                self.pipeline = TextGenerationPipeline(
-                    model=self.model,
-                    tokenizer=self.tokenizer,
-                    device=pipeline_device,
-                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                    return_full_text=False
-                )
+                # Model was loaded without device_map, we can specify device
+                pipeline_device = 0 if self.device == "cuda" else -1
+                pipeline_kwargs["device"] = pipeline_device
+                logger.info(f"🔧 Creating pipeline with device={pipeline_device}")
+            
+            # Suppress stderr during pipeline creation to filter out docstring validation warnings
+            import sys
+            from io import StringIO
+            old_stderr = sys.stderr
+            stderr_filter = StringIO()
+            
+            class StderrFilter:
+                """Filter stderr to suppress transformers docstring validation warnings"""
+                def __init__(self, original):
+                    self.original = original
+                
+                def write(self, message):
+                    # Filter out "but not documented" warnings
+                    if "but not documented" in message:
+                        return
+                    if "Make sure to add it to the docstring" in message:
+                        return
+                    if "🚨" in message and ("signature" in message.lower() or "docstring" in message.lower()):
+                        return
+                    self.original.write(message)
+                
+                def flush(self):
+                    self.original.flush()
+            
+            sys.stderr = StderrFilter(old_stderr)
+            
+            try:
+                pipeline_func = _get_pipeline()
+                if pipeline_func is not None:
+                    self.pipeline = pipeline_func(
+                        "text-generation",
+                        **pipeline_kwargs
+                    )
+                else:
+                    # Fallback: Create pipeline manually using TextGenerationPipeline
+                    logger.warning("⚠️ Pipeline import failed, creating TextGenerationPipeline manually")
+                    from transformers.pipelines.text_generation import TextGenerationPipeline
+                    self.pipeline = TextGenerationPipeline(**pipeline_kwargs)
+            finally:
+                sys.stderr = old_stderr
             
             logger.info("✅ Pipeline created successfully")
             

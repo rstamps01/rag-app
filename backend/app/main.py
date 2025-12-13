@@ -980,66 +980,68 @@ def _generate_embedding_sync(query: str):
     # Lazy initialization: Ensure embedding model is loaded
     if embedding_model is None:
         logger.info("🔄 Embedding model not initialized, attempting lazy initialization...")
-        import sys
-        import io
-        import warnings
         
-        # Suppress all warnings and stderr
-        old_stderr = sys.stderr
-        old_warnings_filters = warnings.filters[:]
-        warnings.filterwarnings('ignore')
-        stderr_buffer = io.StringIO()
-        sys.stderr = stderr_buffer
-        
+        # Use the safe_sentence_transformer utility which has comprehensive error handling
         try:
-            # Try to load model - ValueError will be raised but we'll catch it
-            embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-            logger.info("✅ Embedding model initialized lazily")
-        except (ValueError, TypeError) as e:
-            error_str = str(e)
-            # If it's a Pydantic validation error, try again with fresh stderr
-            if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
-                # Clear buffer and try again - the error is non-fatal
+            from app.utils.pydantic_suppress import safe_sentence_transformer, _patch_transformers_validation
+            
+            # Apply patches before loading
+            _patch_transformers_validation()
+            
+            # Use safe loader with all fallback strategies
+            embedding_model = safe_sentence_transformer('sentence-transformers/all-MiniLM-L6-v2')
+            
+            if embedding_model is not None:
+                logger.info("✅ Embedding model initialized lazily using safe loader")
+            else:
+                logger.warning("⚠️ Safe sentence transformer returned None, trying direct initialization...")
+                # Fallback to direct initialization with error suppression
+                import sys
+                import io
+                import warnings
+                old_stderr = sys.stderr
                 stderr_buffer = io.StringIO()
                 sys.stderr = stderr_buffer
+                warnings.filterwarnings('ignore')
                 try:
                     embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-                    logger.info("✅ Embedding model initialized lazily (validation error suppressed)")
-                except Exception as retry_e:
-                    # If retry also fails, check if it's still a validation error
-                    retry_error_str = str(retry_e)
-                    if "Args" in retry_error_str or "Parameters" in retry_error_str or "docstring" in retry_error_str.lower():
-                        # Still a validation error - try one more time
-                        stderr_buffer = io.StringIO()
-                        sys.stderr = stderr_buffer
-                        try:
-                            embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-                            logger.info("✅ Embedding model initialized lazily (after multiple retries)")
-                        except:
-                            logger.warning("⚠️ Embedding model lazy initialization failed after retries")
-                            embedding_model = None
-                    else:
-                        logger.warning(f"⚠️ Embedding model lazy initialization failed: {retry_e}")
+                    logger.info("✅ Embedding model initialized lazily (direct fallback)")
+                except Exception as e:
+                    error_str = str(e)
+                    if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
+                        logger.warning(f"⚠️ Validation error during direct load (non-fatal): {error_str[:100]}")
                         embedding_model = None
-            else:
-                embedding_model = None
-        except Exception as e:
-            error_str = str(e)
-            if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
-                # Pydantic validation error - try one more time
-                stderr_buffer = io.StringIO()
-                sys.stderr = stderr_buffer
-                try:
-                    embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-                    logger.info("✅ Embedding model initialized lazily despite validation warnings")
-                except:
+                    else:
+                        logger.error(f"❌ Failed to initialize embedding model: {e}")
+                        embedding_model = None
+                finally:
+                    sys.stderr = old_stderr
+        except ImportError:
+            logger.warning("⚠️ safe_sentence_transformer not available, using direct initialization...")
+            # Fallback if utility not available
+            import sys
+            import io
+            import warnings
+            old_stderr = sys.stderr
+            stderr_buffer = io.StringIO()
+            sys.stderr = stderr_buffer
+            warnings.filterwarnings('ignore')
+            try:
+                embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+                logger.info("✅ Embedding model initialized lazily (direct fallback)")
+            except Exception as e:
+                error_str = str(e)
+                if "Args" in error_str or "Parameters" in error_str or "docstring" in error_str.lower():
+                    logger.warning(f"⚠️ Validation error (non-fatal): {error_str[:100]}")
                     embedding_model = None
-            else:
-                logger.error(f"❌ Embedding model lazy initialization failed: {e}")
-                embedding_model = None
-        finally:
-            sys.stderr = old_stderr
-            warnings.filters[:] = old_warnings_filters
+                else:
+                    logger.error(f"❌ Failed to initialize embedding model: {e}")
+                    embedding_model = None
+            finally:
+                sys.stderr = old_stderr
+        except Exception as e:
+            logger.error(f"❌ Embedding model lazy initialization failed: {e}", exc_info=True)
+            embedding_model = None
     if embedding_model is None:
         return None
     try:

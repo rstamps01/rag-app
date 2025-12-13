@@ -4,7 +4,7 @@ services:
     - .env
     build:
       context: ./backend
-      dockerfile: Dockerfile.optimized
+      dockerfile: Dockerfile #.optimized
     container_name: backend-07
     restart: unless-stopped
     ports:
@@ -249,11 +249,16 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
-          cpus: '2.0'
+          memory: 24G
+          cpus: '16.0'
         reservations:
-          memory: 2G
-          cpus: '1.0'
+          memory: 8G
+          cpus: '4.0'
+          devices:
+          - driver: nvidia
+            count: 1
+            capabilities:
+            - gpu
     
     logging:
       driver: json-file
