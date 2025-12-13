@@ -35,9 +35,9 @@ scipy==1.11.4
 # MACHINE LEARNING STACK - BALANCED VERSIONS (Install Fourth)
 # =============================================================================
 # Core ML packages with memory fixes
-transformers==4.53.2          # UPDATED: Includes memory fixes from 4.45+
-tokenizers==0.21.2                    # UPDATED: Compatible with transformers 4.44.2
-sentence-transformers==5.0.0         # UPDATED: Includes memory management fixes
+transformers==4.53.2          # PINNED: Compatible with Pydantic, fixes docstring None bug (matches main branch)
+tokenizers==0.21.2            # PINNED: Compatible with transformers 4.53.2 (matches main branch)
+sentence-transformers==5.0.0         # PINNED: Includes memory management fixes (matches main branch)
 huggingface-hub               # UPDATED: Improved caching with memory fixes
 
 # GPU acceleration packages - balanced versions
@@ -94,8 +94,8 @@ flake8==6.1.0
 # =============================================================================
 # SYSTEM UTILITIES
 # =============================================================================
-pydantic>=2.0.0,<3.0.0
-pydantic-settings>=2.0.0,<3.0.0
+pydantic>=2.0.0,<3.0.0          # PINNED: Compatible with transformers 4.53.2 (2.12.4 causes validation errors)
+pydantic-settings>=2.0.0,<3.0.0  # PINNED: Compatible with pydantic 2.9.2
 typing-extensions>=4.8.0
 click>=8.1.0
 
@@ -104,7 +104,7 @@ click>=8.1.0
 # =============================================================================
 celery==5.3.4
 redis==5.0.1
-
+pillow==11.2.1
 # =============================================================================
 # INSTALLATION NOTES:
 # =============================================================================
