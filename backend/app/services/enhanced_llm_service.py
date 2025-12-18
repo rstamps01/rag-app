@@ -204,20 +204,28 @@ class LLMService:
             
             # Add GPU-specific optimizations
             if self.device == "cuda":
-                # Use device_map="cuda" instead of "auto" to avoid meta device offloading issues
-                # With 2 workers, each gets ~12GB which should be enough for Mistral-7B (~14GB)
-                # If memory is insufficient, the model will fail to load rather than partially offload
-                model_kwargs["device_map"] = "cuda"  # Force all parameters to GPU, no offloading
-                self.uses_device_map = True  # Track that we're using device_map
+                # Limit GPU memory usage to 80% to reserve resources for graphics rendering
+                if torch.cuda.is_available():
+                    gpu_memory = torch.cuda.get_device_properties(0).total_memory
+                    max_memory_80_percent = int(gpu_memory * 0.80)
+                    total_memory_gb = gpu_memory / 1e9
+                    allocated_memory_gb = max_memory_80_percent / 1e9
+                    logger.info(f"💾 GPU Memory: {total_memory_gb:.1f}GB total, limiting LLM to {allocated_memory_gb:.1f}GB (80%)")
+                    logger.info(f"🎨 Reserving {total_memory_gb - allocated_memory_gb:.1f}GB for graphics rendering")
+                    
+                    # Use device_map="auto" with max_memory to respect memory limits
+                    model_kwargs["device_map"] = "auto"
+                    model_kwargs["max_memory"] = {0: max_memory_80_percent}
+                    self.uses_device_map = True  # Track that we're using device_map
+                else:
+                    # Fallback if CUDA check fails
+                    model_kwargs["device_map"] = "cuda"
+                    self.uses_device_map = True
                 
                 model_kwargs.update({
                     "attn_implementation": "eager",                # "flash_attention_2",  # For RTX 5090 optimization
                     "use_cache": True
                 })
-                
-                if torch.cuda.is_available():
-                    total_memory = torch.cuda.get_device_properties(0).total_memory / 1e9  # GB
-                    logger.info(f"🔒 Loading model on GPU (device_map='cuda'): {total_memory:.1f}GB available")
             
             # Load model with comprehensive error suppression
             import sys

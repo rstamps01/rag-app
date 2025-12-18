@@ -28,6 +28,9 @@ import {
   Layers,
   Type,
   Circle,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
   Square,
   Diamond,
   FileText,
@@ -37,6 +40,8 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import GraphTypePreview from './GraphTypePreview';
+import { validateSimilarityData } from '../../utils/similarityUtils';
 
 interface GraphType {
   id: string;
@@ -98,6 +103,7 @@ interface VisualizationSettings {
 }
 
 interface EnhancedVisualizationControlsProps {
+  graphNodes?: any[]; // Optional: for data validation
   settings: VisualizationSettings;
   onSettingsChange: (settings: Partial<VisualizationSettings>) => void;
   onApplyChanges: () => void;
@@ -147,6 +153,7 @@ const graphTypes: GraphType[] = [
 ];
 
 const EnhancedVisualizationControls: React.FC<EnhancedVisualizationControlsProps> = ({
+  graphNodes = [],
   settings,
   onSettingsChange,
   onApplyChanges,
@@ -156,15 +163,33 @@ const EnhancedVisualizationControls: React.FC<EnhancedVisualizationControlsProps
   livePreview,
   onToggleLivePreview
 }) => {
-  const [currentGraphTypeIndex, setCurrentGraphTypeIndex] = useState(0);
+  // Sync carousel index with selected graph type
+  const getInitialGraphTypeIndex = () => {
+    const index = graphTypes.findIndex(gt => gt.id === settings.graphType);
+    return index >= 0 ? index : 0;
+  };
+  
+  const [currentGraphTypeIndex, setCurrentGraphTypeIndex] = useState(getInitialGraphTypeIndex());
   const [accordionValue, setAccordionValue] = useState<string[]>(['graph-layout', 'node-labels']);
 
-  // Live preview effect
+  // Sync carousel when settings.graphType changes externally
+  useEffect(() => {
+    const index = graphTypes.findIndex(gt => gt.id === settings.graphType);
+    if (index >= 0 && index !== currentGraphTypeIndex) {
+      setCurrentGraphTypeIndex(index);
+    }
+  }, [settings.graphType]);
+
+  // Live preview effect - apply changes automatically when live preview is enabled
   useEffect(() => {
     if (livePreview) {
-      onApplyChanges();
+      // Use a small delay to debounce rapid changes
+      const timeoutId = setTimeout(() => {
+        onApplyChanges();
+      }, 100);
+      return () => clearTimeout(timeoutId);
     }
-  }, [settings, livePreview, onApplyChanges]);
+  }, [settings, livePreview]); // Removed onApplyChanges from dependencies to prevent infinite loops
 
   const handleSettingChange = (key: keyof VisualizationSettings, value: any) => {
     onSettingsChange({ [key]: value });
@@ -195,9 +220,18 @@ const EnhancedVisualizationControls: React.FC<EnhancedVisualizationControlsProps
             <Button
               variant="ghost"
               size="sm"
+              onClick={onToggleLivePreview}
+              className={`p-2 ${livePreview ? 'text-green-400 bg-green-900/20' : 'text-gray-400 hover:text-white'}`}
+              title={livePreview ? 'Disable live preview' : 'Enable live preview'}
+            >
+              {livePreview ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onTogglePin}
               className={`p-2 ${isPinned ? 'text-blue-400 bg-blue-900/20' : 'text-gray-400 hover:text-white'}`}
-              title={isPinned ? 'Unpin and disable live preview' : 'Pin and enable live preview'}
+              title={isPinned ? 'Unpin panel' : 'Pin panel'}
             >
               {isPinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
             </Button>
@@ -260,10 +294,11 @@ const EnhancedVisualizationControls: React.FC<EnhancedVisualizationControlsProps
                   </div>
                   
                   <div className="bg-gray-700 rounded-lg p-4 mb-3">
-                    <div className="aspect-video bg-gray-600 rounded mb-3 flex items-center justify-center">
-                      <div className="text-gray-400 text-sm">
-                        {graphTypes[currentGraphTypeIndex].name} Preview
-                      </div>
+                    <div className="aspect-video bg-gray-900 rounded mb-3 overflow-hidden border border-gray-600">
+                      <GraphTypePreview 
+                        graphType={graphTypes[currentGraphTypeIndex].id}
+                        className="w-full h-full"
+                      />
                     </div>
                     <h3 className="font-medium text-white mb-1">
                       {graphTypes[currentGraphTypeIndex].name}
@@ -527,6 +562,71 @@ const EnhancedVisualizationControls: React.FC<EnhancedVisualizationControlsProps
                         <SelectItem value="hybrid" className="hover:bg-gray-600">Hybrid</SelectItem>
                       </SelectContent>
                     </Select>
+                    
+                    {/* Data Validation Feedback */}
+                    {(() => {
+                      // Validate data if graphNodes are available
+                      let validation = null;
+                      if (graphNodes && graphNodes.length > 0) {
+                        validation = validateSimilarityData(graphNodes, settings.similarityMode);
+                      }
+                      
+                      const modeDescriptions = {
+                        semantic: 'Requires embeddings or content text',
+                        structural: 'Uses graph connections (base links auto-generated if needed)',
+                        temporal: 'Requires timestamps in node payload',
+                        hybrid: 'Combines semantic, structural, and temporal (uses available data)'
+                      };
+                      
+                      if (validation) {
+                        return (
+                          <div className="mt-2 p-3 rounded-lg bg-gray-700/50 border border-gray-600">
+                            <div className="flex items-start gap-2 mb-2">
+                              {validation.isValid ? (
+                                <CheckCircle2 className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
+                              ) : (
+                                <AlertTriangle className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium text-gray-300 mb-1">
+                                  Data Availability
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                  <Badge variant="outline" className={`text-xs ${validation.hasEmbeddings > 0 ? 'bg-green-900/20 border-green-500 text-green-300' : 'bg-gray-900/20 border-gray-500 text-gray-400'}`}>
+                                    E: {validation.hasEmbeddings}/{validation.totalNodes}
+                                  </Badge>
+                                  <Badge variant="outline" className={`text-xs ${validation.hasContent > 0 ? 'bg-green-900/20 border-green-500 text-green-300' : 'bg-gray-900/20 border-gray-500 text-gray-400'}`}>
+                                    C: {validation.hasContent}/{validation.totalNodes}
+                                  </Badge>
+                                  <Badge variant="outline" className={`text-xs ${validation.hasTimestamps > 0 ? 'bg-green-900/20 border-green-500 text-green-300' : 'bg-gray-900/20 border-gray-500 text-gray-400'}`}>
+                                    T: {validation.hasTimestamps}/{validation.totalNodes}
+                                  </Badge>
+                                </div>
+                                {validation.warnings.length > 0 && (
+                                  <div className="space-y-1">
+                                    {validation.warnings.map((warning, idx) => (
+                                      <div key={idx} className="flex items-start gap-1.5 text-xs text-yellow-400">
+                                        <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                        <span>{warning}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="mt-2 p-2 rounded bg-gray-700/30 border border-gray-600">
+                            <div className="flex items-start gap-1.5 text-xs text-gray-400">
+                              <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                              <span>{modeDescriptions[settings.similarityMode] || 'Unknown mode'}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                   
                   <div>
@@ -535,12 +635,17 @@ const EnhancedVisualizationControls: React.FC<EnhancedVisualizationControlsProps
                     </Label>
                     <Slider
                       value={[settings.minDistance]}
-                      onValueChange={([value]) => handleSettingChange('minDistance', value)}
+                      onValueChange={([value]) => {
+                        // Ensure minDistance doesn't exceed maxDistance
+                        const newMin = Math.min(value, settings.maxDistance - 1);
+                        handleSettingChange('minDistance', newMin);
+                      }}
                       min={10}
-                      max={100}
+                      max={Math.min(settings.maxDistance - 1, 200)}
                       step={5}
                       className="w-full"
                     />
+                    <p className="text-xs text-gray-400 mt-1">Range: 10 - {Math.min(settings.maxDistance - 1, 200)}</p>
                   </div>
                   
                   <div>
@@ -549,12 +654,17 @@ const EnhancedVisualizationControls: React.FC<EnhancedVisualizationControlsProps
                     </Label>
                     <Slider
                       value={[settings.maxDistance]}
-                      onValueChange={([value]) => handleSettingChange('maxDistance', value)}
-                      min={100}
+                      onValueChange={([value]) => {
+                        // Ensure maxDistance is greater than minDistance
+                        const newMax = Math.max(value, settings.minDistance + 1);
+                        handleSettingChange('maxDistance', newMax);
+                      }}
+                      min={Math.max(settings.minDistance + 1, 50)}
                       max={500}
                       step={10}
                       className="w-full"
                     />
+                    <p className="text-xs text-gray-400 mt-1">Range: {Math.max(settings.minDistance + 1, 50)} - 500</p>
                   </div>
                   
                   <div>

@@ -145,3 +145,4 @@ curl -s http://localhost:8000/api/v1/documents | jq '.documents[] | select(.stat
 ## Status
 ✅ **FIXED** - Background task now creates its own database session and properly processes documents into Qdrant.
 
+

@@ -18,14 +18,38 @@ import {
   Layers
 } from 'lucide-react';
 
-const SimilarityVisualizationDemo: React.FC = () => {
+interface SimilarityVisualizationDemoProps {
+  onPanelStateChange?: (state: { leftPanel: boolean; rightPanel: boolean }) => void;
+  onGraphStatsChange?: (stats: { collectionName: string; nodeCount: number; linkCount: number; is3D: boolean; status: string }) => void;
+  onResetRequest?: () => void;
+  on3DToggleRequest?: () => void;
+  is3D?: boolean;
+}
+
+const SimilarityVisualizationDemo: React.FC<SimilarityVisualizationDemoProps> = ({ 
+  onPanelStateChange,
+  onGraphStatsChange,
+  onResetRequest,
+  on3DToggleRequest,
+  is3D: parentIs3D
+}) => {
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [similarityData, setSimilarityData] = useState<any[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [demoMode, setDemoMode] = useState<'static' | 'interactive'>('static');
   const [similarityMode, setSimilarityMode] = useState('semantic');
-  const [similarityThreshold, setSimilarityThreshold] = useState(0.7);
+  const [similarityThreshold, setSimilarityThreshold] = useState(0.45);
   const [similarityStats, setSimilarityStats] = useState(null);
+  const [demoInterval, setDemoInterval] = useState<NodeJS.Timeout | null>(null);
+  const [panelState, setPanelState] = useState({ leftPanel: false, rightPanel: false });
+  const [graphStats, setGraphStats] = useState<{ collectionName: string; nodeCount: number; linkCount: number; is3D: boolean; status: string } | null>(null);
+  
+  // Notify parent of panel state changes
+  useEffect(() => {
+    if (onPanelStateChange) {
+      onPanelStateChange(panelState);
+    }
+  }, [panelState, onPanelStateChange]);
   const [visualizationSettings, setVisualizationSettings] = useState({
     // Graph Layout
     graphType: 'force-directed',
@@ -57,7 +81,7 @@ const SimilarityVisualizationDemo: React.FC = () => {
     similarityMode: 'semantic',
     minDistance: 20,
     maxDistance: 200,
-    similarityThreshold: 0.7,
+    similarityThreshold: 0.45,
     
     // Advanced Features
     showTooltips: true,
@@ -93,13 +117,152 @@ const SimilarityVisualizationDemo: React.FC = () => {
     }
   }, [selectedNode]);
 
+  // Store original graph type before switching to static
+  const [originalGraphType, setOriginalGraphType] = useState('force-directed');
+  
+  // Listen for reset event from parent
+  useEffect(() => {
+    const handleReset = (event: CustomEvent) => {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Reset event received', event.detail);
+      }
+      setSelectedNode(null);
+      setSimilarityData([]);
+      setIsPlaying(false);
+      if (demoInterval) {
+        clearInterval(demoInterval);
+        setDemoInterval(null);
+      }
+      // Reset visualization settings to defaults
+      setVisualizationSettings({
+        // Graph Layout
+        graphType: 'force-directed',
+        
+        // Node Labels
+        showTextLabels: true,
+        labelMode: 'filename',
+        
+        // Color Coding
+        colorScheme: 'group',
+        
+        // Node Size
+        nodeSizeMode: 'fixed',
+        nodeSize: 3,
+        
+        // Node Shape
+        nodeShape: 'circle',
+        
+        // Node Mobility & Interconnectivity
+        maintainInterconnectivity: true,
+        showAnchorPoints: false,
+        
+        // Display Options
+        showInterconnectivity: false,
+        highlightSelected: true,
+        
+        // Node Distance & Similarity
+        useVariableDistance: true,
+        similarityMode: 'semantic',
+        minDistance: 20,
+        maxDistance: 200,
+        similarityThreshold: 0.45,
+        
+        // Advanced Features
+        showTooltips: true,
+        enableClustering: false,
+        enableAnimations: true,
+        enableFiltering: false,
+        multiSelect: false,
+        
+        // Hub & Spoke Model
+        enableHubSpoke: false,
+        spokesPerHub: 5,
+        maxHubs: 10,
+        
+        // 3D Settings
+        is3D: false,
+        movementSpeed: 2.0,
+        linkWidth: 1
+      });
+      // Trigger graph reset if requested
+      if (event.detail?.resetGraph) {
+        window.dispatchEvent(new CustomEvent('resetGraphVisualization'));
+      }
+    };
+    window.addEventListener('resetDemo', handleReset as EventListener);
+    return () => window.removeEventListener('resetDemo', handleReset as EventListener);
+  }, [demoInterval]);
+  
+  // Demo mode effect: Control interactivity based on mode
+  useEffect(() => {
+    if (demoMode === 'static') {
+      // Static mode: Disable animations and interactions, use fixed layout
+      setVisualizationSettings(prev => {
+        // Save current graph type if not already grid
+        if (prev.graphType !== 'grid') {
+          setOriginalGraphType(prev.graphType);
+        }
+        return {
+          ...prev,
+          enableAnimations: false,
+          enableFiltering: false,
+          multiSelect: false,
+          graphType: 'grid' // Use grid layout for static mode
+        };
+      });
+    } else {
+      // Interactive mode: Enable animations and interactions, restore original graph type
+      setVisualizationSettings(prev => ({
+        ...prev,
+        enableAnimations: true,
+        enableFiltering: true,
+        multiSelect: true,
+        graphType: originalGraphType // Restore original graph type
+      }));
+    }
+  }, [demoMode, originalGraphType]);
+
+  // Store available nodes for demo cycling
+  const [availableNodes, setAvailableNodes] = useState<any[]>([]);
+  
+  // Play/Pause demo effect: Auto-cycle through nodes when playing
+  useEffect(() => {
+    if (isPlaying && demoMode === 'interactive' && availableNodes.length > 0) {
+      let currentNodeIndex = 0;
+      
+      // Create interval to cycle through actual nodes
+      const interval = setInterval(() => {
+        if (availableNodes.length > 0) {
+          const node = availableNodes[currentNodeIndex];
+          setSelectedNode(node);
+          currentNodeIndex = (currentNodeIndex + 1) % availableNodes.length;
+        }
+      }, 2000); // Change node every 2 seconds
+      
+      setDemoInterval(interval);
+      return () => {
+        clearInterval(interval);
+        setDemoInterval(null);
+      };
+    } else {
+      // Clear interval when paused or in static mode
+      if (demoInterval) {
+        clearInterval(demoInterval);
+        setDemoInterval(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, demoMode, availableNodes.length]);
+
   const handleNodeSelect = (node: any) => {
     setSelectedNode(node);
     // console.log('Node selected:', node);
   };
 
   const handleSettingsChange = (settings: any) => {
-    console.log('Settings changed:', settings);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Settings changed:', settings);
+    }
     
     // Update similarity settings
     if (settings.similarityMode) {
@@ -110,7 +273,15 @@ const SimilarityVisualizationDemo: React.FC = () => {
     }
     
     // Update visualization settings
-    setVisualizationSettings(prev => ({ ...prev, ...settings }));
+    setVisualizationSettings(prev => {
+      const updated = { ...prev, ...settings };
+      if (settings.graphType) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`🔄 Updating graphType to: ${settings.graphType}`);
+        }
+      }
+      return updated;
+    });
   };
 
   const handleSimilarityChange = (similarityInfo: any) => {
@@ -119,21 +290,83 @@ const SimilarityVisualizationDemo: React.FC = () => {
   };
 
   const toggleDemo = () => {
-    setIsPlaying(!isPlaying);
+    if (availableNodes.length === 0) {
+      console.warn('⚠️ No nodes available for demo. Please wait for graph to load.');
+      return;
+    }
+    
+    setIsPlaying(prev => {
+      const newState = !prev;
+      if (!newState && demoInterval) {
+        // Clear interval when pausing
+        clearInterval(demoInterval);
+        setDemoInterval(null);
+      }
+      return newState;
+    });
   };
 
   const resetDemo = () => {
     setSelectedNode(null);
     setSimilarityData([]);
     setIsPlaying(false);
+    if (demoInterval) {
+      clearInterval(demoInterval);
+      setDemoInterval(null);
+    }
+    // Notify parent of reset request
+    if (onResetRequest) {
+      onResetRequest();
+    }
   };
+  
+  // Listen for 3D toggle event from parent (single listener to prevent duplicates)
+  useEffect(() => {
+    const handleToggle3D = (event: CustomEvent) => {
+      const { is3D: newIs3D } = event.detail;
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 3D toggle event received:', newIs3D);
+      }
+      setVisualizationSettings(prev => {
+        // Only update if different to prevent unnecessary re-renders
+        if (prev.is3D !== newIs3D) {
+          const updated = { ...prev, is3D: newIs3D };
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔄 Updated visualization settings with is3D:', updated.is3D);
+          }
+          return updated;
+        }
+        return prev;
+      });
+    };
+    window.addEventListener('toggle3D', handleToggle3D as EventListener);
+    return () => window.removeEventListener('toggle3D', handleToggle3D as EventListener);
+  }, []);
+  
+  // Handle 3D toggle from parent prop (only if different from current state)
+  useEffect(() => {
+    if (parentIs3D !== undefined) {
+      setVisualizationSettings(prev => {
+        // Only update if different to prevent feedback loop
+        if (prev.is3D !== parentIs3D) {
+          return { ...prev, is3D: parentIs3D };
+        }
+        return prev;
+      });
+    }
+  }, [parentIs3D]);
 
   return (
     <div className="w-full h-screen bg-gray-900 flex flex-col">
       {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700 p-4">
+      <div className="bg-gray-800 border-b border-gray-700 p-4 transition-all duration-300 relative">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 min-w-0 flex-1">
+          {/* Left section - Title stays left-justified, not affected by left panel */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 min-w-0 flex-1"
+            style={{
+              marginLeft: panelState.leftPanel ? '28rem' : '0',
+              transition: 'margin-left 0.3s ease'
+            }}>
             <CardTitle className="text-xl lg:text-2xl font-bold text-white flex items-center gap-3 min-w-0">
               <BarChart3 className="h-6 w-6 lg:h-8 lg:w-8 flex-shrink-0" />
               <span className="truncate">
@@ -154,7 +387,13 @@ const SimilarityVisualizationDemo: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Right section - Buttons shift left when right panel opens, stay fixed when left panel opens */}
+          <div className="flex items-center gap-2 flex-wrap flex-shrink-0"
+            style={{
+              marginRight: panelState.rightPanel ? '28rem' : '0',
+              transition: 'margin-right 0.3s ease',
+              maxWidth: panelState.rightPanel ? 'calc(100% - 28rem)' : '100%'
+            }}>
             <Button
               variant="outline"
               onClick={() => setDemoMode(demoMode === 'static' ? 'interactive' : 'static')}
@@ -198,6 +437,15 @@ const SimilarityVisualizationDemo: React.FC = () => {
           onNodeSelect={handleNodeSelect}
           onSettingsChange={handleSettingsChange}
           className="h-full"
+          visualizationSettings={visualizationSettings}
+          onPanelStateChange={setPanelState}
+          collectionName="rag"
+          graphStats={graphStats}
+          graphNodes={availableNodes}
+          similarityMode={similarityMode}
+          similarityThreshold={similarityThreshold}
+          minDistance={visualizationSettings.minDistance}
+          maxDistance={visualizationSettings.maxDistance}
         >
           {/* This is where your actual graph component would go */}
           <div className="w-full h-full bg-gray-800/50 backdrop-blur-sm">
@@ -211,6 +459,7 @@ const SimilarityVisualizationDemo: React.FC = () => {
               onNodeSelect={handleNodeSelect}
               onSimilarityChange={handleSimilarityChange}
               // Pass visualization settings
+              graphType={visualizationSettings.graphType}
               showTextLabels={visualizationSettings.showTextLabels}
               labelMode={visualizationSettings.labelMode}
               colorScheme={visualizationSettings.colorScheme}
@@ -235,6 +484,34 @@ const SimilarityVisualizationDemo: React.FC = () => {
               is3D={visualizationSettings.is3D}
               movementSpeed={visualizationSettings.movementSpeed}
               linkWidth={visualizationSettings.linkWidth}
+              // Callbacks for slider changes
+              onNodeSizeChange={(newSize) => {
+                setVisualizationSettings(prev => ({ ...prev, nodeSize: newSize }));
+              }}
+              onLinkWidthChange={(newWidth) => {
+                setVisualizationSettings(prev => ({ ...prev, linkWidth: newWidth }));
+              }}
+              onGraphDataLoaded={(nodes) => {
+                // Store available nodes for demo cycling
+                setAvailableNodes(nodes);
+              }}
+              onShowTextLabelsChange={(newValue) => {
+                setVisualizationSettings(prev => ({ ...prev, showTextLabels: newValue }));
+              }}
+              onIs3DChange={(newValue) => {
+                setVisualizationSettings(prev => ({ ...prev, is3D: newValue }));
+                // Forward to parent for top header button state
+                if (on3DToggleRequest && newValue !== parentIs3D) {
+                  // Parent will handle the state update
+                }
+              }}
+              onGraphStatsChange={(stats) => {
+                setGraphStats(stats);
+                // Forward to parent
+                if (onGraphStatsChange) {
+                  onGraphStatsChange(stats);
+                }
+              }}
             />
           </div>
         </EnhancedSimilarityDemo>

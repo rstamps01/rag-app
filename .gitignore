@@ -1048,3 +1048,5 @@ z-archive/docs/be/document_processor.py
 z-archive/docs/be/query_processor.py
 .gitignore
 .gitignore
+*.pyc
+__pycache__/

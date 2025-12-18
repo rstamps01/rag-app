@@ -4,7 +4,9 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Slider } from '../ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Settings, SlidersHorizontal, GitGraph, Palette } from 'lucide-react';
+import { Badge } from '../ui/badge';
+import { Settings, SlidersHorizontal, GitGraph, Palette, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { validateSimilarityData } from '../../utils/similarityUtils';
 
 interface EnhancedSimilarityControlsProps {
   onSimilarityThresholdChange: (value: number) => void;
@@ -22,6 +24,7 @@ interface EnhancedSimilarityControlsProps {
   currentConnectionLevels: number;
   currentMovementSpeed: number;
   similarityModes: { value: string; label: string; description: string }[];
+  graphNodes?: any[]; // Optional: for data validation
 }
 
 const EnhancedSimilarityControls: React.FC<EnhancedSimilarityControlsProps> = ({
@@ -40,8 +43,15 @@ const EnhancedSimilarityControls: React.FC<EnhancedSimilarityControlsProps> = ({
   currentConnectionLevels,
   currentMovementSpeed,
   similarityModes,
+  graphNodes = [],
 }) => {
   const [activeTab, setActiveTab] = React.useState('general');
+  
+  // Validate data for current similarity mode
+  const validation = React.useMemo(() => {
+    if (graphNodes.length === 0) return null;
+    return validateSimilarityData(graphNodes, currentSimilarityMode);
+  }, [graphNodes, currentSimilarityMode]);
 
   return (
     <Card className="w-full bg-gray-800 text-white border-gray-700 shadow-lg">
@@ -86,6 +96,45 @@ const EnhancedSimilarityControls: React.FC<EnhancedSimilarityControlsProps> = ({
                     ))}
                   </SelectContent>
                 </Select>
+                
+                {/* Data Validation Feedback */}
+                {validation && (
+                  <div className="mt-3 p-3 rounded-lg bg-gray-700/50 border border-gray-600">
+                    <div className="flex items-start gap-2 mb-2">
+                      {validation.isValid ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-300 mb-1">
+                          Data Availability
+                        </div>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          <Badge variant="outline" className={`text-xs ${validation.hasEmbeddings > 0 ? 'bg-green-900/20 border-green-500 text-green-300' : 'bg-gray-900/20 border-gray-500 text-gray-400'}`}>
+                            Embeddings: {validation.hasEmbeddings}/{validation.totalNodes}
+                          </Badge>
+                          <Badge variant="outline" className={`text-xs ${validation.hasContent > 0 ? 'bg-green-900/20 border-green-500 text-green-300' : 'bg-gray-900/20 border-gray-500 text-gray-400'}`}>
+                            Content: {validation.hasContent}/{validation.totalNodes}
+                          </Badge>
+                          <Badge variant="outline" className={`text-xs ${validation.hasTimestamps > 0 ? 'bg-green-900/20 border-green-500 text-green-300' : 'bg-gray-900/20 border-gray-500 text-gray-400'}`}>
+                            Timestamps: {validation.hasTimestamps}/{validation.totalNodes}
+                          </Badge>
+                        </div>
+                        {validation.warnings.length > 0 && (
+                          <div className="space-y-1">
+                            {validation.warnings.map((warning, idx) => (
+                              <div key={idx} className="flex items-start gap-1.5 text-xs text-yellow-400">
+                                <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                <span>{warning}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

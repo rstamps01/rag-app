@@ -38,28 +38,29 @@ const TestComponent = () => {
 function App() {
   return (
     <Router>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/queries" element={<QueriesPage />} />
-          <Route path="/documents" element={<DocumentsPage />} />
-          <Route path="/monitoring" element={<PipelineMonitoringDashboard />} />
-          <Route path="/dynamic-pipeline" element={<DynamicPipelinePage />} />
-          <Route path="/documentation-processing" element={<DocumentationProcessingPage />} />
-          <Route path="/test" element={<TestPage />} />
-          <Route path="/qdrant-dashboard" element={<QdrantReactFlowDashboard />} />
-          <Route path="/qdrant-flow" element={<QdrantReactFlowDashboard />} />
-          <Route path="/qdrant-advanced" element={<AdvancedQdrantFlowDashboard />} />
-          <Route path="/qdrant-professional" element={<ProfessionalQdrantFlowDashboard />} />
-          <Route path="/database-dashboard" element={<DatabaseDashboard />} />
-          <Route path="/qdrant-collection-graph" element={<QdrantCollectionGraphPage />} />
-          <Route path="/modular-graph-test" element={<ModularGraphTest />} />
-          <Route path="/similarity-test" element={<SimilarityTestPage />} />
-          <Route path="/similarity-dashboard" element={<SimilarityDashboardPage />} />
-          <Route path="/metrics" element={<MetricsDashboardPage />} />
-          <Route path="/admin" element={<AdminPanel />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        {/* Routes that need Layout wrapper */}
+        <Route path="/" element={<Layout><HomePage /></Layout>} />
+        <Route path="/queries" element={<Layout><QueriesPage /></Layout>} />
+        <Route path="/documents" element={<Layout><DocumentsPage /></Layout>} />
+        <Route path="/monitoring" element={<Layout><PipelineMonitoringDashboard /></Layout>} />
+        <Route path="/dynamic-pipeline" element={<Layout><DynamicPipelinePage /></Layout>} />
+        <Route path="/documentation-processing" element={<Layout><DocumentationProcessingPage /></Layout>} />
+        <Route path="/test" element={<Layout><TestPage /></Layout>} />
+        <Route path="/qdrant-dashboard" element={<Layout><QdrantReactFlowDashboard /></Layout>} />
+        <Route path="/qdrant-flow" element={<Layout><QdrantReactFlowDashboard /></Layout>} />
+        <Route path="/qdrant-advanced" element={<Layout><AdvancedQdrantFlowDashboard /></Layout>} />
+        <Route path="/qdrant-professional" element={<Layout><ProfessionalQdrantFlowDashboard /></Layout>} />
+        <Route path="/database-dashboard" element={<Layout><DatabaseDashboard /></Layout>} />
+        <Route path="/qdrant-collection-graph" element={<Layout><QdrantCollectionGraphPage /></Layout>} />
+        <Route path="/modular-graph-test" element={<Layout><ModularGraphTest /></Layout>} />
+        <Route path="/metrics" element={<Layout><MetricsDashboardPage /></Layout>} />
+        <Route path="/admin" element={<Layout><AdminPanel /></Layout>} />
+        
+        {/* Routes that don't need Layout wrapper (full-screen pages) */}
+        <Route path="/similarity-test" element={<SimilarityTestPage />} />
+        <Route path="/similarity-dashboard" element={<SimilarityDashboardPage />} />
+      </Routes>
     </Router>
   );
 }

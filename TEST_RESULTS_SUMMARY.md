@@ -105,3 +105,4 @@ curl http://localhost:6333/collections/rag | jq '.result.points_count'
 
 
 
+

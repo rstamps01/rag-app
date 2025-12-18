@@ -149,3 +149,4 @@ warnings.filterwarnings("ignore", message=".*Args.*Parameters.*")
 
 Apply **Option 1** - use the `_patch_transformers_validation()` function from `app.utils.pydantic_suppress` **before** importing transformers in `enhanced_llm_service.py`. This will patch the internal transformers functions that raise the ValueError, preventing it from being raised in the first place.
 
+

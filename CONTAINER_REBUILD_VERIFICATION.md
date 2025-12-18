@@ -198,3 +198,4 @@ curl http://localhost:8000/health
 docker logs -f backend-07 | grep -E "(🚀|✅|vector|Qdrant)"
 ```
 
+

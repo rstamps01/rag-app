@@ -348,3 +348,4 @@ command: "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
 - No code changes needed (just docker-compose.yml)
 - Models already support lazy loading
 
+
