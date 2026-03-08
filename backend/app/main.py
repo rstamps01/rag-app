@@ -85,7 +85,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.services.integrated_vector_db_service import integrated_vector_db_service
 from app.services.text_processing import normalize_text, chunk_text as tp_chunk_text
@@ -225,7 +225,7 @@ except Exception as e:
 
 # Pydantic models for API
 class QueryRequest(BaseModel):
-    query: str
+    query: str = Field(..., min_length=1, max_length=10000)
     department: Optional[str] = "General"
     use_llm: bool = True
     use_vector_search: bool = True
@@ -716,13 +716,13 @@ app = FastAPI(
 
 
 
-# Configure CORS
+# Configure CORS using settings (ISS-024)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS_LIST if config_ok else ["*"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=settings.CORS_METHODS_LIST if config_ok else ["*"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Add middleware to suppress access logs for monitoring endpoints
@@ -798,6 +798,14 @@ try:
 except Exception as e:
     logger.error(f"⚠️  Admin router import failed: {e}")
     admin_available = False
+
+# Auth router (ISS-069)
+try:
+    from app.api.routes.auth import router as auth_router
+    app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
+    logger.info("✅ Auth router imported and registered successfully")
+except Exception as e:
+    logger.error(f"⚠️ Auth router import failed: {e}")
 
 # Collection Management Router
 try:
@@ -1355,24 +1363,36 @@ async def upload_document(
             logger.error("Pipeline monitor not available")
             pipeline_monitor = None
         
-        # RESTORED: Validate file type
+        # Sanitize filename (ISS-073): strip path components, whitespace
+        safe_filename = os.path.basename(file.filename or "unnamed").strip()
+        safe_filename = safe_filename.replace("..", "").replace("/", "").replace("\\", "")
+        if not safe_filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+
+        # Validate file type (ISS-074)
         allowed_extensions = {".pdf", ".txt", ".docx", ".md", ".doc"}
-        file_ext = os.path.splitext(file.filename)[1].lower()
-        
+        file_ext = os.path.splitext(safe_filename)[1].lower()
+
         if file_ext not in allowed_extensions:
-            logger.warning(f"Invalid file type attempted: {file_ext} for file: {file.filename}")
+            logger.warning(f"Invalid file type attempted: {file_ext} for file: {safe_filename}")
             raise HTTPException(
                 status_code=400,
                 detail=f"File type {file_ext} not allowed. Allowed: {', '.join(allowed_extensions)}"
             )
-        
+
         # Read file content
         content = await file.read()
         file_size = len(content)
-        
-        # NOTE: 100MB limit removed as requested
-        # Log file size for monitoring
-        logger.info(f"File size: {file_size // (1024*1024)}MB for {file.filename}")
+
+        # File size limit — 100 MB (ISS-022)
+        max_upload_bytes = 100 * 1024 * 1024
+        if file_size > max_upload_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File size {file_size} bytes exceeds limit of {max_upload_bytes} bytes"
+            )
+
+        logger.info(f"File size: {file_size // (1024*1024)}MB for {safe_filename}")
         
         # Log upload start
         if pipeline_monitor:
@@ -1390,8 +1410,8 @@ async def upload_document(
             logger.error(f"Failed to create upload directory: {e}")
             raise HTTPException(status_code=500, detail="Upload directory unavailable")
         
-        # Save file
-        file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
+        # Save file with sanitized name
+        file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{safe_filename}")
         try:
             with open(file_path, "wb") as buffer:
                 buffer.write(content)
@@ -1512,11 +1532,16 @@ async def delete_document(
             except Exception as e:
                 logger.warning(f"Failed to remove from vector database: {e}")
         
-        # Delete physical file
+        # Delete physical file (ISS-077: validate path under UPLOAD_DIR)
         try:
             if file_path and os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"Deleted physical file: {file_path}")
+                real_path = os.path.realpath(file_path)
+                real_upload = os.path.realpath(UPLOAD_DIR)
+                if not real_path.startswith(real_upload):
+                    logger.warning(f"Blocked delete outside UPLOAD_DIR: {file_path}")
+                else:
+                    os.remove(file_path)
+                    logger.info(f"Deleted physical file: {file_path}")
         except Exception as e:
             logger.warning(f"Failed to delete physical file: {e}")
         

@@ -29,9 +29,9 @@
 | ISS-019 | main.py monolithic — 1809 lines, 18 inline endpoints | Medium | API | 2 | Open |
 | ISS-020 | No centralized exception handler | Medium | API | 2 | Open |
 | ISS-021 | Inconsistent API versioning (/api/qdrant vs /api/v1/) | Medium | API | 2 | Open |
-| ISS-022 | File uploads have no size limit | High | API | 2 | Open |
+| ISS-022 | File uploads have no size limit | High | API | 2 | Resolved |
 | ISS-023 | Most endpoints return raw dicts, not Pydantic models | Low | API | 2 | Open |
-| ISS-024 | CORS allow_origins=["*"] with allow_credentials=True | High | Security | 2 | Open |
+| ISS-024 | CORS allow_origins=["*"] with allow_credentials=True | High | Security | 2 | Resolved |
 | ISS-025 | Bare except in enhanced_documents_api swallows errors | Medium | API | 2 | Resolved |
 | ISS-026 | system.py calls undefined supports_pytorch_sdpa() | High | API | 2 | Resolved |
 | ISS-027 | enhanced_documents_api calls non-existent methods | High | API | 2 | Resolved |
@@ -76,16 +76,16 @@
 | ISS-066 | db-init mounts entire backend over container /app | Medium | Infrastructure | 6 | Resolved |
 | ISS-067 | models_cache bind mount — risk of data loss | Medium | Infrastructure | 6 | Resolved |
 | ISS-068 | build-backend.sh uses wrong context for Dockerfile.optimized | High | Infrastructure | 6 | Resolved |
-| ISS-069 | Auth router not mounted; no endpoints protected | Critical | Security | 7 | Open |
-| ISS-070 | JWT secret mismatch (SECRET_KEY vs JWT_SECRET) | Critical | Security | 7 | Open |
-| ISS-071 | Admin endpoints unprotected | Critical | Security | 7 | Open |
-| ISS-072 | Hardcoded demo password and broken registration | High | Security | 7 | Open |
-| ISS-073 | File upload path traversal vulnerability | Critical | Security | 7 | Open |
-| ISS-074 | File type validation by extension only | Medium | Security | 7 | Open |
-| ISS-075 | No Content-Type verification on upload | Medium | Security | 7 | Open |
-| ISS-076 | Query input has no length limit | Medium | Security | 7 | Open |
-| ISS-077 | Delete endpoint does not validate path under upload dir | High | Security | 7 | Open |
-| ISS-078 | No rate limiting on API endpoints | High | Security | 7 | Open |
+| ISS-069 | Auth router not mounted; no endpoints protected | Critical | Security | 7 | Resolved |
+| ISS-070 | JWT secret mismatch (SECRET_KEY vs JWT_SECRET) | Critical | Security | 7 | Resolved |
+| ISS-071 | Admin endpoints unprotected | Critical | Security | 7 | Resolved |
+| ISS-072 | Hardcoded demo password and broken registration | High | Security | 7 | Resolved |
+| ISS-073 | File upload path traversal vulnerability | Critical | Security | 7 | Resolved |
+| ISS-074 | File type validation by extension only | Medium | Security | 7 | Resolved |
+| ISS-075 | No Content-Type verification on upload | Medium | Security | 7 | Resolved |
+| ISS-076 | Query input has no length limit | Medium | Security | 7 | Resolved |
+| ISS-077 | Delete endpoint does not validate path under upload dir | High | Security | 7 | Resolved |
+| ISS-078 | No rate limiting on API endpoints | High | Security | 7 | Resolved |
 | ISS-079 | No CI/CD pipeline (GitHub Actions or equivalent) | Critical | CI/CD | 8 | Resolved |
 | ISS-080 | No structured backend test suite (pytest layout) | Critical | CI/CD | 8 | Resolved |
 | ISS-081 | No frontend test suite (Vitest/Jest) | High | CI/CD | 8 | Resolved |

@@ -44,6 +44,7 @@ class Settings(BaseSettings):
         description="Secret key for JWT signing and session security"
     )
     ALGORITHM: str = Field(default="HS256", description="JWT signing algorithm")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60, description="JWT token expiry in minutes")
     
     # Vector Database Configuration
     QDRANT_URL: str = Field(
