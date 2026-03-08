@@ -15,7 +15,8 @@ import {
   calculateTextSimilarity,
   temporalSimilarity,
   hybridSimilarity,
-  structuralSimilarity
+  structuralSimilarity,
+  generateBaseLinksForStructural
 } from '../../utils/similarityUtils';
 // import RotatingText from '../RotatingText';
 import { 
@@ -49,6 +50,7 @@ interface EnhancedSimilarityDemoProps {
   collectionName?: string; // Collection name for display
   graphStats?: { collectionName: string; nodeCount: number; linkCount: number; is3D: boolean; status: string } | null; // Graph statistics
   graphNodes?: any[]; // All graph nodes for similarity calculations
+  graphLinks?: any[]; // Optional: graph links for structural similarity (when not provided, base links are generated from nodes)
   similarityMode?: string; // Current similarity mode
   similarityThreshold?: number; // Current similarity threshold
   minDistance?: number; // Minimum link distance
@@ -67,6 +69,7 @@ const EnhancedSimilarityDemo: React.FC<EnhancedSimilarityDemoProps> = ({
   collectionName = 'rag',
   graphStats = null,
   graphNodes = [],
+  graphLinks,
   similarityMode = 'semantic',
   similarityThreshold = 0.45,
   minDistance = 20,
@@ -294,9 +297,14 @@ const EnhancedSimilarityDemo: React.FC<EnhancedSimilarityDemoProps> = ({
   // Calculate real similarity nodes when a node is selected
   useEffect(() => {
     if (selectedNode && graphNodes.length > 0) {
-      // Create graph data structure for similarity calculations
-      // Note: For structural similarity, we'd need actual links, but for semantic/temporal/hybrid, nodes are sufficient
-      const graphData = { nodes: graphNodes, links: [] };
+      // Use provided graph links when available; for structural/hybrid without links, generate base links from nodes
+      const links =
+        graphLinks && graphLinks.length > 0
+          ? graphLinks
+          : (similarityMode === 'structural' || similarityMode === 'hybrid')
+            ? generateBaseLinksForStructural(graphNodes, Math.max(0.2, similarityThreshold * 0.5))
+            : [];
+      const graphData = { nodes: graphNodes, links };
       
       // Calculate similarity for all other nodes (without threshold filter first to get all values)
       const allSimilarities = graphNodes
@@ -316,8 +324,6 @@ const EnhancedSimilarityDemo: React.FC<EnhancedSimilarityDemoProps> = ({
               }
               break;
             case 'structural':
-              // Structural similarity needs links - for now return 0 if no links available
-              // TODO: Pass actual graph links for structural similarity
               similarity = structuralSimilarity(selectedNode, node, graphData);
               break;
             case 'temporal':
@@ -361,7 +367,7 @@ const EnhancedSimilarityDemo: React.FC<EnhancedSimilarityDemoProps> = ({
     } else {
       setSimilarityNodes([]);
     }
-  }, [selectedNode, graphNodes, similarityMode, similarityThreshold, minDistance, maxDistance]);
+  }, [selectedNode, graphNodes, graphLinks, similarityMode, similarityThreshold, minDistance, maxDistance]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {

@@ -459,9 +459,8 @@ const QdrantGraphWorking = ({
         console.log(`✅ Graph loaded with ${nodes.length} nodes and ${links.length} links`);
       }
       
-      // Notify parent that graph data is loaded (pass nodes with embeddings)
-      // Pass the original nodes which include embeddings for similarity calculations
-      onGraphDataLoaded(nodes);
+      // Notify parent that graph data is loaded (pass nodes and links for structural similarity)
+      onGraphDataLoaded({ nodes, links: processedData.links });
       
       // Notify parent of graph stats
       if (onGraphStatsChange) {

@@ -224,6 +224,7 @@ const SimilarityVisualizationDemo: React.FC<SimilarityVisualizationDemoProps> = 
 
   // Store available nodes for demo cycling
   const [availableNodes, setAvailableNodes] = useState<any[]>([]);
+  const [availableLinks, setAvailableLinks] = useState<any[]>([]);
   
   // Play/Pause demo effect: Auto-cycle through nodes when playing
   useEffect(() => {
@@ -442,6 +443,7 @@ const SimilarityVisualizationDemo: React.FC<SimilarityVisualizationDemoProps> = 
           collectionName="rag"
           graphStats={graphStats}
           graphNodes={availableNodes}
+          graphLinks={availableLinks}
           similarityMode={similarityMode}
           similarityThreshold={similarityThreshold}
           minDistance={visualizationSettings.minDistance}
@@ -491,9 +493,11 @@ const SimilarityVisualizationDemo: React.FC<SimilarityVisualizationDemoProps> = 
               onLinkWidthChange={(newWidth) => {
                 setVisualizationSettings(prev => ({ ...prev, linkWidth: newWidth }));
               }}
-              onGraphDataLoaded={(nodes) => {
-                // Store available nodes for demo cycling
+              onGraphDataLoaded={(data) => {
+                const nodes = data?.nodes ?? (Array.isArray(data) ? data : []);
+                const links = data?.links ?? [];
                 setAvailableNodes(nodes);
+                setAvailableLinks(links);
               }}
               onShowTextLabelsChange={(newValue) => {
                 setVisualizationSettings(prev => ({ ...prev, showTextLabels: newValue }));
