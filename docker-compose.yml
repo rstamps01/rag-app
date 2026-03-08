@@ -4,40 +4,35 @@ services:
     - .env
     build:
       context: ./backend
-      dockerfile: Dockerfile #.optimized
+      dockerfile: Dockerfile
     container_name: backend-07
     restart: unless-stopped
     ports:
     - 8000:8000
     - 9090:9090
     healthcheck:
-      test:
-      - CMD
-      - curl
-      - -f
-      - http://localhost:8000/health
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 60s
     deploy:
       resources:
         limits:
           memory: 24G
-          cpus: '16.0'      # Allocate all 16 vCPUs for maximum performance
+          cpus: '16.0'
         reservations:
           memory: 8G
-          cpus: '4.0'       # Reserve 4 vCPUs to ensure minimum performance
+          cpus: '4.0'
           devices:
           - driver: nvidia
             count: 1
             capabilities:
             - gpu
-
     volumes:
-    - ./backend/models_cache:/app/models_cache:rw
+    - models_cache-07:/app/models_cache:rw
     - backend_logs-07:/app/data/logs:rw
     - uploaded_documents-07:/app/data/uploads:rw
-    # PHASE 1: Shared memory for model caching and PyTorch DataLoader
     shm_size: '8gb'
     environment:
     - HF_HOME=/app/models_cache
@@ -49,7 +44,6 @@ services:
     - NVIDIA_VISIBLE_DEVICES=0
     - CUDA_LAUNCH_BLOCKING=0
     - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    # PHASE 1: Performance optimizations
     - OMP_NUM_THREADS=8
     - MKL_NUM_THREADS=8
     - TORCH_NUM_THREADS=8
@@ -62,29 +56,23 @@ services:
     - EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
     - LLM_MODEL_NAME=mistralai/Mistral-7B-Instruct-v0.2
     - UPLOAD_DIR=/app/data/uploads
-    - JWT_SECRET=${JWT_SECRET}
-    - JWT_ALGORITHM=HS256
+    - SECRET_KEY=${SECRET_KEY}
     - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     - ENVIRONMENT=development
     - LOG_LEVEL=DEBUG
     - DEBUG=true
-    - POSTGRES_USER=rag
-    - POSTGRES_PASSWORD=rag
-    - POSTGRES_DB=rag
     - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,expandable_segments:True
     - TRITON_CACHE_DIR=/tmp/triton_cache
-    - TRITON_KERNEL_CACHE_SIZE=1024
-  # PyTorch Verbose Logging
-    - TORCHDYNAMO_VERBOSE=1
-    - TORCH_LOGS=+dynamo,+distributed,+inductor
-    command: "sh -c \"\n  echo 'Waiting for cache initialization...' &&\n  while [\
-      \ ! -f /app/models_cache/.initialization_complete ]; do\n    echo 'Cache not\
-      \ ready, waiting...'\n    sleep 2\n  done &&\n  echo 'Cache initialization detected,\
-      \ starting backend...' &&\n  sleep 7 &&\n  cd /app &&\n  echo 'Skipping migrations\
-      \ - starting FastAPI application...' &&\n  PYTHONPATH=/app python -m uvicorn\
-      \ app.main:app --host 0.0.0.0 --port 8000 --workers 2\n\"\n"
+    command: >
+      sh -c "cd /app && PYTHONPATH=/app python -m uvicorn app.main:app
+      --host 0.0.0.0 --port 8000 --workers 2"
     networks:
     - network-07
+    depends_on:
+      postgres-07:
+        condition: service_healthy
+      qdrant-07:
+        condition: service_healthy
 
   postgres-07:
     image: postgres:15
@@ -99,9 +87,7 @@ services:
     ports:
     - 5432:5432
     healthcheck:
-      test:
-      - CMD-SHELL
-      - pg_isready -U rag -d rag
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -109,17 +95,11 @@ services:
     - network-07
 
   qdrant-07:
-    #image: qdrant/qdrant:latest
     image: qdrant/qdrant:gpu-nvidia-latest
     container_name: qdrant-07
     restart: unless-stopped
     environment:
-    - QDRANT_URL=http://qdrant-07:6333
-    - QDRANT_HOST=qdrant-07
-    - QDRANT_PORT=6333
-    - QDRANT_COLLECTION_NAME=rag
     - QDRANT__GPU__INDEXING=1
-    - QDRANT__GPU__DEVICE_FILTER=
     - QDRANT__GPU__ALLOW_EMULATED=true
     - QDRANT__GPU__GROUPS_COUNT=256
     - QDRANT__GPU__PARALLEL_INDEXES=1
@@ -139,11 +119,7 @@ services:
             - gpu
     runtime: nvidia
     healthcheck:
-      test:
-      - CMD
-      - sh
-      - -c
-      - grep -q ':18BD ' /proc/net/tcp
+      test: ["CMD", "sh", "-c", "grep -q ':18BD ' /proc/net/tcp"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -162,8 +138,6 @@ services:
     - REACT_APP_API_URL=http://localhost:8000
     - REACT_APP_ENVIRONMENT=production
     - REACT_APP_API_URL_INTERNAL=http://backend-07:8000
-    volumes:
-    - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
     - 3000:3000
     networks:
@@ -181,7 +155,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-      
 
   db-init-07:
     build:
@@ -195,9 +168,6 @@ services:
     - EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
     - PYTHONPATH=/app
     - LOG_LEVEL=INFO
-    volumes:
-    - ./backend:/app
-    - db_init_status:/tmp
     networks:
     - network-07
     depends_on:
@@ -205,21 +175,18 @@ services:
         condition: service_healthy
       qdrant-07:
         condition: service_healthy
-    command: "sh -c \"\n  echo '\U0001F680 Starting integrated database initialization...'\
-      \ &&\n  python /app/app/scripts/init_database.py &&\n  echo '\u2705 Database\
-      \ schema initialization complete' &&\n  python /app/app/scripts/init_qdrant_collection.py\
-      \ &&\n  echo '\u2705 Qdrant collection initialization complete' &&\n  python\
-      \ /app/app/scripts/verify_integration.py &&\n  echo '\u2705 Integration verification\
-      \ complete' &&\n  touch /tmp/.db_init_complete &&\n  echo '\U0001F389 Integrated\
-      \ database initialization completed successfully' &&\n  exit 0\n\"\n"
+    command: >
+      sh -c "echo 'Starting database initialization...' &&
+      python /app/app/scripts/init_database.py &&
+      python /app/app/scripts/init_qdrant_collection.py &&
+      python /app/app/scripts/verify_integration.py &&
+      echo 'Database initialization completed successfully'"
     restart: 'no'
 
   cache-init-07:
     build:
       context: ./backend
-      dockerfile: Dockerfile.cache-init
-      args:
-      - BUILDKIT_INLINE_CACHE=1
+      dockerfile: Dockerfile
     container_name: cache-init-07
     environment:
     - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
@@ -231,21 +198,22 @@ services:
     - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     - PYTHONPATH=/app
     - PYTHONUNBUFFERED=1
-    - PYTHONDONTWRITEBYTECODE=1
-    - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-    - ./backend/models_cache:/app/models_cache
-    - cache_init_logs:/app/logs
+    - models_cache-07:/app/models_cache
     networks:
     - network-07
     profiles:
     - cache-init
     restart: 'no'
-    command: "sh -c \"\n  if [ -f /app/models_cache/.initialization_complete ]; then\n\
-      \    echo 'Cache already initialized, skipping...'\n    exit 0\n  else\n   \
-      \ echo 'Starting cache initialization...' &&\n    python /app/scripts/initialize_model_cache.py\
-      \ &&\n    touch /app/models_cache/.initialization_complete &&\n    echo 'Cache\
-      \ initialization completed successfully' &&\n    exit 0\n  fi\n\"\n"
+    command: >
+      sh -c "if [ -f /app/models_cache/.initialization_complete ]; then
+        echo 'Cache already initialized, skipping...'; exit 0;
+      else
+        echo 'Starting cache initialization...' &&
+        python /app/scripts/initialize_model_cache.py &&
+        touch /app/models_cache/.initialization_complete &&
+        echo 'Cache initialization completed successfully';
+      fi"
     deploy:
       resources:
         limits:
@@ -259,13 +227,11 @@ services:
             count: 1
             capabilities:
             - gpu
-    
     logging:
       driver: json-file
       options:
         max-size: 10m
         max-file: '3'
-        labels: com.rag-app.service
 
 volumes:
   postgres_data-07:
@@ -280,12 +246,9 @@ volumes:
   uploaded_documents-07:
     driver: local
     name: uploaded_documents-07
-  cache_init_logs:
+  models_cache-07:
     driver: local
-    name: cache_init_logs_07
-  db_init_status:
-    driver: local
-    name: db_init_status_07
+    name: models_cache-07
 
 networks:
   network-07:

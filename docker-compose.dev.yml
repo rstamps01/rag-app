@@ -1,19 +1,19 @@
-version: '3.8'
-
 services:
   backend-07:
     build:
-      context: .
-      dockerfile: backend/Dockerfile.optimized
+      context: ./backend
+      dockerfile: Dockerfile
     volumes:
-      # Mount source code for hot reloading
       - ./backend/app:/app/app
       - ./backend/scripts:/app/scripts
     environment:
       - PYTHONPATH=/app
       - RELOAD=true
+      - DATABASE_URL=postgresql://rag:rag@postgres-07:5432/rag
+      - QDRANT_URL=http://qdrant-07:6333
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     depends_on:
-      - postgres-07
-      - qdrant-07
-      - redis-07
+      postgres-07:
+        condition: service_healthy
+      qdrant-07:
+        condition: service_healthy

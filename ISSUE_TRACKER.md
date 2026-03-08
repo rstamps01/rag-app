@@ -66,16 +66,16 @@
 | ISS-056 | Dead/backup component files (QdrantGraph_clean, _backup) | Low | Frontend | 5 | Open |
 | ISS-057 | No global state management; prop drilling in similarity components | Low | Frontend | 5 | Open |
 | ISS-058 | Orphaned enhanced_documents_page and enhanced_queries_page | Low | Frontend | 5 | Open |
-| ISS-059 | Backend blocks forever on cache-init; cache-init in profile | Critical | Infrastructure | 6 | Open |
-| ISS-060 | docker-compose.dev.yml depends on undefined redis-07 | Critical | Infrastructure | 6 | Open |
-| ISS-061 | docker-compose.dev.yml wrong build context for backend | High | Infrastructure | 6 | Open |
-| ISS-062 | Dockerfile.optimized requires pre-built base not in compose | High | Infrastructure | 6 | Open |
-| ISS-063 | Four backend Dockerfiles with divergent deps | High | Infrastructure | 6 | Open |
-| ISS-064 | Healthcheck mismatch between Dockerfile and compose | Medium | Infrastructure | 6 | Open |
-| ISS-065 | Frontend nginx volume mount overrides conf.d but not used | Medium | Infrastructure | 6 | Open |
-| ISS-066 | db-init mounts entire backend over container /app | Medium | Infrastructure | 6 | Open |
-| ISS-067 | models_cache bind mount — risk of data loss | Medium | Infrastructure | 6 | Open |
-| ISS-068 | build-backend.sh uses wrong context for Dockerfile.optimized | High | Infrastructure | 6 | Open |
+| ISS-059 | Backend blocks forever on cache-init; cache-init in profile | Critical | Infrastructure | 6 | Resolved |
+| ISS-060 | docker-compose.dev.yml depends on undefined redis-07 | Critical | Infrastructure | 6 | Resolved |
+| ISS-061 | docker-compose.dev.yml wrong build context for backend | High | Infrastructure | 6 | Resolved |
+| ISS-062 | Dockerfile.optimized requires pre-built base not in compose | High | Infrastructure | 6 | Resolved |
+| ISS-063 | Four backend Dockerfiles with divergent deps | High | Infrastructure | 6 | Resolved |
+| ISS-064 | Healthcheck mismatch between Dockerfile and compose | Medium | Infrastructure | 6 | Resolved |
+| ISS-065 | Frontend nginx volume mount overrides conf.d but not used | Medium | Infrastructure | 6 | Resolved |
+| ISS-066 | db-init mounts entire backend over container /app | Medium | Infrastructure | 6 | Resolved |
+| ISS-067 | models_cache bind mount — risk of data loss | Medium | Infrastructure | 6 | Resolved |
+| ISS-068 | build-backend.sh uses wrong context for Dockerfile.optimized | High | Infrastructure | 6 | Resolved |
 | ISS-069 | Auth router not mounted; no endpoints protected | Critical | Security | 7 | Open |
 | ISS-070 | JWT secret mismatch (SECRET_KEY vs JWT_SECRET) | Critical | Security | 7 | Open |
 | ISS-071 | Admin endpoints unprotected | Critical | Security | 7 | Open |
