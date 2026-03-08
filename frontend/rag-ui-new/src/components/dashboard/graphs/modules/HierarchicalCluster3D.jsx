@@ -28,35 +28,53 @@ const HierarchicalCluster3D = ({
 }) => {
   const graphRef = useRef();
 
+  // Provide default values for visualizationSettings and settings to prevent errors
+  const safeVisualizationSettings = visualizationSettings || {
+    showInterconnectivity: true,
+    showText: false,
+    nodeShape: 'circle',
+    showAnimations: true
+  };
+  
+  const safeSettings = settings || {
+    nodeSize: 6,  // Increased from 3 for better visibility in 3D (radius = 3px)
+    linkWidth: 2  // Increased from 1 for better visibility
+  };
+
   // Enhanced node color function
   const getNodeColor = (node) => {
-    return generateNodeColor(node, visualizationSettings);
+    return generateNodeColor(node, safeVisualizationSettings);
   };
 
   // Enhanced link color function
   const getLinkColor = (link) => {
     if (link.type === 'hub-spoke') return '#ff6b6b';
     if (link.type === 'anchor') return '#ffd700';
-    return '#666';
+    // Use brighter color for better visibility on dark background
+    if (link.similarity !== undefined) {
+      const intensity = Math.max(0.3, Math.min(1, link.similarity));
+      return `rgba(150, 150, 255, ${0.4 + intensity * 0.6})`; // Blue tint with variable opacity
+    }
+    return '#bbb'; // Brighter gray for better visibility on dark background
   };
 
   // Enhanced link width function
   const getLinkWidth = (link) => {
     if (link.type === 'hub-spoke') return 3;
     if (link.type === 'anchor') return 2;
-    return settings.linkWidth;
+    return safeSettings.linkWidth || 1;
   };
 
   // Create 3D node objects
   const createNodeObject = (node) => {
-    const size = generateNodeSize(node, visualizationSettings, settings);
+    const size = generateNodeSize(node, safeVisualizationSettings, safeSettings);
     const color = getNodeColor(node);
     
     // Create different geometries based on node shape
     let geometry;
-    if (visualizationSettings.nodeShape === 'square') {
+    if (safeVisualizationSettings.nodeShape === 'square') {
       geometry = new THREE.BoxGeometry(size, size, size);
-    } else if (visualizationSettings.nodeShape === 'diamond') {
+    } else if (safeVisualizationSettings.nodeShape === 'diamond') {
       geometry = new THREE.OctahedronGeometry(size / 2);
     } else {
       geometry = new THREE.SphereGeometry(size / 2, 16, 12);
@@ -68,7 +86,7 @@ const HierarchicalCluster3D = ({
 
   // Create link text objects
   const createLinkObject = (link) => {
-    if (!visualizationSettings.showInterconnectivity) {
+    if (!safeVisualizationSettings.showInterconnectivity) {
       return null;
     }
 
@@ -90,15 +108,21 @@ const HierarchicalCluster3D = ({
   });
 
   // Common graph props
+  // Create wrapper functions that capture visualizationSettings and settings
+  const nodeValFn = (node) => generateNodeSize(node, safeVisualizationSettings, safeSettings);
+  const nodeColorFn = (node) => getNodeColor(node);
+  const linkColorFn = (link) => getLinkColor(link);
+  const linkWidthFn = (link) => getLinkWidth(link);
+
   const graphProps = createCommonGraphProps({
     ref: graphRef,
     graphData,
-    nodeLabel: visualizationSettings.showText ? 'label' : '',
-    nodeColor: getNodeColor,
-    nodeVal: generateNodeSize,
-    linkColor: getLinkColor,
-    linkWidth: getLinkWidth,
-    linkDirectionalArrowLength: visualizationSettings.showInterconnectivity ? 3 : 0,
+    nodeLabel: safeVisualizationSettings.showText ? 'label' : '',
+    nodeColor: nodeColorFn,
+    nodeVal: nodeValFn,
+    linkColor: linkColorFn,
+    linkWidth: linkWidthFn,
+    linkDirectionalArrowLength: safeVisualizationSettings.showInterconnectivity ? 3 : 0,
     linkDirectionalArrowRelPos: 1,
     width,
     height,
@@ -107,17 +131,53 @@ const HierarchicalCluster3D = ({
 
   // Configure D3 forces for hierarchical clustering
   useEffect(() => {
-    if (graphRef.current) {
+    if (graphRef.current && graphData && graphData.links && graphData.nodes) {
+      // Filter links and convert string IDs to node objects (D3 requires node objects, not IDs)
+      const validLinks = graphData.links
+        .map(link => {
+          const sourceId = typeof link.source === 'object' ? String(link.source.id) : String(link.source);
+          const targetId = typeof link.target === 'object' ? String(link.target.id) : String(link.target);
+          const sourceNode = graphData.nodes.find(n => String(n.id) === sourceId);
+          const targetNode = graphData.nodes.find(n => String(n.id) === targetId);
+          if (!sourceNode || !targetNode) {
+            return null;
+          }
+          return {
+            ...link,
+            source: sourceNode,
+            target: targetNode
+          };
+        })
+        .filter(link => link !== null);
+      
       // Hierarchical clustering with document-based organization
+      const linkDistanceFn = (link) => {
+        if (link.distance !== undefined && link.distance !== null) {
+          return link.distance;
+        }
+        return 70; // Default for hierarchical
+      };
+      
       graphRef.current.d3Force('charge', d3.forceManyBody().strength(-600));
-      graphRef.current.d3Force('link', d3.forceLink()
-        .id(d => d.id)
-        .distance(70)
-        .strength(0.2)
-      );
+      
+      const linkForce = d3.forceLink(validLinks)
+        .id(d => {
+          if (typeof d === 'object' && d !== null && d.id !== undefined) {
+            return String(d.id);
+          }
+          return String(d);
+        })
+        .distance(linkDistanceFn)
+        .strength(0.2);
+      
+      try {
+        graphRef.current.d3Force('link', linkForce);
+      } catch (error) {
+        console.error('❌ Error configuring D3 link force:', error);
+      }
       graphRef.current.d3Force('center', d3.forceCenter(width / 2, height / 2).strength(0.1));
     }
-  }, [width, height]);
+  }, [width, height, graphData]);
 
   return (
     <ForceGraph3D
@@ -132,7 +192,7 @@ const HierarchicalCluster3D = ({
         })));
         Object.assign(sprite.position, middlePos);
       }}
-      linkThreeObjectExtend={visualizationSettings.showInterconnectivity}
+      linkThreeObjectExtend={safeVisualizationSettings.showInterconnectivity}
       showNavInfo={false}
       controlType="orbit"
       backgroundColor="transparent"

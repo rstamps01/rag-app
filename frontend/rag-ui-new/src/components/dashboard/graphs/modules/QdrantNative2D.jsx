@@ -25,34 +25,53 @@ const QdrantNative2D = ({
   ...props 
 }) => {
   const graphRef = useRef();
+  const wrapperRef = useRef();
+
+  // Provide default values for visualizationSettings and settings to prevent errors
+  const safeVisualizationSettings = visualizationSettings || {
+    showInterconnectivity: true,
+    showText: false,
+    nodeShape: 'circle',
+    showAnimations: true
+  };
+  
+  const safeSettings = settings || {
+    nodeSize: 8,  // Increased from 3 for better visibility (radius = 4px)
+    linkWidth: 2  // Increased from 1 for better visibility
+  };
 
   // Enhanced node color function
   const getNodeColor = (node) => {
-    return generateNodeColor(node, visualizationSettings);
+    return generateNodeColor(node, safeVisualizationSettings);
   };
 
   // Enhanced link color function
   const getLinkColor = (link) => {
     if (link.type === 'hub-spoke') return '#ff6b6b';
     if (link.type === 'anchor') return '#ffd700';
-    return '#666';
+    // Use brighter color for better visibility on dark background
+    if (link.similarity !== undefined) {
+      const intensity = Math.max(0.3, Math.min(1, link.similarity));
+      return `rgba(150, 150, 255, ${0.4 + intensity * 0.6})`; // Blue tint with variable opacity
+    }
+    return '#bbb'; // Brighter gray for better visibility on dark background
   };
 
   // Enhanced link width function
   const getLinkWidth = (link) => {
     if (link.type === 'hub-spoke') return 3;
     if (link.type === 'anchor') return 2;
-    return settings.linkWidth;
+    return safeSettings.linkWidth || 1;
   };
 
   // Create 2D node objects
   const createNodeObject = (node, ctx, globalScale) => {
-    const size = generateNodeSize(node, visualizationSettings, settings);
+    const size = generateNodeSize(node, safeVisualizationSettings, safeSettings);
     const color = getNodeColor(node);
-    const label = generateNodeLabel(node, visualizationSettings);
+    const label = generateNodeLabel(node, safeVisualizationSettings);
 
     // Handle different node shapes
-    if (visualizationSettings.nodeShape === 'text') {
+    if (safeVisualizationSettings.nodeShape === 'text') {
       // Text-only nodes
       ctx.font = `${8/globalScale}px Arial`;
       ctx.textAlign = 'center';
@@ -65,10 +84,10 @@ const QdrantNative2D = ({
       ctx.strokeStyle = '#333';
       ctx.lineWidth = 1/globalScale;
 
-      if (visualizationSettings.nodeShape === 'square') {
+      if (safeVisualizationSettings.nodeShape === 'square') {
         ctx.fillRect(node.x - size/2, node.y - size/2, size, size);
         ctx.strokeRect(node.x - size/2, node.y - size/2, size, size);
-      } else if (visualizationSettings.nodeShape === 'diamond') {
+      } else if (safeVisualizationSettings.nodeShape === 'diamond') {
         ctx.save();
         ctx.translate(node.x, node.y);
         ctx.rotate(Math.PI / 4);
@@ -84,7 +103,7 @@ const QdrantNative2D = ({
       }
 
       // Add text labels if enabled
-      if (visualizationSettings.showText && label) {
+      if (safeVisualizationSettings.showText && label) {
         const fontSize = 8/globalScale;
         ctx.font = `${fontSize}px Arial`;
         ctx.textAlign = 'center';
@@ -110,15 +129,21 @@ const QdrantNative2D = ({
   });
 
   // Common graph props
+  // Create wrapper functions that capture visualizationSettings and settings
+  const nodeValFn = (node) => generateNodeSize(node, safeVisualizationSettings, safeSettings);
+  const nodeColorFn = (node) => getNodeColor(node);
+  const linkColorFn = (link) => getLinkColor(link);
+  const linkWidthFn = (link) => getLinkWidth(link);
+
   const graphProps = createCommonGraphProps({
     ref: graphRef,
     graphData,
-    nodeLabel: visualizationSettings.showText ? 'label' : '',
-    nodeColor: getNodeColor,
-    nodeVal: generateNodeSize,
-    linkColor: getLinkColor,
-    linkWidth: getLinkWidth,
-    linkDirectionalArrowLength: visualizationSettings.showInterconnectivity ? 3 : 0,
+    nodeLabel: safeVisualizationSettings.showText ? 'label' : '',
+    nodeColor: nodeColorFn,
+    nodeVal: nodeValFn,
+    linkColor: linkColorFn,
+    linkWidth: linkWidthFn,
+    linkDirectionalArrowLength: safeVisualizationSettings.showInterconnectivity ? 3 : 0,
     linkDirectionalArrowRelPos: 1,
     width,
     height,
@@ -127,50 +152,116 @@ const QdrantNative2D = ({
 
   // Configure D3 forces for Qdrant native style
   useEffect(() => {
-    if (graphRef.current) {
+    if (graphRef.current && graphData && graphData.links && graphData.nodes) {
+      // Filter links and convert string IDs to node objects (D3 requires node objects, not IDs)
+      const validLinks = graphData.links
+        .map(link => {
+          const sourceId = typeof link.source === 'object' ? String(link.source.id) : String(link.source);
+          const targetId = typeof link.target === 'object' ? String(link.target.id) : String(link.target);
+          const sourceNode = graphData.nodes.find(n => String(n.id) === sourceId);
+          const targetNode = graphData.nodes.find(n => String(n.id) === targetId);
+          if (!sourceNode || !targetNode) {
+            return null;
+          }
+          return {
+            ...link,
+            source: sourceNode,
+            target: targetNode
+          };
+        })
+        .filter(link => link !== null);
+      
       // Qdrant native layout with multi-star topology
+      const linkDistanceFn = (link) => {
+        // Use similarity-based distance if available
+        if (link.distance !== undefined && link.distance !== null) {
+          return link.distance;
+        }
+        // Otherwise use type-based distances
+        if (link.type === 'intra-star') return 60;  // Short spokes
+        if (link.type === 'inter-star') return 120; // Longer inter-star connections
+        return 80; // Default
+      };
+      
+      const linkStrengthFn = (link) => {
+        if (link.type === 'intra-star') return 0.8;  // Strong intra-star connections
+        if (link.type === 'inter-star') return 0.2;  // Weak inter-star connections
+        return 0.1; // Default
+      };
+      
       graphRef.current.d3Force('charge', d3.forceManyBody().strength(-200));
-      graphRef.current.d3Force('link', d3.forceLink()
-        .id(d => d.id)
-        .distance(d => {
-          // Different distances for different link types
-          if (d.type === 'intra-star') return 60;  // Short spokes
-          if (d.type === 'inter-star') return 120; // Longer inter-star connections
-          return 80; // Default
+      
+      const linkForce = d3.forceLink(validLinks)
+        .id(d => {
+          if (typeof d === 'object' && d !== null && d.id !== undefined) {
+            return String(d.id);
+          }
+          return String(d);
         })
-        .strength(d => {
-          // Different strengths for different link types
-          if (d.type === 'intra-star') return 0.8;  // Strong intra-star connections
-          if (d.type === 'inter-star') return 0.2;  // Weak inter-star connections
-          return 0.1; // Default
-        })
-      );
+        .distance(linkDistanceFn)
+        .strength(linkStrengthFn);
+      
+      try {
+        graphRef.current.d3Force('link', linkForce);
+      } catch (error) {
+        console.error('❌ Error configuring D3 link force:', error);
+      }
       graphRef.current.d3Force('center', d3.forceCenter(width / 2, height / 2).strength(0.05));
     }
-  }, [width, height]);
+  }, [width, height, graphData]);
 
   return (
-    <ForceGraph2D
+    <div 
+      ref={wrapperRef}
+      style={{ 
+        width: '100%', 
+        height: '100%', 
+        backgroundColor: 'transparent', 
+        background: 'transparent',
+        position: 'relative',
+        overflow: 'hidden',
+        zIndex: 20  // Ensure wrapper is on top layer
+      }}
+    >
+      <ForceGraph2D
       {...graphProps}
       {...eventHandlers}
       nodeCanvasObject={createNodeObject}
       backgroundRender={(ctx, globalScale) => {
+        // Guard against invalid canvas dimensions
+        if (!ctx || !ctx.canvas || ctx.canvas.width === 0 || ctx.canvas.height === 0) {
+          return;
+        }
         // Set background to match UI theme
-        ctx.fillStyle = '#1f2937';
-        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        // Background removed - canvas will be transparent
       }}
       d3Force="link"
       d3ForceConfig={{
         charge: { strength: -200 },
-        link: { distance: 80, strength: 0.1 },
+        link: { 
+          distance: (link) => {
+            if (link && link.distance !== undefined && link.distance !== null) {
+              return link.distance;
+            }
+            if (link.type === 'intra-star') return 60;
+            if (link.type === 'inter-star') return 120;
+            return 80;
+          }, 
+          strength: (link) => {
+            if (link.type === 'intra-star') return 0.8;
+            if (link.type === 'inter-star') return 0.2;
+            return 0.1;
+          }
+        },
         center: { strength: 0.05 }
       }}
-      d3VelocityDecay={visualizationSettings.showAnimations ? 0.4 : 0.8}
+      d3VelocityDecay={safeVisualizationSettings.showAnimations ? 0.4 : 0.8}
       enableZoomInteraction={true}
       enablePanInteraction={true}
       enableNodeDrag={true}
       enablePointerInteraction={true}
     />
+    </div>
   );
 };
 

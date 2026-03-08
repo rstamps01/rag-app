@@ -18,6 +18,11 @@ import AutoColored3D from '../modules/AutoColored3D';
 import Highlight3D from '../modules/Highlight3D';
 import PauseResume3D from '../modules/PauseResume3D';
 import ClickFocus3D from '../modules/ClickFocus3D';
+// Enhanced variants for Graph Layout v2
+import ForceDirected2DArrows from '../modules/ForceDirected2DArrows';
+import ForceDirected2DText from '../modules/ForceDirected2DText';
+import ForceDirected2DCurved from '../modules/ForceDirected2DCurved';
+import ForceDirected3DCollision from '../modules/ForceDirected3DCollision';
 
 // Graph type definitions
 export const GRAPH_TYPES = {
@@ -91,6 +96,53 @@ export const GRAPH_TYPES = {
       showClustering: true,
       showAnimations: true,
       enableFiltering: true
+    }
+  },
+  
+  // Enhanced 2D Graph Types (Graph Layout v2)
+  'force-directed-2d-arrows': {
+    id: 'force-directed-2d-arrows',
+    name: 'Force-Directed with Arrows (2D)',
+    description: 'Shows relationship direction with arrows. Best for semantic similarity flows.',
+    component: ForceDirected2DArrows,
+    dimension: '2D',
+    category: 'enhanced',
+    enabled: true,
+    settings: {
+      showClustering: true,
+      showAnimations: true,
+      enableFiltering: true,
+      showArrows: true
+    }
+  },
+  'force-directed-2d-text': {
+    id: 'force-directed-2d-text',
+    name: 'Force-Directed with Text Nodes (2D)',
+    description: 'Displays document/chunk names as text. Best for content exploration.',
+    component: ForceDirected2DText,
+    dimension: '2D',
+    category: 'enhanced',
+    enabled: true,
+    settings: {
+      showClustering: true,
+      showAnimations: true,
+      enableFiltering: true,
+      showText: true
+    }
+  },
+  'force-directed-2d-curved': {
+    id: 'force-directed-2d-curved',
+    name: 'Force-Directed Curved (2D)',
+    description: 'Uses curved lines to reduce clutter. Best for complex multi-document relationships.',
+    component: ForceDirected2DCurved,
+    dimension: '2D',
+    category: 'enhanced',
+    enabled: true,
+    settings: {
+      showClustering: true,
+      showAnimations: true,
+      enableFiltering: true,
+      curvedLinks: true
     }
   },
 
@@ -178,6 +230,23 @@ export const GRAPH_TYPES = {
       showClustering: true,
       showAnimations: true,
       enableFiltering: true
+    }
+  },
+  
+  // Enhanced 3D Graph Types (Graph Layout v2)
+  'force-directed-3d-collision': {
+    id: 'force-directed-3d-collision',
+    name: 'Force-Directed Collision (3D)',
+    description: '3D layout with collision detection. Best for large collections without overlap.',
+    component: ForceDirected3DCollision,
+    dimension: '3D',
+    category: 'enhanced',
+    enabled: true,
+    settings: {
+      showClustering: true,
+      showAnimations: true,
+      enableFiltering: true,
+      collisionDetection: true
     }
   },
 

@@ -1,15 +1,17 @@
 /**
- * Disjoint Force-Directed 2D Graph Module
+ * Force-Directed 3D Graph with Collision Detection
  * 
- * 2D force-directed graph that prevents detached subgraphs from escaping viewport
+ * Enhanced version with collision detection to prevent node overlap
  */
 
 import React, { useRef, useEffect } from 'react';
-import ForceGraph2D from 'react-force-graph-2d';
+import ForceGraph3D from 'react-force-graph-3d';
+import SpriteText from 'three-spritetext';
+import * as THREE from 'three';
 import * as d3 from 'd3';
 import { generateNodeColor, generateNodeSize, generateNodeLabel, createCommonEventHandlers, createCommonGraphProps } from '../core/GraphUtils';
 
-const DisjointForce2D = ({ 
+const ForceDirected3DCollision = ({ 
   graphData, 
   visualizationSettings, 
   settings, 
@@ -25,7 +27,6 @@ const DisjointForce2D = ({
   ...props 
 }) => {
   const graphRef = useRef();
-  const wrapperRef = useRef();
 
   // Provide default values for visualizationSettings and settings to prevent errors
   const safeVisualizationSettings = visualizationSettings || {
@@ -36,7 +37,7 @@ const DisjointForce2D = ({
   };
   
   const safeSettings = settings || {
-    nodeSize: 8,  // Increased from 3 for better visibility (radius = 4px)
+    nodeSize: 6,  // Increased from 3 for better visibility in 3D (radius = 3px)
     linkWidth: 2  // Increased from 1 for better visibility
   };
 
@@ -47,6 +48,9 @@ const DisjointForce2D = ({
 
   // Enhanced link color function
   const getLinkColor = (link) => {
+    if (!safeVisualizationSettings.showInterconnectivity) {
+      return 'rgba(0,0,0,0)';
+    }
     if (link.type === 'hub-spoke') return '#ff6b6b';
     if (link.type === 'anchor') return '#ffd700';
     // Use brighter color for better visibility on dark background
@@ -59,62 +63,41 @@ const DisjointForce2D = ({
 
   // Enhanced link width function
   const getLinkWidth = (link) => {
+    if (!safeVisualizationSettings.showInterconnectivity) {
+      return 0;
+    }
     if (link.type === 'hub-spoke') return 3;
     if (link.type === 'anchor') return 2;
     return safeSettings.linkWidth || 1;
   };
 
-  // Create 2D node objects
-  const createNodeObject = (node, ctx, globalScale) => {
+  // Create 3D node objects
+  const createNodeObject = (node) => {
     const size = generateNodeSize(node, safeVisualizationSettings, safeSettings);
     const color = getNodeColor(node);
-    const label = generateNodeLabel(node, safeVisualizationSettings);
-
-    // Handle different node shapes
-    if (safeVisualizationSettings.nodeShape === 'text') {
-      // Text-only nodes
-      ctx.font = `${8/globalScale}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = color;
-      ctx.fillText(label, node.x, node.y);
+    
+    let geometry;
+    if (safeVisualizationSettings.nodeShape === 'square') {
+      geometry = new THREE.BoxGeometry(size, size, size);
+    } else if (safeVisualizationSettings.nodeShape === 'diamond') {
+      geometry = new THREE.OctahedronGeometry(size / 2);
     } else {
-      // Shape-based nodes
-      ctx.fillStyle = color;
-      ctx.strokeStyle = '#333';
-      ctx.lineWidth = 1/globalScale;
-
-      if (safeVisualizationSettings.nodeShape === 'square') {
-        ctx.fillRect(node.x - size/2, node.y - size/2, size, size);
-        ctx.strokeRect(node.x - size/2, node.y - size/2, size, size);
-      } else if (safeVisualizationSettings.nodeShape === 'diamond') {
-        ctx.save();
-        ctx.translate(node.x, node.y);
-        ctx.rotate(Math.PI / 4);
-        ctx.fillRect(-size/2, -size/2, size, size);
-        ctx.strokeRect(-size/2, -size/2, size, size);
-        ctx.restore();
-      } else {
-        // Circle (default)
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, size/2, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.stroke();
-      }
-
-      // Add text labels if enabled
-      if (safeVisualizationSettings.showText && label) {
-        const fontSize = 8/globalScale;
-        ctx.font = `${fontSize}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#fff';
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 0.5/globalScale;
-        ctx.strokeText(label, node.x, node.y + size/2 + fontSize);
-        ctx.fillText(label, node.x, node.y + size/2 + fontSize);
-      }
+      geometry = new THREE.SphereGeometry(size / 2, 16, 12);
     }
+
+    const material = new THREE.MeshLambertMaterial({ color });
+    return new THREE.Mesh(geometry, material);
+  };
+
+  // Create link text objects
+  const createLinkObject = (link) => {
+    if (!safeVisualizationSettings.showInterconnectivity) {
+      return null;
+    }
+    const sprite = new SpriteText(link.label || `${link.source.id} → ${link.target.id}`);
+    sprite.color = link.type === 'hub-spoke' ? '#ff6b6b' : '#fff';
+    sprite.textHeight = 4;
+    return sprite;
   };
 
   // Common event handlers
@@ -150,7 +133,7 @@ const DisjointForce2D = ({
     ...props
   });
 
-  // Configure D3 forces with containment
+  // Configure D3 forces with collision detection
   useEffect(() => {
     if (graphRef.current && graphData && graphData.links && graphData.nodes) {
       // Filter links and convert string IDs to node objects (D3 requires node objects, not IDs)
@@ -171,16 +154,17 @@ const DisjointForce2D = ({
         })
         .filter(link => link !== null);
       
-      // Disjoint force-directed layout with containment
       const linkDistanceFn = (link) => {
         if (link.distance !== undefined && link.distance !== null) {
           return link.distance;
         }
-        return 60; // Default for disjoint
+        return 80;
       };
       
-      graphRef.current.d3Force('charge', d3.forceManyBody().strength(-600));
+      // Charge force (repulsion)
+      graphRef.current.d3Force('charge', d3.forceManyBody().strength(-300));
       
+      // Link force
       const linkForce = d3.forceLink(validLinks)
         .id(d => {
           if (typeof d === 'object' && d !== null && d.id !== undefined) {
@@ -189,66 +173,76 @@ const DisjointForce2D = ({
           return String(d);
         })
         .distance(linkDistanceFn)
-        .strength(0.3);
+        .strength(0.1);
       
       try {
         graphRef.current.d3Force('link', linkForce);
       } catch (error) {
         console.error('❌ Error configuring D3 link force:', error);
       }
-      graphRef.current.d3Force('center', d3.forceCenter(width / 2, height / 2).strength(0.2));
       
-      // Strong containment to prevent detached subgraphs
-      graphRef.current.d3Force('containment', () => {
-        const nodes = graphRef.current.graphData().nodes;
-        const viewportWidth = width || 800;
-        const viewportHeight = height || 500;
-        
-        nodes.forEach(node => {
-          if (node.x < 0) node.x = 0;
-          if (node.x > viewportWidth) node.x = viewportWidth;
-          if (node.y < 0) node.y = 0;
-          if (node.y > viewportHeight) node.y = viewportHeight;
-        });
-      });
+      // Center force
+      graphRef.current.d3Force('center', d3.forceCenter(width / 2, height / 2).strength(0.1));
+      
+      // Collision detection - prevents node overlap
+      graphRef.current.d3Force('collision', d3.forceCollide()
+        .radius(d => {
+          const nodeSize = generateNodeSize(d, safeVisualizationSettings, safeSettings);
+          return nodeSize * 1.5; // Add padding around nodes
+        })
+        .strength(0.7) // Strong collision force
+      );
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔧 ForceDirected3DCollision: Collision detection enabled');
+      }
     }
-  }, [width, height, graphData]);
+  }, [width, height, graphData, safeVisualizationSettings, safeSettings]);
 
   return (
-    <div 
-      ref={wrapperRef}
-      style={{ 
-        width: '100%', 
-        height: '100%', 
-        backgroundColor: 'transparent', 
-        background: 'transparent',
-        position: 'relative',
-        overflow: 'hidden',
-        zIndex: 20  // Ensure wrapper is on top layer
-      }}
-    >
-      <ForceGraph2D
+    <ForceGraph3D
       {...graphProps}
       {...eventHandlers}
-      nodeCanvasObject={createNodeObject}
-      backgroundRender={(ctx, globalScale) => {
-        // Background removed - canvas will be transparent
-        // No background fill needed
+      nodeThreeObject={createNodeObject}
+      linkThreeObject={createLinkObject}
+      linkPositionUpdate={(sprite, { start, end }) => {
+        const middlePos = Object.assign(...['x', 'y', 'z'].map(c => ({
+          [c]: start[c] + (end[c] - start[c]) / 2
+        })));
+        Object.assign(sprite.position, middlePos);
       }}
+      linkThreeObjectExtend={safeVisualizationSettings.showInterconnectivity}
+      showNavInfo={false}
+      controlType="orbit"
+      backgroundColor="transparent"
       d3Force="link"
       d3ForceConfig={{
-        charge: { strength: -600 },
-        link: { distance: 60, strength: 0.3 },
-        center: { strength: 0.2 }
+        charge: { strength: -300 },
+        link: { 
+          distance: (link) => {
+            if (link && link.distance !== undefined && link.distance !== null) {
+              return link.distance;
+            }
+            return 80;
+          }, 
+          strength: 0.1 
+        },
+        center: { strength: 0.1 },
+        collision: { 
+          radius: (d) => {
+            const nodeSize = generateNodeSize(d, visualizationSettings, settings);
+            return nodeSize * 1.5;
+          },
+          strength: 0.7
+        }
       }}
-      d3VelocityDecay={safeVisualizationSettings.showAnimations ? 0.4 : 0.8}
       enableZoomInteraction={true}
       enablePanInteraction={true}
       enableNodeDrag={true}
       enablePointerInteraction={true}
     />
-    </div>
   );
 };
 
-export default DisjointForce2D;
+export default ForceDirected3DCollision;
+

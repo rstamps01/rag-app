@@ -13,13 +13,19 @@ const ModularGraphTest = () => {
   const [activeTab, setActiveTab] = useState('modular');
   const [collectionName, setCollectionName] = useState('rag');
   const [qdrantBaseUrl, setQdrantBaseUrl] = useState('http://localhost:6333');
+  
+  // Similarity settings (matching QdrantGraphWorking defaults)
+  const [similarityMode, setSimilarityMode] = useState('semantic');
+  const [similarityThreshold, setSimilarityThreshold] = useState(0.45);
+  const [minDistance, setMinDistance] = useState(20);
+  const [maxDistance, setMaxDistance] = useState(200);
 
   const availableGraphTypes = getEnabledGraphTypes();
   const graph2DTypes = getGraphTypesByDimension('2D');
   const graph3DTypes = getGraphTypesByDimension('3D');
 
   return (
-    <div className="h-screen bg-gray-900 flex flex-col">
+    <div className="h-screen flex flex-col" style={{ backgroundColor: 'transparent' }}>
       {/* Header */}
       <div className="bg-gray-800 p-4 border-b border-gray-700">
         <h1 className="text-2xl font-bold text-white mb-4">
@@ -74,13 +80,17 @@ const ModularGraphTest = () => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden" style={{ backgroundColor: 'transparent' }}>
         {activeTab === 'modular' && (
           <QdrantGraphModular
             collectionName={collectionName}
             qdrantBaseUrl={qdrantBaseUrl}
             height="100%"
             fullWidth={true}
+            similarityMode={similarityMode}
+            similarityThreshold={similarityThreshold}
+            minDistance={minDistance}
+            maxDistance={maxDistance}
           />
         )}
         

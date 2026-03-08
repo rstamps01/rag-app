@@ -69,6 +69,19 @@ const VectorStorageNode = ({ data, isConnectable }) => {
       />
       <Handle
         type="source"
+        position={Position.Top}
+        id="top"
+        isConnectable={isConnectable}
+        style={{ 
+          background: '#3B82F6', 
+          width: '16px', 
+          height: '16px',
+          border: '3px solid var(--bg-card)',
+          boxShadow: '0 0 8px var(--glow-primary)'
+        }}
+      />
+      <Handle
+        type="source"
         position={Position.Right}
         id="right"
         isConnectable={isConnectable}

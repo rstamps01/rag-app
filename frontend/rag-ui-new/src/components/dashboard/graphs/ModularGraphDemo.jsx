@@ -63,10 +63,26 @@ const ModularGraphDemo = ({
     maxHubs: 10
   });
 
+  // Refs for preventing duplicate fetches
+  const fetchInProgressRef = useRef(false);
+  const dataLoadedRef = useRef(new Set());
+
   // Fetch graph data
   const fetchGraphData = async () => {
+    // Guard against concurrent fetches
+    if (fetchInProgressRef.current) {
+      return;
+    }
+    
+    // Guard against duplicate fetches for same collection
+    const collectionKey = `${collectionName}-${qdrantBaseUrl}`;
+    if (dataLoadedRef.current.has(collectionKey) && graphData.nodes.length > 0) {
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
+    fetchInProgressRef.current = true;
     
     try {
       const response = await fetch(`${qdrantBaseUrl}/collections/${collectionName}/points/scroll`, {
@@ -118,18 +134,42 @@ const ModularGraphDemo = ({
 
       setGraphData({ nodes, links });
       console.log(`✅ Graph loaded with ${nodes.length} nodes and ${links.length} links`);
+      
+      // Mark as loaded for this collection
+      dataLoadedRef.current.add(collectionKey);
     } catch (err) {
       console.error('Error fetching graph data:', err);
       setError(err.message);
     } finally {
       setIsLoading(false);
+      fetchInProgressRef.current = false;
     }
+
   };
 
-  // Load data on mount
-  useEffect(() => {
+  // Handle refresh - clear cache and refetch
+  const handleRefresh = () => {
+    const collectionKey = `${collectionName}-${qdrantBaseUrl}`;
+    dataLoadedRef.current.delete(collectionKey);
+    fetchInProgressRef.current = false;
+    setGraphData({ nodes: [], links: [] });
     fetchGraphData();
-  }, [collectionName, settings.nodeLimit]);
+  };
+
+  // Load data on mount (only once per collection, even with React StrictMode)
+  useEffect(() => {
+    const collectionKey = `${collectionName}-${qdrantBaseUrl}`;
+    
+    // Skip if already loaded for this collection
+    if (dataLoadedRef.current.has(collectionKey) && graphData.nodes.length > 0) {
+      return;
+    }
+    
+    // Call fetchGraphData - it will handle its own guards
+    fetchGraphData();
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionName]); // Only depend on collectionName, not settings.nodeLimit
 
   // Event handlers
   const handleNodeClick = (node) => {
@@ -200,7 +240,7 @@ const ModularGraphDemo = ({
         graphData={graphData}
         isLoading={isLoading}
         error={error}
-        onRefresh={fetchGraphData}
+        onRefresh={handleRefresh}
         onNodeClick={handleNodeClick}
         onNodeHover={handleNodeHover}
         onNodeDrag={handleNodeDrag}
@@ -261,3 +301,4 @@ const ModularGraphDemo = ({
 };
 
 export default ModularGraphDemo;
+

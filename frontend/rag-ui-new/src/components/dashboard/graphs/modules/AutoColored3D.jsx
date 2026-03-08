@@ -130,14 +130,20 @@ const AutoColored3D = ({
   });
 
   // Common graph props
+  // Create wrapper functions that capture visualizationSettings and settings
+  const nodeValFn = (node) => generateNodeSize(node, visualizationSettings, settings);
+  const nodeColorFn = (node) => getNodeColor(node);
+  const linkColorFn = (link) => getLinkColor(link);
+  const linkWidthFn = (link) => getLinkWidth(link);
+
   const graphProps = createCommonGraphProps({
     ref: graphRef,
     graphData,
     nodeLabel: visualizationSettings.showText ? 'label' : '',
-    nodeColor: getNodeColor,
-    nodeVal: generateNodeSize,
-    linkColor: getLinkColor,
-    linkWidth: getLinkWidth,
+    nodeColor: nodeColorFn,
+    nodeVal: nodeValFn,
+    linkColor: linkColorFn,
+    linkWidth: linkWidthFn,
     linkDirectionalArrowLength: visualizationSettings.showInterconnectivity ? 3 : 0,
     linkDirectionalArrowRelPos: 1,
     width,

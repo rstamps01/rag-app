@@ -3,9 +3,9 @@ import Navbar from './Navbar';
 
 const Layout = ({ children }) => {
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen" style={{ backgroundColor: 'transparent' }}>
       <Navbar />
-      <main className="flex-1">
+      <main className="flex-1" style={{ backgroundColor: 'transparent' }}>
         {children}
       </main>
     </div>
