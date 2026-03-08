@@ -128,6 +128,9 @@ def create_document(db: Session, obj_in: DocumentCreate) -> Document:
             id=str(uuid.uuid4()),
             filename=obj_in.filename,
             content_type=obj_in.content_type,
+            size=getattr(obj_in, "size", None),
+            path=getattr(obj_in, "path", None),
+            department=getattr(obj_in, "department", None),
             upload_date=datetime.utcnow(),
             status="uploaded"
         )

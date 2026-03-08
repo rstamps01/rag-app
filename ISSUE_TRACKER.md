@@ -12,7 +12,7 @@
 | ISS-002 | No document/chunk deduplication | Critical | Data Pipeline | 1 | Open |
 | ISS-003 | Chunking ignores configured CHUNK_STRATEGY | High | Data Pipeline | 1 | Open |
 | ISS-004 | Sentence boundary heuristic is fragile | High | Data Pipeline | 1 | Open |
-| ISS-005 | CRUD create_document drops size and department | High | Storage | 1 | Open |
+| ISS-005 | CRUD create_document drops size and department | High | Storage | 1 | Resolved |
 | ISS-006 | Four divergent pipeline implementations | High | Data Pipeline | 1 | Open |
 | ISS-007 | Hardcoded collection name "rag" in main.py | Medium | Config | 1 | Resolved |
 | ISS-008 | query_processor uses undefined config keys | High | Config | 1 | Resolved |
@@ -45,19 +45,19 @@
 | ISS-035 | Duplicate service pairs with divergent behavior | Medium | Services | 3 | Open |
 | ISS-036 | vector_db.py has self.collection_name bug in async delete | Medium | Services | 3 | Open |
 | ISS-037 | integrated_document_processor and integrated_database_service imported but unused in main.py | Low | Services | 3 | Open |
-| ISS-038 | Five separate SQLAlchemy engines created at runtime | High | Storage | 4 | Open |
-| ISS-039 | base.py and session.py duplicate engine/SessionLocal/get_db | High | Storage | 4 | Open |
-| ISS-040 | enhanced_session and integrated_database_service unused get_db | Medium | Storage | 4 | Open |
-| ISS-041 | integrated_database_service get_db returns None when unavailable | Medium | Storage | 4 | Open |
-| ISS-042 | No Alembic migration versions exist | Critical | Storage | 4 | Open |
-| ISS-043 | init_database has no schema migration support | High | Storage | 4 | Open |
+| ISS-038 | Five separate SQLAlchemy engines created at runtime | High | Storage | 4 | Resolved |
+| ISS-039 | base.py and session.py duplicate engine/SessionLocal/get_db | High | Storage | 4 | Resolved |
+| ISS-040 | enhanced_session and integrated_database_service unused get_db | Medium | Storage | 4 | Resolved |
+| ISS-041 | integrated_database_service get_db returns None when unavailable | Medium | Storage | 4 | Resolved |
+| ISS-042 | No Alembic migration versions exist | Critical | Storage | 4 | Resolved |
+| ISS-043 | init_database has no schema migration support | High | Storage | 4 | Resolved |
 | ISS-044 | SECRET_KEY, JWT_SECRET, ALGORITHM not defined in Settings | Critical | Config | 4 | Resolved |
 | ISS-045 | DATABASE_URL_COMPUTED and SQLALCHEMY_DATABASE_URI never used | Medium | Config | 4 | Resolved |
 | ISS-046 | FallbackSettings CORS_ORIGINS_LIST returns single-element list | Low | Config | 4 | Resolved |
 | ISS-047 | Production-inappropriate default values in config | Medium | Config | 4 | Resolved |
 | ISS-048 | No canonical .env.example template | Medium | Config | 4 | Resolved |
-| ISS-049 | enhanced_metrics_collector leaks DB session via next(get_db()) | High | Storage | 4 | Open |
-| ISS-050 | main.py get_db fallback returns None when DB import fails | Medium | Storage | 4 | Open |
+| ISS-049 | enhanced_metrics_collector leaks DB session via next(get_db()) | High | Storage | 4 | Resolved |
+| ISS-050 | main.py get_db fallback returns None when DB import fails | Medium | Storage | 4 | Resolved |
 | ISS-051 | 30+ files with hardcoded localhost URLs | High | Frontend | 5 | Open |
 | ISS-052 | API integration inconsistency — direct fetch bypasses api.js | High | Frontend | 5 | Open |
 | ISS-053 | No frontend .env; VITE_API_URL never configured | Medium | Frontend | 5 | Open |

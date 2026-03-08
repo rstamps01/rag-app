@@ -206,7 +206,7 @@ try:
 except Exception as e:
     logger.error(f"⚠️  Database import failed: {e}")
     def get_db():
-        return None
+        raise RuntimeError("Database is not available — db import failed at startup")
 
 # Try to import LLM service
 try:

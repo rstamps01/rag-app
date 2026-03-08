@@ -6,12 +6,11 @@ Combines the best of original and new approaches while preserving all functional
 
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func, create_engine, event
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import QueuePool
+from sqlalchemy import desc, func, event
 from sqlalchemy import text
 from app.models.models import User, Document, QueryHistory
 from app.core.config import settings
+from app.db.session import engine as _canonical_engine, SessionLocal as _canonical_session
 import logging
 from datetime import datetime
 import asyncio
@@ -20,8 +19,8 @@ import asyncpg
 logger = logging.getLogger(__name__)
 
 class IntegratedDatabaseManager:
-    """Enhanced database manager with connection pooling and health checks"""
-    
+    """Enhanced database manager reusing the canonical engine from db.session"""
+
     def __init__(self):
         self.engine = None
         self.SessionLocal = None
@@ -29,29 +28,12 @@ class IntegratedDatabaseManager:
         self.is_connected = False
         self.is_async_available = False
         self.initialize_database()
-    
+
     def initialize_database(self):
-        """Initialize both sync and async database connections with enhanced configuration"""
+        """Reuse the canonical engine/session from app.db.session (ISS-038)."""
         try:
-            # Initialize synchronous connection with pooling
-            self.engine = create_engine(
-                settings.DATABASE_URL,
-                poolclass=QueuePool,
-                pool_size=20,
-                max_overflow=40,
-                pool_pre_ping=True,
-                pool_recycle=3600,
-                echo=False  # Set to True for SQL debugging
-            )
-            
-            # Create session factory
-            self.SessionLocal = sessionmaker(
-                autocommit=False,
-                autoflush=False,
-                bind=self.engine
-            )
-            
-            # Test synchronous connection
+            self.engine = _canonical_engine
+            self.SessionLocal = _canonical_session
             self.test_connection()
             
             # Initialize asynchronous connection pool (for backward compatibility)
@@ -372,13 +354,4 @@ class IntegratedDatabaseService:
 # Global integrated database service instance
 integrated_database_service = IntegratedDatabaseService()
 
-def get_db():
-    """Database dependency for FastAPI routes"""
-    if not integrated_database_service.is_available():
-        return None
-    
-    db = integrated_database_service.db_manager.get_session()
-    try:
-        yield db
-    finally:
-        db.close()
+from app.db.session import get_db  # noqa: F811,E402 — re-export canonical get_db

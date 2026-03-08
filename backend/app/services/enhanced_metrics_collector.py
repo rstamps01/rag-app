@@ -512,11 +512,10 @@ class EnhancedMetricsCollector:
     async def _collect_postgres_metrics(self):
         """Collect PostgreSQL-specific metrics"""
         try:
-            # Use SQLAlchemy connection pool instead of direct psycopg2
-            from app.db.session import get_db
+            from app.db.session import SessionLocal
             from sqlalchemy import text
-            
-            db = next(get_db())
+
+            db = SessionLocal()
             try:
                 # Get active connections
                 try:
