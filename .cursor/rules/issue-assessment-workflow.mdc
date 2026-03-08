@@ -1,0 +1,42 @@
+---
+description: Consolidated issue assessment and remediation workflow for the RAG application
+alwaysApply: true
+---
+
+# Issue Assessment & Remediation Workflow
+
+## Process
+
+When analyzing any part of the codebase, follow this workflow:
+
+1. **Assess** — Identify issues (bugs, inconsistencies, missing features, tech debt, performance)
+2. **Record** — Add every issue to `ISSUE_TRACKER.md` at the project root using the format below
+3. **Classify** — Tag each issue with severity, category, and affected components
+4. **Defer fixes** — Do NOT fix issues during assessment unless explicitly asked; record them first
+5. **Review** — Once assessment is complete, review the full list with the user
+6. **Organize** — Group by category, identify interdependencies, and prioritize
+7. **Remediate** — Fix systematically, updating the tracker as issues are resolved
+
+## Issue Tracker Format (`ISSUE_TRACKER.md`)
+
+Each issue entry must include:
+
+```markdown
+### ISS-{NNN}: {Short title}
+- **Severity**: Critical | High | Medium | Low
+- **Category**: Data Pipeline | Storage | API | Frontend | Config | Performance | Security
+- **Component(s)**: {file paths or module names}
+- **Description**: {What is wrong}
+- **Impact**: {What breaks or degrades}
+- **Dependencies**: {Other ISS-NNN IDs this blocks or is blocked by}
+- **Status**: Open | In Progress | Resolved | Deferred
+- **Resolution**: {Empty until fixed; then describe what was done}
+```
+
+## Rules
+
+- Never duplicate an issue — check existing entries before adding
+- When resolving an issue, update its Status and Resolution in the tracker
+- When a fix touches multiple issues, cross-reference them
+- Keep the Summary table at the top of `ISSUE_TRACKER.md` in sync with the detail section
+- Prefix commit messages with the issue ID when fixing tracked issues (e.g. `fix(ISS-007): ...`)
