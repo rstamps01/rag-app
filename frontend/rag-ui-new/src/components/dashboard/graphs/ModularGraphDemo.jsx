@@ -5,12 +5,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { QDRANT_URL } from '../../../config';
 import GraphContainer from './core/GraphContainer';
 import { getEnabledGraphTypes, getGraphTypesByDimension } from './core/GraphTypes';
 
 const ModularGraphDemo = ({ 
   collectionName = 'rag', 
-  qdrantBaseUrl = 'http://localhost:6333', 
+  qdrantBaseUrl = QDRANT_URL, 
   height = '500px', 
   fullWidth = false 
 }) => {

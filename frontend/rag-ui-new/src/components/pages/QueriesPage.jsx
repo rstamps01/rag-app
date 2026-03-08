@@ -12,6 +12,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../../config';
 import ImprovedQueryInput from '../../components/ImprovedQueryInput';
 
 /**
@@ -292,7 +293,7 @@ const QueriesPage = () => {
     setSubmissionError(null);
     setResponse(null);
     try {
-      const result = await fetch('http://localhost:8000/api/v1/queries/ask', {
+      const result = await fetch(`${API_URL}/api/v1/queries/ask`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -329,7 +330,7 @@ const QueriesPage = () => {
         skip: ((page - 1) * queriesPerPage).toString(),
         ...filters,
       });
-      const res = await fetch(`http://localhost:8000/api/v1/queries/history?${params}`);
+      const res = await fetch(`${API_URL}/api/v1/queries/history?${params}`);
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }

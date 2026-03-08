@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { QDRANT_URL } from '../../config';
 import { 
   Database, 
   BarChart3, 
@@ -30,7 +31,7 @@ const AdvancedQdrantDashboard = () => {
   const [selectedCollection, setSelectedCollection] = useState('rag');
 
   // Qdrant configuration
-  const qdrantBaseUrl = 'http://localhost:6333';
+  const qdrantBaseUrl = QDRANT_URL;
   const dashboardUrls = {
     graph: `${qdrantBaseUrl}/dashboard#/collections/${selectedCollection}/graph`,
     visualize: `${qdrantBaseUrl}/dashboard#/collections/${selectedCollection}/visualize`,

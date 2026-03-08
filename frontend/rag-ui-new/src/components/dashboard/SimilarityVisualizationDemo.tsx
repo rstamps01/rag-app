@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
+import { QDRANT_URL } from '../../config';
 import EnhancedSimilarityDemo from './EnhancedSimilarityDemo';
 import QdrantGraphWorking from './QdrantGraphWorking';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -453,7 +454,7 @@ const SimilarityVisualizationDemo: React.FC<SimilarityVisualizationDemoProps> = 
           <div className="w-full h-full bg-gray-800/50 backdrop-blur-sm">
             <QdrantGraphWorking
               collectionName="rag"
-              qdrantBaseUrl="http://localhost:6333"
+              qdrantBaseUrl={QDRANT_URL}
               height="100%"
               fullWidth={true}
               similarityMode={similarityMode}

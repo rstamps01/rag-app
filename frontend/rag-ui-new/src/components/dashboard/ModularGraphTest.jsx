@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from 'react';
+import { QDRANT_URL } from '../../config';
 import QdrantGraphModular from './QdrantGraphModular';
 import ModularGraphDemo from './graphs/ModularGraphDemo';
 import { getEnabledGraphTypes, getGraphTypesByDimension } from './graphs/core/GraphTypes';
@@ -12,7 +13,7 @@ import { getEnabledGraphTypes, getGraphTypesByDimension } from './graphs/core/Gr
 const ModularGraphTest = () => {
   const [activeTab, setActiveTab] = useState('modular');
   const [collectionName, setCollectionName] = useState('rag');
-  const [qdrantBaseUrl, setQdrantBaseUrl] = useState('http://localhost:6333');
+  const [qdrantBaseUrl, setQdrantBaseUrl] = useState(QDRANT_URL);
   
   // Similarity settings (matching QdrantGraphWorking defaults)
   const [similarityMode, setSimilarityMode] = useState('semantic');

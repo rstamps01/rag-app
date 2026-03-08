@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { QDRANT_URL } from '../../config';
 import ForceGraph2D from 'react-force-graph-2d';
 import ForceGraph3D from 'react-force-graph-3d';
 import SpriteText from 'three-spritetext';
@@ -33,7 +34,7 @@ import {
   Network
 } from 'lucide-react';
 
-const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost:6333', height = '500px', fullWidth = false }) => {
+const QdrantGraph = ({ collectionName = 'rag', qdrantBaseUrl = QDRANT_URL, height = '500px', fullWidth = false }) => {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);

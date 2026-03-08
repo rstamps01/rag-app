@@ -5,10 +5,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { QDRANT_URL } from '../../config';
 import ForceGraph2D from 'react-force-graph-2d';
 import { RefreshCw } from 'lucide-react';
 
-const QdrantGraphMock = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost:6333', height = '500px', fullWidth = false }) => {
+const QdrantGraphMock = ({ collectionName = 'rag', qdrantBaseUrl = QDRANT_URL, height = '500px', fullWidth = false }) => {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);

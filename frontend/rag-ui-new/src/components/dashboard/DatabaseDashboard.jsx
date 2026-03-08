@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { API_URL, QDRANT_URL } from '../../config';
 import { 
   Database, 
   BarChart3, 
@@ -47,14 +48,14 @@ const DatabaseDashboard = () => {
   const [collectionConfig, setCollectionConfig] = useState({});
 
   // Qdrant configuration
-  const qdrantBaseUrl = 'http://localhost:6333';
-  const backendBaseUrl = 'http://localhost:8000/api/v1';
+  const qdrantBaseUrl = QDRANT_URL;
+  const backendBaseUrl = `${API_URL}/api/v1`;
 
   // Check service availability
   const checkServiceAvailability = async () => {
     // Check backend availability
     try {
-      const response = await fetch(`http://localhost:8000/health`, {
+      const response = await fetch(`${API_URL}/health`, {
         method: 'GET',
         timeout: 2000
       });

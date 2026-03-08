@@ -2,11 +2,11 @@
 // File Path: frontend/rag-ui-new/src/lib/api.js
 
 import axios from 'axios';
+import { API_URL } from '../config';
 
-// ✅ CORRECTED: Use proper backend URL configuration
-const API_BASE_URL = import.meta.env.MODE === 'production' 
-  ? '' // Use relative URLs in production (nginx proxy handles routing)
-  : 'http://localhost:8000'; // Direct backend URL in development
+const API_BASE_URL = import.meta.env.MODE === 'production'
+  ? ''
+  : API_URL;
 
 // Create axios instance with base configuration
 const api = axios.create({

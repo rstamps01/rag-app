@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { API_URL } from '../../config';
 import { Card, Button, Alert } from '../ui';
 
 // Define a single source of truth for maximum upload size in megabytes
@@ -38,7 +39,7 @@ const DocumentsPage = () => {
 
   const fetchDocuments = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/documents');
+      const response = await fetch(`${API_URL}/api/v1/documents`);
       if (response.ok) {
         const data = await response.json();
         setDocuments(data.documents || []);
@@ -95,7 +96,7 @@ const DocumentsPage = () => {
           const formData = new FormData();
           formData.append('file', file);
           formData.append('department', 'General');
-          const response = await fetch('http://localhost:8000/api/v1/documents', {
+          const response = await fetch(`${API_URL}/api/v1/documents`, {
             method: 'POST',
             body: formData,
           });
@@ -152,7 +153,7 @@ const DocumentsPage = () => {
   const handleDeleteDocument = async (documentId, filename) => {
     setDeleting((prev) => new Set([...prev, documentId]));
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/documents/${documentId}`, { method: 'DELETE' });
+      const response = await fetch(`${API_URL}/api/v1/documents/${documentId}`, { method: 'DELETE' });
       if (response.ok) {
         setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
         setDeleteConfirm(null);

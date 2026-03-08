@@ -5,9 +5,11 @@
  * monitoring data including Qdrant, PostgreSQL, Pipeline, and Connection Status metrics.
  */
 
+import { API_URL } from '../config';
+
 class EnhancedMetricsService {
   constructor() {
-    this.baseUrl = 'http://localhost:8000/api/v1';
+    this.baseUrl = `${API_URL}/api/v1`;
     this.isConnected = false;
     this.listeners = new Set();
     this.metrics = {

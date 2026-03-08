@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { QDRANT_URL } from '../config';
 import { ArrowLeft, Settings, RefreshCw, HelpCircle, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import QdrantGraph from '../components/dashboard/QdrantGraph';
@@ -134,7 +135,7 @@ const QdrantCollectionGraphPage = () => {
       <div className="flex-1 bg-gray-800 h-full">
         <QdrantGraph 
           collectionName={selectedCollection}
-          qdrantBaseUrl="http://localhost:6333"
+          qdrantBaseUrl={QDRANT_URL}
           height={graphHeight}
           fullWidth={true}
         />

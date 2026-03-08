@@ -4,8 +4,10 @@
  * Integrates with Qdrant's REST API for live data visualization
  */
 
+import { API_URL } from '../config';
+
 class QdrantService {
-  constructor(baseUrl = 'http://localhost:8000', apiKey = null) {
+  constructor(baseUrl = API_URL, apiKey = null) {
     // Use backend proxy instead of direct Qdrant access
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;

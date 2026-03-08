@@ -57,6 +57,7 @@ import {
 } from '../components/ui/accordion';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Slider } from '../components/ui/slider';
+import { API_URL, QDRANT_URL } from '../config';
 
 const MetricsDashboardPage = () => {
   // State management
@@ -89,8 +90,8 @@ const MetricsDashboardPage = () => {
   const [metricAutoRefresh, setMetricAutoRefresh] = useState({});
   
   // Base URLs
-  const backendBaseUrl = 'http://localhost:8000/api/v1';
-  const qdrantBaseUrl = 'http://localhost:6333';
+  const backendBaseUrl = `${API_URL}/api/v1`;
+  const qdrantBaseUrl = QDRANT_URL;
   
   // WebSocket connection
   const [ws, setWs] = useState(null);
@@ -99,7 +100,7 @@ const MetricsDashboardPage = () => {
   const checkServiceAvailability = useCallback(async () => {
     // Check backend
     try {
-      const response = await fetch('http://localhost:8000/health', { method: 'GET' });
+      const response = await fetch(`${API_URL}/health`, { method: 'GET' });
       setBackendAvailable(response.ok);
     } catch (error) {
       setBackendAvailable(false);
@@ -159,7 +160,7 @@ const MetricsDashboardPage = () => {
   useEffect(() => {
     const connectWebSocket = () => {
       const endpoints = [
-        'ws://localhost:8000/api/v1/ws/pipeline-monitoring',
+        `${API_URL.replace('http', 'ws')}/api/v1/ws/pipeline-monitoring`,
         'ws://backend-07:8000/api/v1/ws/pipeline-monitoring'
       ];
       

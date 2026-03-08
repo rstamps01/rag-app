@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { API_URL } from '../config';
 import useWebSocket from './improved_useWebSocket.jsx';
 
 /**
@@ -20,7 +21,7 @@ const useImprovedPipelineMonitoring = () => {
   const [errorLog, setErrorLog] = useState([]);
 
   // Connect to the monitoring WebSocket; adjust URL as needed
-  const wsUrl = `ws://localhost:8000/api/v1/ws/pipeline-monitoring`;
+  const wsUrl = `${API_URL.replace('http', 'ws')}/api/v1/ws/pipeline-monitoring`;
 
   const handleWebSocketMessage = useCallback((message) => {
     switch (message.type) {

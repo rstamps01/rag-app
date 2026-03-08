@@ -5,6 +5,7 @@
  * and provides them to the pipeline visualization components.
  */
 
+import { API_URL } from '../config';
 import systemMetricsCollector from './systemMetricsCollector';
 import applicationMetricsCollector from './applicationMetricsCollector';
 import apiMetricsCollector from './apiMetricsCollector';
@@ -126,10 +127,11 @@ class RealTimePipelineService {
 
     try {
       // Try different possible WebSocket endpoints
+      const wsApiUrl = API_URL.replace('http', 'ws');
       const endpoints = [
-        'ws://localhost:8000/api/v1/ws/pipeline-monitoring',
+        `${wsApiUrl}/api/v1/ws/pipeline-monitoring`,
         'ws://backend-07:8000/api/v1/ws/pipeline-monitoring',
-        'ws://localhost:8000/ws/pipeline-monitoring',
+        `${wsApiUrl}/ws/pipeline-monitoring`,
         'ws://backend-07:8000/ws/pipeline-monitoring'
       ];
 

@@ -5,11 +5,12 @@
  */
 
 import React, { useState } from 'react';
+import { QDRANT_URL } from '../../../../config';
 import ForceGraph2D from 'react-force-graph-2d';
 
 const GraphContainerSimple = ({ 
   collectionName = 'rag', 
-  qdrantBaseUrl = 'http://localhost:6333', 
+  qdrantBaseUrl = QDRANT_URL, 
   height = '500px', 
   fullWidth = false,
   graphData,

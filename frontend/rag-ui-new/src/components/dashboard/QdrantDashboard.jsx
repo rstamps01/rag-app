@@ -2,11 +2,12 @@
  * Qdrant Dashboard Component
  * 
  * Integrates Qdrant's built-in dashboard visualizations:
- * - Collection Graph: http://localhost:6333/dashboard#/collections/rag/graph
- * - Vector Visualization: http://localhost:6333/dashboard#/collections/rag/visualize
+ * - Collection Graph: {QDRANT_URL}/dashboard#/collections/rag/graph
+ * - Vector Visualization: {QDRANT_URL}/dashboard#/collections/rag/visualize
  */
 
 import React, { useState, useEffect } from 'react';
+import { QDRANT_URL } from '../../config';
 import { Database, BarChart3, Eye, RefreshCw, ExternalLink, Settings } from 'lucide-react';
 
 const QdrantDashboard = () => {
@@ -16,7 +17,7 @@ const QdrantDashboard = () => {
   const [collectionInfo, setCollectionInfo] = useState(null);
 
   // Qdrant dashboard URLs
-  const qdrantBaseUrl = 'http://localhost:6333';
+  const qdrantBaseUrl = QDRANT_URL;
   const dashboardUrls = {
     graph: `${qdrantBaseUrl}/dashboard#/collections/rag/graph`,
     visualize: `${qdrantBaseUrl}/dashboard#/collections/rag/visualize`,

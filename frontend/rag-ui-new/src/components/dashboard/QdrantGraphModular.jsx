@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { QDRANT_URL } from '../../config';
 import GraphContainer from './graphs/core/GraphContainer';
 import { getGraphTypeById } from './graphs/core/GraphTypes';
 import { 
@@ -42,7 +43,7 @@ import {
 
 const QdrantGraphModular = ({ 
   collectionName = 'rag', 
-  qdrantBaseUrl = 'http://localhost:6333', 
+  qdrantBaseUrl = QDRANT_URL, 
   height = '500px', 
   fullWidth = false,
   similarityMode = 'semantic',

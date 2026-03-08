@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { QDRANT_URL } from '../config';
 
 const useQdrantData = (refreshInterval = 30000) => {
   const [data, setData] = useState({
@@ -15,7 +16,7 @@ const useQdrantData = (refreshInterval = 30000) => {
 
   const fetchCollections = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:6333/collections');
+      const response = await fetch(`${QDRANT_URL}/collections`);
       const result = await response.json();
       return result.result?.collections || [];
     } catch (error) {
@@ -26,7 +27,7 @@ const useQdrantData = (refreshInterval = 30000) => {
 
   const fetchCollectionDetails = useCallback(async (collectionName) => {
     try {
-      const response = await fetch(`http://localhost:6333/collections/${collectionName}`);
+      const response = await fetch(`${QDRANT_URL}/collections/${collectionName}`);
       const result = await response.json();
       return result.result;
     } catch (error) {
@@ -37,7 +38,7 @@ const useQdrantData = (refreshInterval = 30000) => {
 
   const fetchHealth = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:6333/health');
+      const response = await fetch(`${QDRANT_URL}/health`);
       const result = await response.json();
       return result;
     } catch (error) {
@@ -48,7 +49,7 @@ const useQdrantData = (refreshInterval = 30000) => {
 
   const fetchMetrics = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:6333/metrics');
+      const response = await fetch(`${QDRANT_URL}/metrics`);
       const result = await response.text();
       
       // Parse Prometheus metrics

@@ -5,10 +5,12 @@
  * instead of creating new monitoring infrastructure.
  */
 
+import { API_URL, QDRANT_URL } from '../config';
+
 class APIMetricsCollector {
   constructor() {
-    this.baseURL = 'http://localhost:8000/api/v1';
-    this.qdrantURL = 'http://localhost:6333'; // Default Qdrant port
+    this.baseURL = `${API_URL}/api/v1`;
+    this.qdrantURL = QDRANT_URL;
     this.metrics = {
       queryProcessing: {
         totalQueries: 0,

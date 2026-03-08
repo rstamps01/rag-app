@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { QDRANT_URL } from '../../config';
 import ForceGraph2D from 'react-force-graph-2d';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
@@ -28,7 +29,7 @@ import ClickFocus3DWorking from './graphs/modules/ClickFocus3DWorking';
 
 const QdrantGraphWorking = ({ 
   collectionName = 'rag', 
-  qdrantBaseUrl = 'http://localhost:6333', 
+  qdrantBaseUrl = QDRANT_URL, 
   height = '500px', 
   fullWidth = false,
   similarityMode = 'semantic',

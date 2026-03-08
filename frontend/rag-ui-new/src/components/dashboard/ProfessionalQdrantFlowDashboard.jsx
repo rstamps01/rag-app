@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { QDRANT_URL } from '../../config';
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -549,7 +550,7 @@ const ProfessionalQdrantFlowDashboard = () => {
   // Check Qdrant availability
   const checkQdrantAvailability = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:6333/health', {
+      const response = await fetch(`${QDRANT_URL}/health`, {
         method: 'HEAD',
         timeout: 2000
       });
@@ -568,8 +569,8 @@ const ProfessionalQdrantFlowDashboard = () => {
 
     try {
       const [collectionsResponse, healthResponse] = await Promise.all([
-        fetch('http://localhost:6333/collections'),
-        fetch('http://localhost:6333/health')
+        fetch(`${QDRANT_URL}/collections`),
+        fetch(`${QDRANT_URL}/health`)
       ]);
       
       const collectionsData = await collectionsResponse.json();
@@ -909,7 +910,7 @@ const ProfessionalQdrantFlowDashboard = () => {
             </button>
             
             <a
-              href="http://localhost:6333/dashboard"
+              href={`${QDRANT_URL}/dashboard`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center space-x-2 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors text-white"

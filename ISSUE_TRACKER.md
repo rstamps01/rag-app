@@ -22,7 +22,7 @@
 | ISS-012 | No chunk-level metadata (page number, section) | Medium | Data Pipeline | 1 | Resolved |
 | ISS-013 | No OCR or table extraction for PDFs | Medium | Data Pipeline | 1 | Resolved |
 | ISS-014 | GPU config inconsistency (USE_GPU vs ENABLE_GPU) | Medium | Config | 1 | Resolved |
-| ISS-015 | No embedding cache for document chunks | Low | Performance | 1 | Open |
+| ISS-015 | No embedding cache for document chunks | Low | Performance | 1 | Deferred |
 | ISS-016 | Broken import in documents.py (process_and_store_document) | High | API | 1 | Resolved |
 | ISS-017 | document_id not returned in all query paths | Medium | API | 1 | Resolved |
 | ISS-018 | Six route files unmounted (dead/incomplete code) | High | API | 2 | Resolved |
@@ -58,14 +58,14 @@
 | ISS-048 | No canonical .env.example template | Medium | Config | 4 | Resolved |
 | ISS-049 | enhanced_metrics_collector leaks DB session via next(get_db()) | High | Storage | 4 | Resolved |
 | ISS-050 | main.py get_db fallback returns None when DB import fails | Medium | Storage | 4 | Resolved |
-| ISS-051 | 30+ files with hardcoded localhost URLs | High | Frontend | 5 | Open |
-| ISS-052 | API integration inconsistency — direct fetch bypasses api.js | High | Frontend | 5 | Open |
-| ISS-053 | No frontend .env; VITE_API_URL never configured | Medium | Frontend | 5 | Open |
-| ISS-054 | Zero test files in frontend | Medium | Frontend | 5 | Open |
-| ISS-055 | Duplicate api.js at project root with wrong endpoints | Medium | Frontend | 5 | Open |
-| ISS-056 | Dead/backup component files (QdrantGraph_clean, _backup) | Low | Frontend | 5 | Open |
-| ISS-057 | No global state management; prop drilling in similarity components | Low | Frontend | 5 | Open |
-| ISS-058 | Orphaned enhanced_documents_page and enhanced_queries_page | Low | Frontend | 5 | Open |
+| ISS-051 | 30+ files with hardcoded localhost URLs | High | Frontend | 5 | Resolved |
+| ISS-052 | API integration inconsistency — direct fetch bypasses api.js | High | Frontend | 5 | Resolved |
+| ISS-053 | No frontend .env; VITE_API_URL never configured | Medium | Frontend | 5 | Resolved |
+| ISS-054 | Zero test files in frontend | Medium | Frontend | 5 | Resolved |
+| ISS-055 | Duplicate api.js at project root with wrong endpoints | Medium | Frontend | 5 | Resolved |
+| ISS-056 | Dead/backup component files (QdrantGraph_clean, _backup) | Low | Frontend | 5 | Resolved |
+| ISS-057 | No global state management; prop drilling in similarity components | Low | Frontend | 5 | Resolved |
+| ISS-058 | Orphaned enhanced_documents_page and enhanced_queries_page | Low | Frontend | 5 | Resolved |
 | ISS-059 | Backend blocks forever on cache-init; cache-init in profile | Critical | Infrastructure | 6 | Resolved |
 | ISS-060 | docker-compose.dev.yml depends on undefined redis-07 | Critical | Infrastructure | 6 | Resolved |
 | ISS-061 | docker-compose.dev.yml wrong build context for backend | High | Infrastructure | 6 | Resolved |
@@ -95,7 +95,7 @@
 | ISS-085 | No code coverage tooling or thresholds | Medium | CI/CD | 8 | Resolved |
 | ISS-086 | No security scanning in pipeline (pip-audit, npm audit) | High | CI/CD | 8 | Resolved |
 | ISS-087 | No Cursor rules for code quality, testing, or CI/CD standards | Medium | CI/CD | 8 | Resolved |
-| ISS-088 | Ad-hoc test scripts in backend/scripts/ instead of pytest suite | Medium | CI/CD | 8 | Open |
+| ISS-088 | Ad-hoc test scripts in backend/scripts/ instead of pytest suite | Medium | CI/CD | 8 | Deferred |
 
 **Totals: 88 issues** — 12 Critical, 35 High, 31 Medium, 10 Low
 

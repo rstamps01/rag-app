@@ -5,10 +5,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { QDRANT_URL } from '../../config';
 import GraphContainerSimple from './graphs/core/GraphContainerSimple';
 import { getGraphTypeById } from './graphs/core/GraphTypesSimple';
 
-const QdrantGraphModularSimple = ({ collectionName = 'rag', qdrantBaseUrl = 'http://localhost:6333', height = '500px', fullWidth = false }) => {
+const QdrantGraphModularSimple = ({ collectionName = 'rag', qdrantBaseUrl = QDRANT_URL, height = '500px', fullWidth = false }) => {
   // Core state
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [isLoading, setIsLoading] = useState(false);

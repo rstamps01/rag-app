@@ -5,9 +5,11 @@
  * and provides database health, performance, and usage statistics.
  */
 
+import { API_URL } from '../config';
+
 class PostgresMetricsCollector {
   constructor() {
-    this.baseURL = 'http://localhost:8000/api/v1';
+    this.baseURL = `${API_URL}/api/v1`;
     this.metrics = {
       databaseHealth: {
         status: 'unknown',

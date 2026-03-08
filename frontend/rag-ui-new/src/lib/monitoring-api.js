@@ -1,5 +1,6 @@
 // Monitoring API functions
 import api from './api';
+import { API_URL } from '../config';
 
 export const monitoringAPI = {
   // Pipeline Journey
@@ -19,7 +20,7 @@ export const monitoringAPI = {
   
   // Real-time Data
   subscribeToRealTimeData: (callback) => {
-    const ws = new WebSocket('ws://localhost:8000/ws/monitoring');
+    const ws = new WebSocket(`${API_URL.replace('http', 'ws')}/ws/monitoring`);
     ws.onmessage = (event) => callback(JSON.parse(event.data));
     return ws;
   }

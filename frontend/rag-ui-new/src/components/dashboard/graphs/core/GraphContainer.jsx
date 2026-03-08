@@ -5,12 +5,13 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { QDRANT_URL } from '../../../../config';
 import { getGraphComponent, getGraphTypeById, getEnabledGraphTypes } from './GraphTypes';
 import { RefreshCw, Eye, EyeOff, Palette, X, Pin, PinOff, Network } from 'lucide-react';
 
 const GraphContainer = ({ 
   collectionName = 'rag', 
-  qdrantBaseUrl = 'http://localhost:6333', 
+  qdrantBaseUrl = QDRANT_URL, 
   height = '500px', 
   fullWidth = false,
   graphData = { nodes: [], links: [] },  // Default empty data to prevent errors
