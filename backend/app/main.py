@@ -87,9 +87,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from app.services.integrated_database_service import integrated_database_service
-from app.services.integrated_document_processor import integrated_document_processor
 from app.services.integrated_vector_db_service import integrated_vector_db_service
+from app.services.text_processing import normalize_text, chunk_text as tp_chunk_text
 
 # Vector processing imports
 try:
@@ -353,70 +352,36 @@ def initialize_services():
             qdrant_client = None
 
 def extract_text_from_file(file_path: str, file_ext: str) -> str:
-    """Extract text content from various file types with error handling"""
+    """Extract text content from various file types with error handling."""
     try:
         if file_ext in ['.txt', '.md']:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                 return f.read()
-        
         elif file_ext == '.pdf':
             if not vector_processing_available:
                 return f"PDF content from {os.path.basename(file_path)}"
-            
             text = ""
             with open(file_path, 'rb') as f:
                 pdf_reader = PyPDF2.PdfReader(f)
                 for page in pdf_reader.pages:
-                    text += page.extract_text() + "\n"
+                    text += (page.extract_text() or "") + "\n"
             return text
-        
+        elif file_ext == '.docx':
+            try:
+                import docx
+                doc = docx.Document(file_path)
+                return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            except ImportError:
+                return f"DOCX support unavailable for {os.path.basename(file_path)}"
         else:
-            # For other file types, return filename-based content
             return f"Document content from {os.path.basename(file_path)}"
-    
     except Exception as e:
         logger.error(f"Text extraction failed for {file_path}: {e}")
         return f"Content from {os.path.basename(file_path)} (extraction failed)"
 
 def chunk_text(text: str, chunk_size: Optional[int] = None, overlap: Optional[int] = None) -> List[str]:
-    """Split text into overlapping chunks for better vector search using configuration defaults"""
-    try:
-        # Use configuration values if not provided
-        if chunk_size is None:
-            chunk_size = getattr(settings, 'CHUNK_SIZE', 1000) if config_ok else 1000
-        if overlap is None:
-            overlap = getattr(settings, 'CHUNK_OVERLAP', 200) if config_ok else 200
-        
-        if len(text) <= chunk_size:
-            return [text]
-        
-        chunks = []
-        start = 0
-        
-        while start < len(text):
-            end = start + chunk_size
-            
-            # Try to break at sentence boundary
-            if end < len(text):
-                # Look for sentence endings near the chunk boundary
-                for i in range(min(100, len(text) - end)):
-                    if text[end + i] in '.!?':
-                        end = end + i + 1
-                        break
-            
-            chunk = text[start:end].strip()
-            if chunk:
-                chunks.append(chunk)
-            
-            start = end - overlap
-            if start >= len(text):
-                break
-        
-        return chunks
-    
-    except Exception as e:
-        logger.error(f"Text chunking failed: {e}")
-        return [text]  # Return original text as single chunk
+    """Delegate to the unified text_processing module (ISS-003)."""
+    return tp_chunk_text(text, chunk_size=chunk_size, overlap=overlap)
 
 async def process_document_for_vectors(
     file_id: str, 
@@ -457,14 +422,14 @@ async def process_document_for_vectors(
                 if db_session:
                     db_session.rollback()
         
-        # Extract text from file
+        # Extract text, normalize, and chunk (ISS-001, ISS-003)
         file_ext = os.path.splitext(filename)[1].lower()
         text_content = extract_text_from_file(file_path, file_ext)
-        
+
         if not text_content.strip():
             raise Exception("No text content extracted from file")
-        
-        # Chunk the text
+
+        text_content = normalize_text(text_content)
         chunks = chunk_text(text_content)
         logger.info(f"Document chunked into {len(chunks)} pieces")
         

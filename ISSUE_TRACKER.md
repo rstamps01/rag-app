@@ -8,43 +8,43 @@
 
 | ID | Title | Severity | Category | Area | Status |
 |----|-------|----------|----------|------|--------|
-| ISS-001 | No text normalization before embedding | Critical | Data Pipeline | 1 | Open |
-| ISS-002 | No document/chunk deduplication | Critical | Data Pipeline | 1 | Open |
-| ISS-003 | Chunking ignores configured CHUNK_STRATEGY | High | Data Pipeline | 1 | Open |
-| ISS-004 | Sentence boundary heuristic is fragile | High | Data Pipeline | 1 | Open |
+| ISS-001 | No text normalization before embedding | Critical | Data Pipeline | 1 | Resolved |
+| ISS-002 | No document/chunk deduplication | Critical | Data Pipeline | 1 | Resolved |
+| ISS-003 | Chunking ignores configured CHUNK_STRATEGY | High | Data Pipeline | 1 | Resolved |
+| ISS-004 | Sentence boundary heuristic is fragile | High | Data Pipeline | 1 | Resolved |
 | ISS-005 | CRUD create_document drops size and department | High | Storage | 1 | Resolved |
-| ISS-006 | Four divergent pipeline implementations | High | Data Pipeline | 1 | Open |
+| ISS-006 | Four divergent pipeline implementations | High | Data Pipeline | 1 | Resolved |
 | ISS-007 | Hardcoded collection name "rag" in main.py | Medium | Config | 1 | Resolved |
 | ISS-008 | query_processor uses undefined config keys | High | Config | 1 | Resolved |
-| ISS-009 | Document embeddings run on CPU, one at a time | High | Performance | 1 | Open |
+| ISS-009 | Document embeddings run on CPU, one at a time | High | Performance | 1 | Resolved |
 | ISS-010 | timestamp vs processed_at field mismatch | Medium | Storage | 1 | Open |
 | ISS-011 | Two overlapping Pydantic schema sets | Medium | API | 1 | Open |
-| ISS-012 | No chunk-level metadata (page number, section) | Medium | Data Pipeline | 1 | Open |
-| ISS-013 | No OCR or table extraction for PDFs | Medium | Data Pipeline | 1 | Open |
+| ISS-012 | No chunk-level metadata (page number, section) | Medium | Data Pipeline | 1 | Resolved |
+| ISS-013 | No OCR or table extraction for PDFs | Medium | Data Pipeline | 1 | Resolved |
 | ISS-014 | GPU config inconsistency (USE_GPU vs ENABLE_GPU) | Medium | Config | 1 | Resolved |
 | ISS-015 | No embedding cache for document chunks | Low | Performance | 1 | Open |
-| ISS-016 | Broken import in documents.py (process_and_store_document) | High | API | 1 | Open |
+| ISS-016 | Broken import in documents.py (process_and_store_document) | High | API | 1 | Resolved |
 | ISS-017 | document_id not returned in all query paths | Medium | API | 1 | Open |
-| ISS-018 | Six route files unmounted (dead/incomplete code) | High | API | 2 | Open |
+| ISS-018 | Six route files unmounted (dead/incomplete code) | High | API | 2 | Resolved |
 | ISS-019 | main.py monolithic — 1809 lines, 18 inline endpoints | Medium | API | 2 | Open |
 | ISS-020 | No centralized exception handler | Medium | API | 2 | Open |
 | ISS-021 | Inconsistent API versioning (/api/qdrant vs /api/v1/) | Medium | API | 2 | Open |
 | ISS-022 | File uploads have no size limit | High | API | 2 | Open |
 | ISS-023 | Most endpoints return raw dicts, not Pydantic models | Low | API | 2 | Open |
 | ISS-024 | CORS allow_origins=["*"] with allow_credentials=True | High | Security | 2 | Open |
-| ISS-025 | Bare except in enhanced_documents_api swallows errors | Medium | API | 2 | Open |
-| ISS-026 | system.py calls undefined supports_pytorch_sdpa() | High | API | 2 | Open |
-| ISS-027 | enhanced_documents_api calls non-existent methods | High | API | 2 | Open |
-| ISS-028 | query_wrapper and enhanced_query_wrapper use undefined VectorDBService | Critical | Services | 3 | Open |
-| ISS-029 | query_processor passes prompt= but LLM expects query= | High | Services | 3 | Open |
-| ISS-030 | OCR service never wired into active code path | High | Services | 3 | Open |
-| ISS-031 | model_manager has unresolved git merge conflict | High | Services | 3 | Open |
-| ISS-032 | GPUAccelerator missing setup_mixed_precision; rag_service crashes | High | Services | 3 | Open |
-| ISS-033 | rag_service and enhanced_query_processor import non-existent symbols | High | Services | 3 | Open |
-| ISS-034 | 8 orphaned service files never imported by active code | Medium | Services | 3 | Open |
-| ISS-035 | Duplicate service pairs with divergent behavior | Medium | Services | 3 | Open |
-| ISS-036 | vector_db.py has self.collection_name bug in async delete | Medium | Services | 3 | Open |
-| ISS-037 | integrated_document_processor and integrated_database_service imported but unused in main.py | Low | Services | 3 | Open |
+| ISS-025 | Bare except in enhanced_documents_api swallows errors | Medium | API | 2 | Resolved |
+| ISS-026 | system.py calls undefined supports_pytorch_sdpa() | High | API | 2 | Resolved |
+| ISS-027 | enhanced_documents_api calls non-existent methods | High | API | 2 | Resolved |
+| ISS-028 | query_wrapper and enhanced_query_wrapper use undefined VectorDBService | Critical | Services | 3 | Resolved |
+| ISS-029 | query_processor passes prompt= but LLM expects query= | High | Services | 3 | Resolved |
+| ISS-030 | OCR service never wired into active code path | High | Services | 3 | Resolved |
+| ISS-031 | model_manager has unresolved git merge conflict | High | Services | 3 | Resolved |
+| ISS-032 | GPUAccelerator missing setup_mixed_precision; rag_service crashes | High | Services | 3 | Resolved |
+| ISS-033 | rag_service and enhanced_query_processor import non-existent symbols | High | Services | 3 | Resolved |
+| ISS-034 | 8 orphaned service files never imported by active code | Medium | Services | 3 | Resolved |
+| ISS-035 | Duplicate service pairs with divergent behavior | Medium | Services | 3 | Resolved |
+| ISS-036 | vector_db.py has self.collection_name bug in async delete | Medium | Services | 3 | Resolved |
+| ISS-037 | integrated_document_processor and integrated_database_service imported but unused in main.py | Low | Services | 3 | Resolved |
 | ISS-038 | Five separate SQLAlchemy engines created at runtime | High | Storage | 4 | Resolved |
 | ISS-039 | base.py and session.py duplicate engine/SessionLocal/get_db | High | Storage | 4 | Resolved |
 | ISS-040 | enhanced_session and integrated_database_service unused get_db | Medium | Storage | 4 | Resolved |
