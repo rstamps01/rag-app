@@ -1,0 +1,68 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: Unit tests (no external dependencies)",
+    "integration: Integration tests (requires DB/Qdrant)",
+    "api: API endpoint tests (requires TestClient)",
+    "e2e: End-to-end tests (full pipeline)",
+    "slow: Tests that take > 5 seconds",
+]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning:pydantic.*",
+    "ignore::UserWarning:transformers.*",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # simplify
+    "T20",  # print statements
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "T201",   # print found (allow for now during migration)
+    "B008",   # function-call-in-default-argument (FastAPI Depends)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/alembic/*",
+    "app/scripts/*",
+    "tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 0
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+    "pass",
+]

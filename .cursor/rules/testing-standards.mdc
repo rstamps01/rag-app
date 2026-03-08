@@ -1,0 +1,60 @@
+---
+description: Testing standards and patterns for the RAG application
+alwaysApply: true
+---
+
+# Testing Standards
+
+## Test Organization
+
+```
+backend/tests/
+  conftest.py          — shared fixtures (db session, test client, mock services)
+  unit/                — isolated tests, no external deps
+    test_config.py
+    test_text_normalization.py
+    test_chunking.py
+    test_similarity.py
+    test_schemas.py
+  integration/         — tests with real DB/Qdrant (via Docker)
+    test_document_pipeline.py
+    test_query_pipeline.py
+    test_vector_storage.py
+    test_database_crud.py
+  api/                 — HTTP endpoint tests via TestClient
+    test_documents_api.py
+    test_queries_api.py
+    test_admin_api.py
+    test_health_api.py
+  e2e/                 — full stack tests
+    test_upload_query_flow.py
+
+frontend/rag-ui-new/src/
+  __tests__/           — or colocated *.test.tsx next to components
+```
+
+## Backend Test Patterns
+
+- Use `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.e2e` markers
+- Use fixtures for database sessions (`db_session`), test client (`client`), mock services
+- Use factories for creating test data (documents, chunks, embeddings)
+- Test the data pipeline: extraction -> normalization -> chunking -> embedding -> storage
+- Assert on data consistency between PostgreSQL and Qdrant after pipeline runs
+- Use `pytest-cov` with `--cov-fail-under=80` for new code
+
+## Frontend Test Patterns
+
+- Use Vitest + React Testing Library + jsdom
+- Test component rendering, user interactions, and API integration
+- Mock API calls with MSW (Mock Service Worker) or vi.mock
+- Test error states and loading states
+- Snapshot tests only for stable UI components
+
+## Data Consistency Tests (Critical for RAG)
+
+- After document ingestion: verify chunk count in Qdrant matches expected
+- Verify payload fields (document_id, content, filename, department) are populated
+- Verify embedding dimensions match model output (384 for all-MiniLM-L6-v2)
+- Verify PostgreSQL document status matches Qdrant state
+- Verify query results return valid document_id references
+- Verify deduplication: re-upload same file, assert no duplicate vectors

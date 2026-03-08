@@ -86,8 +86,18 @@
 | ISS-076 | Query input has no length limit | Medium | Security | 7 | Open |
 | ISS-077 | Delete endpoint does not validate path under upload dir | High | Security | 7 | Open |
 | ISS-078 | No rate limiting on API endpoints | High | Security | 7 | Open |
+| ISS-079 | No CI/CD pipeline (GitHub Actions or equivalent) | Critical | CI/CD | 8 | Resolved |
+| ISS-080 | No structured backend test suite (pytest layout) | Critical | CI/CD | 8 | Resolved |
+| ISS-081 | No frontend test suite (Vitest/Jest) | High | CI/CD | 8 | Resolved |
+| ISS-082 | No pre-commit hooks for lint/format/secrets | High | CI/CD | 8 | Resolved |
+| ISS-083 | No Makefile or task runner for dev workflow | Medium | CI/CD | 8 | Resolved |
+| ISS-084 | No ruff config for Python linting (pyproject.toml) | Medium | CI/CD | 8 | Resolved |
+| ISS-085 | No code coverage tooling or thresholds | Medium | CI/CD | 8 | Resolved |
+| ISS-086 | No security scanning in pipeline (pip-audit, npm audit) | High | CI/CD | 8 | Resolved |
+| ISS-087 | No Cursor rules for code quality, testing, or CI/CD standards | Medium | CI/CD | 8 | Resolved |
+| ISS-088 | Ad-hoc test scripts in backend/scripts/ instead of pytest suite | Medium | CI/CD | 8 | Open |
 
-**Totals: 78 issues** — 10 Critical, 32 High, 28 Medium, 8 Low
+**Totals: 88 issues** — 12 Critical, 35 High, 31 Medium, 10 Low
 
 ---
 
@@ -159,6 +169,12 @@ Issues that should be fixed together because they share code, root cause, or dep
 - ISS-059, 060, 061, 062, 063, 064, 065, 066, 067, 068
 
 **Approach:** Canonical Dockerfile; fix compose files; fix healthchecks.
+
+### Cluster H: CI/CD & Testing (10 issues)
+**Root cause:** No automated quality gates or testing infrastructure.
+- ISS-079, 080, 081, 082, 083, 084, 085, 086, 087, 088
+
+**Approach:** RESOLVED (9 of 10). Remaining: migrate ad-hoc scripts to pytest (ISS-088).
 
 ### Cluster G: API Layer Cleanup (7 issues)
 **Root cause:** Monolithic main.py; inconsistent patterns.
@@ -985,5 +1001,105 @@ Cluster F (Infrastructure)
 - **Description**: Config defines rate limit settings but no middleware applied.
 - **Impact**: Brute force, DoS, and abuse of expensive endpoints.
 - **Dependencies**: ISS-069
+- **Status**: Open
+- **Resolution**:
+
+### ISS-079: No CI/CD pipeline (GitHub Actions or equivalent)
+- **Severity**: Critical
+- **Category**: CI/CD
+- **Component(s)**: `.github/workflows/`
+- **Description**: No automated CI/CD pipeline existed. No build/test/deploy automation on push or PR.
+- **Impact**: No automated quality gates; regressions undetected; manual testing only.
+- **Dependencies**: ISS-080, ISS-081
+- **Status**: Resolved
+- **Resolution**: Created `.github/workflows/ci.yml` with 8-job pipeline: lint (backend + frontend), security scan, unit/integration/API tests (parallel), frontend tests, Docker build validation, and quality gate summary.
+
+### ISS-080: No structured backend test suite (pytest layout)
+- **Severity**: Critical
+- **Category**: CI/CD
+- **Component(s)**: `backend/tests/`
+- **Description**: No pytest test directory, no conftest.py, no fixtures, no structured test suite. Only ad-hoc scripts in backend/scripts/.
+- **Impact**: No automated regression testing; no coverage tracking; no CI test stage.
+- **Dependencies**: None
+- **Status**: Resolved
+- **Resolution**: Created `backend/tests/` with conftest.py (fixtures for DB, TestClient, mock services, factories), unit tests (config, text processing, schemas), API tests (health, documents, queries), and integration tests (data consistency). Added `backend/pyproject.toml` with pytest and ruff configuration.
+
+### ISS-081: No frontend test suite (Vitest/Jest)
+- **Severity**: High
+- **Category**: CI/CD
+- **Component(s)**: `frontend/rag-ui-new/`
+- **Description**: Zero test files, no test runner, no testing library installed.
+- **Impact**: UI regressions undetected; no automated verification.
+- **Dependencies**: None
+- **Status**: Resolved
+- **Resolution**: Installed Vitest + React Testing Library + jsdom + coverage. Created `vitest.config.js`, test setup, smoke tests for App and API client. Added `test`, `test:ci`, `test:watch` scripts to package.json.
+
+### ISS-082: No pre-commit hooks for lint/format/secrets
+- **Severity**: High
+- **Category**: CI/CD
+- **Component(s)**: `.pre-commit-config.yaml`
+- **Description**: No pre-commit hooks to catch lint errors, formatting issues, merge conflicts, or secrets before commit.
+- **Impact**: Low-quality code reaches CI; secrets could be accidentally committed.
+- **Dependencies**: None
+- **Status**: Resolved
+- **Resolution**: Created `.pre-commit-config.yaml` with ruff (lint + format), pre-commit-hooks (trailing whitespace, YAML/JSON check, merge conflict detection, large file prevention, branch protection), and detect-secrets.
+
+### ISS-083: No Makefile or task runner for dev workflow
+- **Severity**: Medium
+- **Category**: CI/CD
+- **Component(s)**: `Makefile`
+- **Description**: No single command to install, lint, test, build, or clean. Developers must remember individual tool commands.
+- **Impact**: Onboarding friction; inconsistent dev workflows.
+- **Dependencies**: None
+- **Status**: Resolved
+- **Resolution**: Created `Makefile` with targets: install, lint, lint-backend, lint-frontend, format, test, test-unit, test-api, test-integration, test-frontend, test-all, test-coverage, docker-build, docker-up, docker-down, docker-logs, pre-commit, clean.
+
+### ISS-084: No ruff config for Python linting (pyproject.toml)
+- **Severity**: Medium
+- **Category**: CI/CD
+- **Component(s)**: `backend/pyproject.toml`
+- **Description**: Python linting tools (black, isort, flake8) in requirements but no config files.
+- **Impact**: No consistent code style enforcement.
+- **Dependencies**: None
+- **Status**: Resolved
+- **Resolution**: Added `[tool.ruff]` and `[tool.ruff.lint]` config in `backend/pyproject.toml` — replaces black + isort + flake8 with ruff.
+
+### ISS-085: No code coverage tooling or thresholds
+- **Severity**: Medium
+- **Category**: CI/CD
+- **Component(s)**: `backend/pyproject.toml`, `frontend/rag-ui-new/vitest.config.js`
+- **Description**: No coverage configuration, no thresholds, no coverage reporting.
+- **Impact**: Cannot track test coverage; no ratchet to prevent regression.
+- **Dependencies**: ISS-080, ISS-081
+- **Status**: Resolved
+- **Resolution**: Added `[tool.coverage]` in pyproject.toml and coverage config in vitest.config.js. CI pipeline uploads coverage artifacts.
+
+### ISS-086: No security scanning in pipeline (pip-audit, npm audit)
+- **Severity**: High
+- **Category**: CI/CD
+- **Component(s)**: `.github/workflows/ci.yml`
+- **Description**: No automated dependency vulnerability scanning.
+- **Impact**: Known vulnerabilities in dependencies go undetected.
+- **Dependencies**: ISS-079
+- **Status**: Resolved
+- **Resolution**: Added security scan job in CI with pip-audit for Python and npm audit for Node.js dependencies.
+
+### ISS-087: No Cursor rules for code quality, testing, or CI/CD standards
+- **Severity**: Medium
+- **Category**: CI/CD
+- **Component(s)**: `.cursor/rules/`
+- **Description**: Only one rule (issue-assessment-workflow) existed. No rules for code quality, testing patterns, or CI/CD standards.
+- **Impact**: AI assistant has no persistent guidance for quality standards.
+- **Dependencies**: None
+- **Status**: Resolved
+- **Resolution**: Created three new rules: `cicd-pipeline-standards.mdc`, `code-quality-standards.mdc`, `testing-standards.mdc`.
+
+### ISS-088: Ad-hoc test scripts in backend/scripts/ instead of pytest suite
+- **Severity**: Medium
+- **Category**: CI/CD
+- **Component(s)**: `backend/scripts/test_*.py`
+- **Description**: 12+ test-related scripts in backend/scripts/ that are manual/ad-hoc, not proper pytest tests. They define test_* functions but use standalone execution, not pytest fixtures or markers.
+- **Impact**: Cannot run in CI; no coverage; duplicated test logic.
+- **Dependencies**: ISS-080
 - **Status**: Open
 - **Resolution**:

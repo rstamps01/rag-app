@@ -1,0 +1,33 @@
+---
+description: Code quality standards for the RAG application backend and frontend
+alwaysApply: true
+---
+
+# Code Quality Standards
+
+## Backend (Python)
+
+- **Formatter**: ruff format (replaces black + isort)
+- **Linter**: ruff check (replaces flake8 + isort + many plugins)
+- **Type hints**: Required on all public functions and method signatures
+- **Docstrings**: Required on modules, classes, and public functions (Google style)
+- **Imports**: Sorted by ruff; no unused imports; no wildcard imports
+- **Error handling**: Never use bare `except:`; always catch specific exceptions
+- **No hardcoded values**: Use `settings` from config for URLs, keys, thresholds
+- **Single responsibility**: One service class per concern; no monolithic files over 500 lines
+
+## Frontend (TypeScript/JSX)
+
+- **Linter**: ESLint with recommended + React rules
+- **Formatter**: Prettier (via ESLint plugin)
+- **No hardcoded URLs**: All API endpoints via environment variables (`VITE_*`)
+- **API calls**: Always go through the centralized `api.js` client
+- **Components**: Functional components only; hooks for logic reuse
+- **Props**: Define TypeScript interfaces or PropTypes for all components
+
+## Both
+
+- No `console.log` in production code (use structured logger)
+- No TODO/FIXME without an ISS-NNN reference
+- Dead code must be removed, not commented out
+- File names: `snake_case.py` for Python, `PascalCase.tsx` for React components

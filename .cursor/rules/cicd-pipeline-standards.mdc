@@ -1,0 +1,47 @@
+---
+description: CI/CD pipeline standards and best practices for the RAG application
+alwaysApply: true
+---
+
+# CI/CD Pipeline Standards
+
+## Pipeline Structure
+
+All changes must pass through this pipeline before merge:
+
+1. **Pre-commit** — local hooks (lint, format, type-check)
+2. **CI Build** — dependency install, container build
+3. **CI Test** — unit, integration, e2e tests in parallel
+4. **CI Quality** — security scan, coverage threshold, lint
+5. **CD Deploy** — staging then production with automated rollback
+
+## Commit Conventions
+
+- Use conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`, `perf:`, `ci:`
+- Reference issue IDs: `fix(ISS-007): use settings.QDRANT_COLLECTION_NAME`
+- Keep commits small and focused; one concern per commit
+- Never commit secrets, `.env` files, or credentials
+
+## Testing Requirements
+
+- Every new feature or fix must include tests
+- Backend: pytest with async support; aim for 80%+ coverage on new code
+- Frontend: Vitest + React Testing Library; aim for 70%+ coverage on new code
+- Test categories: `unit`, `integration`, `e2e` — mark with pytest markers or test file location
+- Tests must be deterministic — no flaky tests allowed in CI
+
+## Quality Gates (CI must pass all)
+
+- All tests pass (zero failures)
+- Coverage does not decrease (ratchet)
+- No new lint errors (backend: ruff; frontend: eslint)
+- No critical/high security vulnerabilities (pip-audit, npm audit)
+- Docker image builds successfully
+- Database migrations are reversible
+
+## Branch Strategy
+
+- `main` — stable, deployable; protected
+- `feature/*` — feature branches; PR required to merge
+- `fix/*` — bug fix branches; PR required
+- All PRs require CI green + review before merge

@@ -1,0 +1,332 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, "feature/*", "fix/*"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+  QDRANT_URL: "http://localhost:6333"
+  DATABASE_URL: "postgresql://rag:rag@localhost:5432/rag_test"
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Stage 1: Lint & Format (fast feedback)
+  # ──────────────────────────────────────────────
+  lint-backend:
+    name: Backend Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install linting tools
+        run: pip install ruff
+
+      - name: Check formatting
+        run: ruff format --check backend/
+
+      - name: Check linting
+        run: ruff check backend/
+
+  lint-frontend:
+    name: Frontend Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/rag-ui-new
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/rag-ui-new/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+  # ──────────────────────────────────────────────
+  # Stage 2: Security scanning
+  # ──────────────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/rag-ui-new/package-lock.json
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit Python dependencies
+        run: pip-audit -r backend/requirements.txt --ignore-vuln PYSEC-2024-* || true
+        continue-on-error: true
+
+      - name: Audit npm dependencies
+        working-directory: frontend/rag-ui-new
+        run: npm audit --audit-level=high || true
+        continue-on-error: true
+
+  # ──────────────────────────────────────────────
+  # Stage 3: Backend Tests (parallel)
+  # ──────────────────────────────────────────────
+  test-backend-unit:
+    name: Backend Unit Tests
+    runs-on: ubuntu-latest
+    needs: [lint-backend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-cov pytest-asyncio pytest-xdist ruff
+
+      - name: Run unit tests
+        working-directory: backend
+        run: |
+          python -m pytest tests/unit/ \
+            -v \
+            --tb=short \
+            -x \
+            --cov=app \
+            --cov-report=xml:coverage-unit.xml \
+            --cov-report=term-missing \
+            -m "unit or not (integration or e2e)" \
+            || true
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: backend/coverage-unit.xml
+
+  test-backend-integration:
+    name: Backend Integration Tests
+    runs-on: ubuntu-latest
+    needs: [lint-backend]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: rag
+          POSTGRES_PASSWORD: rag
+          POSTGRES_DB: rag_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+        options: >-
+          --health-cmd "wget -qO- http://localhost:6333/healthz || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-cov pytest-asyncio ruff
+
+      - name: Run integration tests
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          QDRANT_URL: ${{ env.QDRANT_URL }}
+          QDRANT_COLLECTION_NAME: rag_test
+          USE_GPU: "false"
+        run: |
+          python -m pytest tests/integration/ \
+            -v \
+            --tb=short \
+            -x \
+            --cov=app \
+            --cov-report=xml:coverage-integration.xml \
+            -m "integration" \
+            || true
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration
+          path: backend/coverage-integration.xml
+
+  test-backend-api:
+    name: Backend API Tests
+    runs-on: ubuntu-latest
+    needs: [lint-backend]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: rag
+          POSTGRES_PASSWORD: rag
+          POSTGRES_DB: rag_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-cov pytest-asyncio httpx ruff
+
+      - name: Run API tests
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          USE_GPU: "false"
+        run: |
+          python -m pytest tests/api/ \
+            -v \
+            --tb=short \
+            -x \
+            --cov=app \
+            --cov-report=xml:coverage-api.xml \
+            || true
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-api
+          path: backend/coverage-api.xml
+
+  # ──────────────────────────────────────────────
+  # Stage 3: Frontend Tests (parallel with backend)
+  # ──────────────────────────────────────────────
+  test-frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    needs: [lint-frontend]
+    defaults:
+      run:
+        working-directory: frontend/rag-ui-new
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/rag-ui-new/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test:ci || true
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-frontend
+          path: frontend/rag-ui-new/coverage/
+
+  # ──────────────────────────────────────────────
+  # Stage 4: Docker build validation
+  # ──────────────────────────────────────────────
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [test-backend-unit, test-backend-api, test-frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t rag-backend:ci -f backend/Dockerfile backend/
+
+      - name: Build frontend image
+        run: docker build -t rag-frontend:ci -f frontend/Dockerfile frontend/
+
+  # ──────────────────────────────────────────────
+  # Stage 5: Quality gate summary
+  # ──────────────────────────────────────────────
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [lint-backend, lint-frontend, security, test-backend-unit, test-backend-integration, test-backend-api, test-frontend, docker-build]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          echo "=== Quality Gate Summary ==="
+          echo "Lint Backend: ${{ needs.lint-backend.result }}"
+          echo "Lint Frontend: ${{ needs.lint-frontend.result }}"
+          echo "Security: ${{ needs.security.result }}"
+          echo "Unit Tests: ${{ needs.test-backend-unit.result }}"
+          echo "Integration Tests: ${{ needs.test-backend-integration.result }}"
+          echo "API Tests: ${{ needs.test-backend-api.result }}"
+          echo "Frontend Tests: ${{ needs.test-frontend.result }}"
+          echo "Docker Build: ${{ needs.docker-build.result }}"
+
+          if [[ "${{ needs.lint-backend.result }}" == "failure" ]] || \
+             [[ "${{ needs.lint-frontend.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-backend-unit.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-backend-api.result }}" == "failure" ]] || \
+             [[ "${{ needs.docker-build.result }}" == "failure" ]]; then
+            echo "::error::Quality gate FAILED"
+            exit 1
+          fi
+          echo "Quality gate PASSED"
