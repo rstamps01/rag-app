@@ -636,7 +636,7 @@ async def process_document_for_vectors(
                 
                 # Batch upsert to Qdrant
                 qdrant_client.upsert(
-                    collection_name="rag",
+                    collection_name=settings.QDRANT_COLLECTION_NAME,
                     points=points
                 )
                 
@@ -1531,7 +1531,7 @@ async def delete_document(
             try:
                 # Delete all chunks for this document using proper Qdrant models
                 qdrant_client.delete(
-                    collection_name="rag",
+                    collection_name=settings.QDRANT_COLLECTION_NAME,
                     points_selector=FilterSelector(
                         filter=Filter(
                             must=[

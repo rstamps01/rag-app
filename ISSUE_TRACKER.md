@@ -14,14 +14,14 @@
 | ISS-004 | Sentence boundary heuristic is fragile | High | Data Pipeline | 1 | Open |
 | ISS-005 | CRUD create_document drops size and department | High | Storage | 1 | Open |
 | ISS-006 | Four divergent pipeline implementations | High | Data Pipeline | 1 | Open |
-| ISS-007 | Hardcoded collection name "rag" in main.py | Medium | Config | 1 | Open |
-| ISS-008 | query_processor uses undefined config keys | High | Config | 1 | Open |
+| ISS-007 | Hardcoded collection name "rag" in main.py | Medium | Config | 1 | Resolved |
+| ISS-008 | query_processor uses undefined config keys | High | Config | 1 | Resolved |
 | ISS-009 | Document embeddings run on CPU, one at a time | High | Performance | 1 | Open |
 | ISS-010 | timestamp vs processed_at field mismatch | Medium | Storage | 1 | Open |
 | ISS-011 | Two overlapping Pydantic schema sets | Medium | API | 1 | Open |
 | ISS-012 | No chunk-level metadata (page number, section) | Medium | Data Pipeline | 1 | Open |
 | ISS-013 | No OCR or table extraction for PDFs | Medium | Data Pipeline | 1 | Open |
-| ISS-014 | GPU config inconsistency (USE_GPU vs ENABLE_GPU) | Medium | Config | 1 | Open |
+| ISS-014 | GPU config inconsistency (USE_GPU vs ENABLE_GPU) | Medium | Config | 1 | Resolved |
 | ISS-015 | No embedding cache for document chunks | Low | Performance | 1 | Open |
 | ISS-016 | Broken import in documents.py (process_and_store_document) | High | API | 1 | Open |
 | ISS-017 | document_id not returned in all query paths | Medium | API | 1 | Open |
@@ -51,11 +51,11 @@
 | ISS-041 | integrated_database_service get_db returns None when unavailable | Medium | Storage | 4 | Open |
 | ISS-042 | No Alembic migration versions exist | Critical | Storage | 4 | Open |
 | ISS-043 | init_database has no schema migration support | High | Storage | 4 | Open |
-| ISS-044 | SECRET_KEY, JWT_SECRET, ALGORITHM not defined in Settings | Critical | Config | 4 | Open |
-| ISS-045 | DATABASE_URL_COMPUTED and SQLALCHEMY_DATABASE_URI never used | Medium | Config | 4 | Open |
-| ISS-046 | FallbackSettings CORS_ORIGINS_LIST returns single-element list | Low | Config | 4 | Open |
-| ISS-047 | Production-inappropriate default values in config | Medium | Config | 4 | Open |
-| ISS-048 | No canonical .env.example template | Medium | Config | 4 | Open |
+| ISS-044 | SECRET_KEY, JWT_SECRET, ALGORITHM not defined in Settings | Critical | Config | 4 | Resolved |
+| ISS-045 | DATABASE_URL_COMPUTED and SQLALCHEMY_DATABASE_URI never used | Medium | Config | 4 | Resolved |
+| ISS-046 | FallbackSettings CORS_ORIGINS_LIST returns single-element list | Low | Config | 4 | Resolved |
+| ISS-047 | Production-inappropriate default values in config | Medium | Config | 4 | Resolved |
+| ISS-048 | No canonical .env.example template | Medium | Config | 4 | Resolved |
 | ISS-049 | enhanced_metrics_collector leaks DB session via next(get_db()) | High | Storage | 4 | Open |
 | ISS-050 | main.py get_db fallback returns None when DB import fails | Medium | Storage | 4 | Open |
 | ISS-051 | 30+ files with hardcoded localhost URLs | High | Frontend | 5 | Open |

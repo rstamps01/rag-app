@@ -394,7 +394,7 @@ def delete_document_by_id(document_id: str, db: Session = Depends(get_db)):
             try:
                 # Delete all chunks for this document using proper Qdrant models
                 qdrant_client.delete(
-                    collection_name="rag",
+                    collection_name=settings.QDRANT_COLLECTION_NAME,
                     points_selector=FilterSelector(
                         filter=Filter(
                             must=[

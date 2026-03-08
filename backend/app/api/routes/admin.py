@@ -174,7 +174,7 @@ async def bulk_delete_documents(
             for doc_id in found_ids:
                 try:
                     qdrant_client.delete(
-                        collection_name="rag",
+                        collection_name=settings.QDRANT_COLLECTION_NAME,
                         points_selector=FilterSelector(
                             filter=Filter(
                                 must=[
@@ -402,8 +402,8 @@ async def cleanup_orphans(
                             # Delete points by ID - Qdrant accepts list of point IDs directly
                             # points_selector can be: List[point_ids] or FilterSelector
                             qdrant_client.delete(
-                                collection_name="rag",
-                                points_selector=batch  # Pass list of point IDs directly
+                                collection_name=settings.QDRANT_COLLECTION_NAME,
+                                points_selector=batch
                             )
                             total_deleted += len(batch)
                             logger.info(f"Admin: Deleted batch of {len(batch)} orphaned vectors ({total_deleted}/{len(orphaned_point_ids)})")

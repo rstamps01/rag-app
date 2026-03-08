@@ -1,25 +1,23 @@
 """
-Application Configuration - Fixed for Pydantic v2
-Properly defines all environment variables to avoid "extra_forbidden" errors
+Application Configuration
+
+Centralizes all environment-driven settings. Every config value referenced
+anywhere in the codebase MUST be defined here with a sensible default.
 """
 
 import os
 from typing import Optional, List
+from urllib.parse import urlparse
 from pydantic import Field
 
-# Try to import pydantic_settings first (Pydantic v2)
 try:
     from pydantic_settings import BaseSettings
-    print("✅ Using pydantic_settings.BaseSettings")
     PYDANTIC_V2 = True
 except ImportError:
     try:
         from pydantic import BaseSettings
-        print("✅ Using pydantic.BaseSettings")
         PYDANTIC_V2 = False
     except ImportError:
-        print("❌ Neither pydantic_settings nor pydantic.BaseSettings available")
-        # Create a fallback class
         class BaseSettings:
             def __init__(self, **kwargs):
                 for key, value in kwargs.items():
@@ -39,10 +37,13 @@ class Settings(BaseSettings):
         default="postgresql://rag:rag@postgres-07:5432/rag",
         description="Database connection URL"
     )
-    SQLALCHEMY_DATABASE_URI: Optional[str] = Field(
-        default=None,
-        description="SQLAlchemy database URI (alternative to DATABASE_URL)"
+
+    # Security / Auth (ISS-044)
+    SECRET_KEY: str = Field(
+        default="CHANGE-ME-in-production-use-openssl-rand-hex-32",
+        description="Secret key for JWT signing and session security"
     )
+    ALGORITHM: str = Field(default="HS256", description="JWT signing algorithm")
     
     # Vector Database Configuration
     QDRANT_URL: str = Field(
@@ -128,7 +129,7 @@ class Settings(BaseSettings):
         description="Hugging Face hub offline mode"
     )
     
-    # GPU Configuration
+    # GPU Configuration (ISS-014: consolidated USE_GPU / ENABLE_GPU into one field)
     USE_GPU: str = Field(default="true", description="Enable GPU usage")
     NVIDIA_VISIBLE_DEVICES: str = Field(default="0", description="Visible GPU devices")
     NVIDIA_DRIVER_CAPABILITIES: str = Field(
@@ -233,8 +234,8 @@ class Settings(BaseSettings):
     
     # CORS Configuration
     CORS_ORIGINS: str = Field(
-        default="http://localhost:3000,http://frontend-07:3000,http://localhost:8000,http://backend-07:8000,http://localhost:5432,http://postgres-07:5432,http://localhost:6333,http://qdrant-07:6333",
-        description="CORS origins"
+        default="http://localhost:3000,http://frontend-07:3000,http://localhost:8000,http://backend-07:8000",
+        description="Comma-separated allowed origins for CORS"
     )
     CORS_METHODS: str = Field(
         default="GET,POST,PUT,DELETE,OPTIONS",
@@ -279,25 +280,43 @@ class Settings(BaseSettings):
         description="Model health check interval"
     )
     
-    # Computed properties
+    # Computed / derived properties
+
     @property
-    def DATABASE_URL_COMPUTED(self) -> str:
-        """Get database URL, preferring SQLALCHEMY_DATABASE_URI if set"""
-        return self.SQLALCHEMY_DATABASE_URI or self.DATABASE_URL
-    
+    def ENABLE_GPU(self) -> bool:
+        """Alias for USE_GPU for backward compatibility (ISS-014)."""
+        return self.USE_GPU.lower() in ("true", "1", "yes")
+
+    @property
+    def QDRANT_HOST(self) -> str:
+        """Derive host from QDRANT_URL for backward compat (ISS-008)."""
+        parsed = urlparse(self.QDRANT_URL)
+        return parsed.hostname or "localhost"
+
+    @property
+    def QDRANT_PORT(self) -> int:
+        """Derive port from QDRANT_URL for backward compat (ISS-008)."""
+        parsed = urlparse(self.QDRANT_URL)
+        return parsed.port or 6333
+
+    @property
+    def JWT_SECRET(self) -> str:
+        """Alias for SECRET_KEY — unifies ISS-044 / ISS-070."""
+        return self.SECRET_KEY
+
     @property
     def CORS_ORIGINS_LIST(self) -> List[str]:
-        """Get CORS origins as a list"""
+        """Get CORS origins as a list."""
         return [origin.strip() for origin in self.CORS_ORIGINS.split(',') if origin.strip()]
-    
+
     @property
     def CORS_METHODS_LIST(self) -> List[str]:
-        """Get CORS methods as a list"""
+        """Get CORS methods as a list."""
         return [method.strip() for method in self.CORS_METHODS.split(',') if method.strip()]
-    
+
     @property
     def ALLOWED_EXTENSIONS_LIST(self) -> List[str]:
-        """Get allowed extensions as a list"""
+        """Get allowed extensions as a list."""
         return [ext.strip() for ext in self.ALLOWED_EXTENSIONS.split(',') if ext.strip()]
     
     # Pydantic v2 configuration
@@ -331,21 +350,38 @@ def create_settings():
             API_V1_STR = "/api/v1"
             DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rag:rag@postgres-07:5432/rag")
             QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant-07:6333")
+            QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "rag")
             LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "mistralai/Mistral-7B-Instruct-v0.2")
             EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
-            
+            SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE-ME-in-production")
+            ALGORITHM = "HS256"
+            USE_GPU = os.getenv("USE_GPU", "true")
+
             @property
-            def DATABASE_URL_COMPUTED(self):
-                return self.DATABASE_URL
-            
+            def ENABLE_GPU(self):
+                return self.USE_GPU.lower() in ("true", "1", "yes")
+
+            @property
+            def JWT_SECRET(self):
+                return self.SECRET_KEY
+
+            @property
+            def QDRANT_HOST(self):
+                return urlparse(self.QDRANT_URL).hostname or "localhost"
+
+            @property
+            def QDRANT_PORT(self):
+                return urlparse(self.QDRANT_URL).port or 6333
+
             @property
             def CORS_ORIGINS_LIST(self):
-                return ["http://localhost:3000,http://frontend-07:3000,http://localhost:8000,http://backend-07:8000,http://localhost:5432,http://postgres-07:5432,http://localhost:6333,http://qdrant-07:6333"]
-            
+                origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://frontend-07:3000,http://localhost:8000,http://backend-07:8000")
+                return [o.strip() for o in origins.split(",") if o.strip()]
+
             @property
             def CORS_METHODS_LIST(self):
                 return ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-            
+
             @property
             def ALLOWED_EXTENSIONS_LIST(self):
                 return ["pdf", "txt", "docx", "md"]
