@@ -17,20 +17,20 @@
 | ISS-007 | Hardcoded collection name "rag" in main.py | Medium | Config | 1 | Resolved |
 | ISS-008 | query_processor uses undefined config keys | High | Config | 1 | Resolved |
 | ISS-009 | Document embeddings run on CPU, one at a time | High | Performance | 1 | Resolved |
-| ISS-010 | timestamp vs processed_at field mismatch | Medium | Storage | 1 | Open |
-| ISS-011 | Two overlapping Pydantic schema sets | Medium | API | 1 | Open |
+| ISS-010 | timestamp vs processed_at field mismatch | Medium | Storage | 1 | Resolved |
+| ISS-011 | Two overlapping Pydantic schema sets | Medium | API | 1 | Resolved |
 | ISS-012 | No chunk-level metadata (page number, section) | Medium | Data Pipeline | 1 | Resolved |
 | ISS-013 | No OCR or table extraction for PDFs | Medium | Data Pipeline | 1 | Resolved |
 | ISS-014 | GPU config inconsistency (USE_GPU vs ENABLE_GPU) | Medium | Config | 1 | Resolved |
 | ISS-015 | No embedding cache for document chunks | Low | Performance | 1 | Open |
 | ISS-016 | Broken import in documents.py (process_and_store_document) | High | API | 1 | Resolved |
-| ISS-017 | document_id not returned in all query paths | Medium | API | 1 | Open |
+| ISS-017 | document_id not returned in all query paths | Medium | API | 1 | Resolved |
 | ISS-018 | Six route files unmounted (dead/incomplete code) | High | API | 2 | Resolved |
-| ISS-019 | main.py monolithic — 1809 lines, 18 inline endpoints | Medium | API | 2 | Open |
-| ISS-020 | No centralized exception handler | Medium | API | 2 | Open |
-| ISS-021 | Inconsistent API versioning (/api/qdrant vs /api/v1/) | Medium | API | 2 | Open |
+| ISS-019 | main.py monolithic — 1809 lines, 18 inline endpoints | Medium | API | 2 | Resolved |
+| ISS-020 | No centralized exception handler | Medium | API | 2 | Resolved |
+| ISS-021 | Inconsistent API versioning (/api/qdrant vs /api/v1/) | Medium | API | 2 | Resolved |
 | ISS-022 | File uploads have no size limit | High | API | 2 | Resolved |
-| ISS-023 | Most endpoints return raw dicts, not Pydantic models | Low | API | 2 | Open |
+| ISS-023 | Most endpoints return raw dicts, not Pydantic models | Low | API | 2 | Resolved |
 | ISS-024 | CORS allow_origins=["*"] with allow_credentials=True | High | Security | 2 | Resolved |
 | ISS-025 | Bare except in enhanced_documents_api swallows errors | Medium | API | 2 | Resolved |
 | ISS-026 | system.py calls undefined supports_pytorch_sdpa() | High | API | 2 | Resolved |

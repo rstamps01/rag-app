@@ -725,6 +725,15 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+# Centralized exception handler (ISS-020)
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
 # Add middleware to suppress access logs for monitoring endpoints
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -782,7 +791,7 @@ except Exception as e:
 # Qdrant Proxy Router
 try:
     from app.api.routes.qdrant_proxy import router as qdrant_router
-    app.include_router(qdrant_router, tags=["qdrant-proxy"])
+    app.include_router(qdrant_router, prefix="/api/v1/qdrant", tags=["qdrant-proxy"])
     qdrant_proxy_available = True
     logger.info("✅ Qdrant proxy router imported and registered successfully")
 except Exception as e:
@@ -1130,12 +1139,13 @@ async def ask_query(
                     content = result.payload.get("content") or result.payload.get("text", "")
                     
                     sources.append({
-                        "content": content,  # FIXED: Standardized with backward compatibility
-                        "filename": result.payload.get("filename", ""),  # Now available from payload
+                        "content": content,
+                        "document_id": result.payload.get("document_id", ""),
+                        "filename": result.payload.get("filename", ""),
                         "score": result.score,
                         "chunk_index": result.payload.get("chunk_index", 0),
-                        "department": result.payload.get("department", "General"),  # ADDED: Now available
-                        "file_type": result.payload.get("file_type", "")  # ADDED: Now available
+                        "department": result.payload.get("department", "General"),
+                        "file_type": result.payload.get("file_type", ""),
                     })
                 
                 used_vector_search = True
